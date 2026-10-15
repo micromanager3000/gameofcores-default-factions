@@ -14,3 +14,11 @@ test('Rust and JavaScript export the same deployable faction sources',()=>{
  }
 });
 test('source lookup rejects unknown names',()=>assert.throws(()=>source('../shared/theme')));
+
+test('the source exporter can be imported from stdin scripts',()=>{
+ const module=new URL('../tools/source.mjs',import.meta.url).href;
+ const output=execFileSync(process.execPath,['--input-type=module','-'],{
+  input:`import {source} from ${JSON.stringify(module)};process.stdout.write(source('default'));`,encoding:'utf8',maxBuffer:1024*1024
+ });
+ assert.equal(output,source('default'));
+});
