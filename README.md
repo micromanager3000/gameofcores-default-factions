@@ -45,6 +45,7 @@ npm run build:founders
 npm run build:data
 npm run build:wasm
 npm run build:lessons
+npm run build:reference
 ```
 
 The sync command installs a commit into `crates/default-factions` and its art into `site/game/default-factions`.
