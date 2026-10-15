@@ -192,9 +192,10 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         if cycles_left() < 120.0 + 30.0 * seen.len() as f64 {
             break;
         }
-        let Some(t) = seen.iter().find(|t| reflex::can_hit(u, *t)) else { continue };
+        let Some(t) = common::windup_target(u,seen,seen.iter().find(|t| reflex::can_hit(u, *t))) else { continue };
         let mut o = obj! { "id" => u.get("id"), "hit" => t.get("id") };
-        if reflex::engaged(u) {
+        common::space_ranged(u,seen,&mut o);
+        if reflex::engaged(u) && !o.get("step").truthy() {
             o.set("hold", true);
         }
         order(o.clone());

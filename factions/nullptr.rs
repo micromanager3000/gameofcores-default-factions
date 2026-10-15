@@ -1017,6 +1017,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
                 best = Some(e);
             }
         }
+        best=common::windup_target(u,ns,best);
         // Repair costs a meaningful 700 cycles (at price level 1) and restores only 0.7 HP, so spend it after a real
         // exchange, early enough that the line can disengage safely. Every price here is the rules' times the level.
         let budget = r.get("budget");
@@ -1056,6 +1057,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         if let Some(b) = best {
             out.set("hit", b.get("id")); // movement and fire intentionally share one order
         }
+        common::space_ranged(u,ns,&mut out);
 
         let cd = r.get("abilityIn");
         let abilities = budget.get("abilities");

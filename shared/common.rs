@@ -6,6 +6,47 @@ use super::{air, theme};
 
     use gameofcores::*;
 
+    /// Keep the target of a paid windup while it is still visible and in reach.
+    /// A new priority target can wait until this shot has resolved.
+    pub fn windup_target(u: View, near: View, preferred: Option<View>) -> Option<View> {
+        let pending=u.path("rts.windupTarget");
+        if pending.is_num() {
+            if let Some(t)=near.iter().find(|t| t.get("id").num()==pending.num() && reflex::can_hit(u,*t)) { return Some(t); }
+        }
+        preferred
+    }
+
+    /// Range control for mobile ground shooters. Explicit hazard dodges take priority.
+    /// Step back during reload, plant for the next shot, and keep a gap from allies.
+    /// This uses public enemy reach and the unit's own weapon clock; it predicts no damage.
+    pub fn space_ranged(u: View, near: View, out: &mut Value) {
+        let r=u.get("rts");
+        if !r.truthy() || u.get("range").num_or(0.0)<=0.0 || u.get("air").truthy()
+            || r.path("sea.ship").truthy() || r.get("deployed").truthy() || out.get("step").truthy() { return; }
+        let reach=u.get("reach").num_or(0.0);
+        let threat=near.iter().find(|t| t.get("rival").truthy() && !t.get("air").truthy());
+        let Some(t)=threat else { return };
+        let enemy_reach=t.get("reach").num_or(match t.get("range").num_or(0.0) as u32 {0=>1.0,1=>4.0,_=>7.0});
+        // Equal-range armies trade fire. Longer-range or faster enemies can still punish a retreat.
+        if reach<=enemy_reach+0.5 { return; }
+        let (d,dx,dy)=(t.get("d").num_or(0.0),t.get("dx").num_or(0.0),t.get("dy").num_or(0.0));
+        let outer=reach-0.4;
+        let inner=(reach*0.72).max(enemy_reach+0.9).min(outer-0.25);
+        let reloading=r.get("readyIn").num_or(0.0)>0.0 && r.get("windupTarget").is_nullish();
+        let desired=if reloading {outer-0.15} else {inner};
+        if d<desired && d>0.01 {
+            let step=(desired-d+0.12).clamp(0.12,1.0);
+            let mut x=-dx/d*step;let mut y=-dy/d*step;
+            for ally in near.iter().filter(|a| !a.get("rival").truthy() && a.get("owner").num_or(-1.0)==u.get("owner").num_or(-2.0)) {
+                let gap=ally.get("d").num_or(10.0);
+                if gap>0.01 && gap<0.8 {x-=ally.get("dx").num()/gap*0.16;y-=ally.get("dy").num()/gap*0.16;}
+            }
+            out.set("hold",false);out.set("step",obj!{"x"=>x,"y"=>y});
+        } else if out.get("hit").is_num() && reflex::engaged(u) {
+            out.set("hold",true);
+        }
+    }
+
     /// Rotate a small wing through eyes, interception and (once licensed) strike craft.
     pub fn airframe(me: View, slot: f64) -> air::Airframe {
         let role = match (slot.max(0.0) as usize) % 3 {
