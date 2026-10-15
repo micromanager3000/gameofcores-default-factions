@@ -47,7 +47,8 @@ use super::{air, theme};
         x/=length;y/=length;
         for a in near.iter().filter(|a| !a.get("rival").truthy() && a.get("owner").num()==u.get("owner").num()) {
             let d=a.get("d").num_or(10.0);
-            if d>0.01 && d<0.9 {let push=(0.9-d)*0.75;x-=a.get("dx").num()/d*push;y-=a.get("dy").num()/d*push;}
+            if d>0.01 && d<1.1 {let push=((1.1-d)/1.1).powi(2)*3.0;x-=a.get("dx").num()/d*push;y-=a.get("dy").num()/d*push;}
+            else if d<=0.01 {y+=if u.get("id").num()<a.get("id").num(){-0.6}else{0.6};}
         }
         // Keep combat micro within the current province's neighbourhood; turning beats an endless retreat.
         let local=u.get("local");let (px,py)=(local.get("x").num_or(0.0),local.get("y").num_or(0.0));
@@ -56,6 +57,7 @@ use super::{air, theme};
             let turn=if -py*x+px*y>=0.0 {1.0}else{-1.0};
             x=(-py*turn-px*0.35)/radius;y=(px*turn-py*0.35)/radius;
         }
+        let amount=x.hypot(y).min(1.0)*length.min(1.0);
         let terrain=u.get("terrain");
         if !terrain.is_empty() {
             let len=x.hypot(y).max(0.01);x/=len;y/=len;
@@ -65,7 +67,7 @@ use super::{air, theme};
             });
             if let Some(t)=best {x=t.get("x").num();y=t.get("y").num();}else{x=0.0;y=0.0;}
         }
-        out.set("hold",false);out.set("step",obj!{"x"=>x*length.min(1.0),"y"=>y*length.min(1.0)});
+        out.set("hold",false);out.set("step",obj!{"x"=>x*amount,"y"=>y*amount});
     }
 
     /// Range control for mobile ground shooters. Explicit hazard dodges take priority.
