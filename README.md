@@ -19,20 +19,11 @@ Their own house presentation is selected by seat. Those assignments match the ex
 node tools/source.mjs kublai /tmp/kublai.rs
 ```
 
-The export contains the selected program and shared strategy in one Rust source file.
-Exports fit the game's 256 KiB source limit. Players can copy and change the exported source.
-The program links the public game SDK and this repository's `default_factions` library.
-The library owns aircraft definitions, themes, capitals and art selection. It is built from `library.rs`.
-
-Build the library beside an SDK built by the same Rust toolchain:
-
-```sh
-node tools/build-library.mjs ../gameofcores/target/wasm32-unknown-unknown/release
-```
-
-The compiler links it as `--extern default_factions=<directory>/libdefault_factions.rlib`.
-Shared strategy remains billed source. Preset library source retains its previous exemption from code RAM.
-Compiled instructions from both libraries are metered normally.
+The export contains the selected program and all shared modules in one Rust source file.
+Exports fit the game's 512 KiB source limit. Players can copy and change the exported source.
+The program compiles against the public game SDK. All faction helpers count toward source RAM.
+The game provides 3,072 free RAM pages to every faction, covering the newly included preset source.
+Compiled instructions are metered normally.
 Both the Rust package and the Node exporter produce the same source; `npm test` checks every program.
 
 ## Update the game

@@ -11,6 +11,11 @@
     "default"
   ],
   "shared": [
-    "common"
+    "air",
+    "capital",
+    "common",
+    "compat",
+    "theme",
+    "unit_art"
   ]
 }
