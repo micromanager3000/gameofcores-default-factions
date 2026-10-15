@@ -189,16 +189,17 @@ fn scout(units: View, world: View, me: View) -> Vec<Value> {
 }
 
 // Units in contact: each strikes the nearest rival it can hit (reflex::can_hit), and holds its ground doing so on an
-// aggressive order. Each strike is committed as it's made, and the call stops when fewer cycles are left than one more
-// unit costs (about 30 for each unit near it that it looks over), so a short duel bank gives fewer strikes, not an
-// error.
+// aggressive order. Orders commit as they are made. CPU RTS keeps room for the most expensive prior turn;
+// classic combat retains its smaller targeting allowance.
 fn reflex(units: View, near: View) -> Vec<Value> {
     let mut out = Vec::new();
+    let mut turn_cost=1800.0_f64;
     for u in units.iter() {
         let seen = near.key(n(u.get("id")));
-        if cycles_left() < 120.0 + 30.0 * seen.len() as f64 {
+        if cycles_left() < if u.get("rts").truthy() {turn_cost}else{120.0 + 30.0 * seen.len() as f64} {
             break;
         }
+        let began=cycles_left();
         let target = common::windup_target(u,seen,seen.iter().find(|t| reflex::can_hit(u, *t)));
         let mut o = obj! { "id" => u.get("id") };
         if let Some(t)=target {o.set("hit",t.get("id"));}
@@ -213,6 +214,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         }
         order(o.clone());
         out.push(o);
+        turn_cost=turn_cost.max(1.5*(began-cycles_left()));
     }
     out
 }
