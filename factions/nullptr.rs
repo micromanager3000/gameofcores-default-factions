@@ -1081,6 +1081,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
                 out.set("aim", obj! { "x" => px + bx, "y" => py + by });
             }
         }
+        common::steer_ground(u,ns,&mut out);
         if best.is_some() || out.get("step").truthy() || out.get("ability").truthy() || out.get("cloak").truthy() {
             order(out);
         }
