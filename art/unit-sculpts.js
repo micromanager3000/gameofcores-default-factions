@@ -56,6 +56,7 @@ function headwear(s,hat,x=0,trim=S){
 }
 function tool(s,kind,{x=.25,y=.9,z=.37}={}){
  const first=s.parts.length;
+ if(['bow','crossbow','rifle','musket'].includes(kind))s.muzzle=[x+(kind==='bow'?.44:kind==='crossbow'?.45:.79),y+(kind==='rifle'||kind==='musket'?.035:0),z];
  if(kind==='bow'){
   s.poly([x+.25,y,z],[0,-.43,.14,-.27,.19,0,.14,.28,0,.44,.06,.20,.08,0,.04,-.20],.065,WOOD);
   s.rod([x+.25,y-.43,z],[x+.25,y+.44,z],.022,IVORY);
@@ -247,5 +248,5 @@ export function houseSculpt(id,flags=0,airRole='fighter'){
  if(flags&1){const model=airSculpt(seat,airRole);if(flags&2)model.parts.push({shape:'box',at:[-.33,.53,-.36],size:[.29,.30,.24],pivot:[-.33,.53,-.36],motion:'',color:'#b89458',on:[]});return model;}
  [kublai,arjuna,templar,atlantis,fleet,manifesto,nullSociety,nations,(s,b)=>b==='truck'?cart(s,{truck:true,culture:8}):emu(s,{forager:b==='forager',gunner:b==='gunner'}),garden][seat](s,body);
  if(flags&2)s.box([-.33,.83,-.36],[.29,.30,.24],'#b89458');
- return {parts:s.parts,sculpt:id};
+ return {parts:s.parts,sculpt:id,muzzle:s.muzzle};
 }
