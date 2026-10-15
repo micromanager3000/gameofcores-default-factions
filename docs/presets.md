@@ -1,7 +1,8 @@
 # Shared faction presets
 
-These modules belong to the faction programs in this repository. They are included in exported source.
-Import them from `shared`; they are not exported by the game SDK.
+These modules belong to this repository's `default_factions` library.
+Import them from `default_factions`; exported programs also re-export them through `shared`.
+The game SDK does not export them.
 
 ## House themes
 

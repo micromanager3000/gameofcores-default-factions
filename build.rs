@@ -1,8 +1,8 @@
 use std::{env, fs, path::PathBuf};
 fn main() {
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
-    let mut shared = String::from("\n#[allow(dead_code, unused_imports)]\nmod shared {\n");
-    for name in ["air", "capital", "common", "compat", "theme", "unit_art"] {
+    let mut shared = String::from("\n#[allow(dead_code, unused_imports)]\nmod shared {\npub use default_factions::{air, capital, theme};\n");
+    for name in ["common"] {
         let path = format!("shared/{name}.rs");
         println!("cargo:rerun-if-changed={path}");
         shared.push_str(&format!("pub mod {name} {{\n{}\n}}\n", fs::read_to_string(path).expect("shared source")));
