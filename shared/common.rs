@@ -58,9 +58,9 @@ use super::{air, theme};
             x=(-py*turn-px*0.35)/radius;y=(px*turn-py*0.35)/radius;
         }
         let amount=x.hypot(y).min(1.0)*length.min(1.0);
+        let len=x.hypot(y).max(0.01);x/=len;y/=len;
         let terrain=u.get("terrain");
         if !terrain.is_empty() {
-            let len=x.hypot(y).max(0.01);x/=len;y/=len;
             let best=terrain.iter().filter(|t|t.get("walk").num_or(0.0)>0.0).max_by(|a,b| {
                 let score=|t:View|x*t.get("x").num()+y*t.get("y").num()+0.2*t.get("walk").num();
                 score(*a).partial_cmp(&score(*b)).unwrap_or(std::cmp::Ordering::Equal)
