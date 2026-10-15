@@ -42,7 +42,7 @@ use super::{air, theme};
                 if gap>0.01 && gap<0.8 {x-=ally.get("dx").num()/gap*0.16;y-=ally.get("dy").num()/gap*0.16;}
             }
             out.set("hold",false);out.set("step",obj!{"x"=>x,"y"=>y});
-        } else if out.get("hit").is_num() && reflex::engaged(u) {
+        } else if matches!(out.get("hit"),Value::Num(_)) && reflex::engaged(u) {
             out.set("hold",true);
         }
     }
