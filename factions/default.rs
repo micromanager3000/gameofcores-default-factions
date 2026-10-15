@@ -14,7 +14,7 @@ program!(think, miner, guard, longbow, spy, scout, reflex, research, duel, look,
 
 // What to research, in order: a CPU RTS world's ids, then a classic world's (archery is ranged there, espionage is
 // cloak). Ids the world lacks are skipped.
-const TECHS: [&str; 10] = ["extraction", "ranged", "seaTraversal", "mountainTraversal", "cloak", "mining", "archery", "boats", "alpine", "espionage"];
+const TECHS: [&str; 11] = ["extraction", "ranged", "dash", "seaTraversal", "mountainTraversal", "cloak", "mining", "archery", "boats", "alpine", "espionage"];
 
 fn think(world: View, me: View) -> Value {
     common::govern(world, me, 0.4, || strategy(world, me))
@@ -59,6 +59,13 @@ fn strategy(world: View, me: View) -> Value {
     let limits = [("scout", 1.0), ("spy", 1.0), ("miner", common::miner_room(me, &plan))];
     let opts = common::Recruit { limits: &limits, reserve: 10.0, builds: &builds, ..common::Recruit::default() };
     common::recruit(&mut orders, me, &mix, name, &opts);
+    if techs.get("dash").truthy() {
+        let module=common::fabrication(me,1.0)-common::fabrication(me,0.0);
+        let mut room=common::fabrication_room(me).unwrap_or(0.0)-orders.get("spawn").len() as f64*common::fabrication(me,0.0);
+        if let Value::Arr(spawns)=orders.entry("spawn") {for sp in spawns {
+            if sp.get("type").str()=="guard" && room>=module {sp.set("modules",arr!["dash"]);room-=module;}
+        }}
+    }
     let units = me.get("units");
     let (mining, guards) = (units.get("doing").get("gather").or(0.0), units.get("byType").get("guard").or(0.0));
     orders.set("memo", format!("{} mining · {} guards", js_num(mining), js_num(guards)));
@@ -192,9 +199,15 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         if cycles_left() < 120.0 + 30.0 * seen.len() as f64 {
             break;
         }
-        let Some(t) = common::windup_target(u,seen,seen.iter().find(|t| reflex::can_hit(u, *t))) else { continue };
-        let mut o = obj! { "id" => u.get("id"), "hit" => t.get("id") };
+        let target = common::windup_target(u,seen,seen.iter().find(|t| reflex::can_hit(u, *t)));
+        let mut o = obj! { "id" => u.get("id") };
+        if let Some(t)=target {o.set("hit",t.get("id"));}
+        let r=u.get("rts");let cost=common::drive_tick(u,420.0)*common::price_level(u);
+        if r.truthy() {o.set("power",obj!{"drive"=>if r.get("bank").num_or(0.0)>=cost && r.path("budget.drive").num_or(cost)>=cost {420}else{0}});}
+        common::close_melee(u,seen,&mut o);
         common::space_ranged(u,seen,&mut o);
+        common::steer_ground(u,seen,&mut o);
+        if target.is_none() && !o.get("step").truthy() && !o.get("ability").truthy() {continue;}
         if reflex::engaged(u) && !o.get("step").truthy() {
             o.set("hold", true);
         }

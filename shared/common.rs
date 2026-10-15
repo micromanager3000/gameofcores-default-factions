@@ -16,6 +16,58 @@ use super::{air, theme};
         preferred
     }
 
+    /// A moving ground unit's next 0.2-second drive charge, before the price level.
+    pub fn drive_tick(u: View, power: f64) -> f64 {
+        (60.0+power)*u.path("rts.driveScale").num_or(1.0)/5.0
+    }
+
+    /// Close with a visible ground rival and buy a dash only near striking distance.
+    pub fn close_melee(u: View, near: View, out: &mut Value) {
+        let r=u.get("rts");
+        if !r.truthy() || u.get("range").num_or(0.0)>0.0 || u.get("air").truthy()
+            || r.path("sea.ship").truthy() || !reflex::engaged(u) || out.get("step").truthy() { return; }
+        let Some(t)=near.iter().find(|t|t.get("rival").truthy()&&!t.get("air").truthy()) else {return};
+        let d=t.get("d").num();
+        if d>0.7 {
+            out.set("hold",false);out.set("step",obj!{"x"=>t.get("dx"),"y"=>t.get("dy")});
+        }
+        let cost=900.0*price_level(u);
+        if d>1.2 && d<3.5 && r.get("modules").has_str("dash") && r.path("abilityIn.dash").num_or(0.0)<=0.0
+            && r.get("bank").num_or(0.0)>=cost && r.path("budget.abilities").num_or(cost)>=cost {
+            out.set("ability","dash");
+        }
+    }
+
+    /// Separate moving allies and turn away from blocked terrain. Direction samples share `u.local`'s frame.
+    pub fn steer_ground(u: View, near: View, out: &mut Value) {
+        if u.get("air").truthy() || u.path("rts.sea.ship").truthy() || u.path("rts.deployed").truthy() {return;}
+        let step=out.get("step");if !step.truthy(){return;}
+        let (mut x,mut y)=(step.get("x").num_or(0.0),step.get("y").num_or(0.0));
+        let length=x.hypot(y);if length<0.01{return;}
+        x/=length;y/=length;
+        for a in near.iter().filter(|a| !a.get("rival").truthy() && a.get("owner").num()==u.get("owner").num()) {
+            let d=a.get("d").num_or(10.0);
+            if d>0.01 && d<0.9 {let push=(0.9-d)*0.75;x-=a.get("dx").num()/d*push;y-=a.get("dy").num()/d*push;}
+        }
+        // Keep combat micro within the current province's neighbourhood; turning beats an endless retreat.
+        let local=u.get("local");let (px,py)=(local.get("x").num_or(0.0),local.get("y").num_or(0.0));
+        let radius=px.hypot(py);
+        if radius>10.0 && px*x+py*y>0.0 {
+            let turn=if -py*x+px*y>=0.0 {1.0}else{-1.0};
+            x=(-py*turn-px*0.35)/radius;y=(px*turn-py*0.35)/radius;
+        }
+        let terrain=u.get("terrain");
+        if !terrain.is_empty() {
+            let len=x.hypot(y).max(0.01);x/=len;y/=len;
+            let best=terrain.iter().filter(|t|t.get("walk").num_or(0.0)>0.0).max_by(|a,b| {
+                let score=|t:View|x*t.get("x").num()+y*t.get("y").num()+0.2*t.get("walk").num();
+                score(*a).partial_cmp(&score(*b)).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            if let Some(t)=best {x=t.get("x").num();y=t.get("y").num();}else{x=0.0;y=0.0;}
+        }
+        out.set("hold",false);out.set("step",obj!{"x"=>x*length.min(1.0),"y"=>y*length.min(1.0)});
+    }
+
     /// Range control for mobile ground shooters. Explicit hazard dodges take priority.
     /// Step back during reload, plant for the next shot, and keep a gap from allies.
     /// This uses public enemy reach and the unit's own weapon clock; it predicts no damage.

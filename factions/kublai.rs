@@ -1664,7 +1664,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         let pressured = melee.is_some() || hurt;
         let weapon = if best.is_some() && lane("weapon", 620.0) { 500.0 } else { 0.0 };
         let power = obj! {
-            "drive" => if lane("drive", if pressured { 180.0 } else { 84.0 }) { if pressured { 900.0 } else { 420.0 } } else { 0.0 },
+            "drive" => if lane("drive", common::drive_tick(u, if pressured { 900.0 } else { 420.0 })) { if pressured { 900.0 } else { 420.0 } } else { 0.0 },
             "armor" => if pressured && lane("armor", 170.0) { 850.0 } else { 0.0 },
             "weapon" => weapon,
         };
@@ -1675,7 +1675,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         }
 
         // Dodge telegraphed artillery before deciding to trade shots.
-        let pos = u.get("pos");
+        let pos = if u.get("local").truthy() {u.get("local")}else{u.get("pos")};
         let (px, py) = (n(pos.get("x")), n(pos.get("y")));
         let hazard = r.get("hazards").iter().find(|h| n(h.get("impactIn")) < 1.3 && (px - n(h.get("x"))).hypot(py - n(h.get("y"))) < n(h.get("radius")) + 0.8);
         if let Some(h) = hazard {
@@ -1688,6 +1688,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         if let Some(b) = best {
             out.set("hit", b.get("id")); // movement and fire intentionally share one order
         }
+        common::close_melee(u,ns,&mut out);
         common::space_ranged(u,ns,&mut out);
 
         let cd = r.get("abilityIn");
@@ -1695,7 +1696,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         let mended = repair_friend(u, ns, &mut out, jmin(bank, if abilities.is_nullish() { bank } else { n(abilities) }), level);
         if mended != 0.0 && !mended.is_nan() {
             // paid support or self-repair
-        } else if melee.is_some() && modules.has_str("dash") && n(r.get("dashIn")) <= 0.0 && lane("abilities", 900.0) {
+        } else if melee.is_some() && modules.has_str("dash") && r.path("abilityIn.dash").num_or(0.0) <= 0.0 && lane("abilities", 900.0) {
             out.set("ability", "dash");
         } else if (air.is_some() || (is_str(ty, "sentry") && best.is_some())) && modules.has_str("scan") && cd.get("scan").or(0.0) <= 0.0 && lane("abilities", 700.0) {
             out.set("ability", "scan");
@@ -1711,6 +1712,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
                 out.set("aim", obj! { "x" => px + bx, "y" => py + by });
             }
         }
+        common::steer_ground(u,ns,&mut out);
         if best.is_some() || out.get("step").truthy() || out.get("ability").truthy() {
             order(out);
         }
