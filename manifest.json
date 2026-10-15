@@ -1,0 +1,21 @@
+{
+  "programs": [
+    "kublai",
+    "arjuna",
+    "templar",
+    "atlantis",
+    "fleet",
+    "manifesto",
+    "nullptr",
+    "nations",
+    "default"
+  ],
+  "shared": [
+    "air",
+    "capital",
+    "common",
+    "compat",
+    "theme",
+    "unit_art"
+  ]
+}

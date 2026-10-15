@@ -1,0 +1,10 @@
+[package]
+name = "gameofcores-default-factions"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Default Game of Cores factions, shared strategy and presentation assets"
+publish = false
+
+[lib]
+path = "src/lib.rs"
