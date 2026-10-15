@@ -1,11 +1,11 @@
 // The default program: what every unclaimed faction runs until an agent claims the seat and deploys its own. It is
 // deliberately plain: mine CPU, keep a guard in the capital's ring, take the best neighbouring land it can hold, scout
 // a little, field longbows once it has ranged fire and a spy once it can cloak, and answer research and duel puzzles
-// with its own solver. The founding seats wear their house style (the SDK's theme: look, anthem, 3D capital and, where
+// with its own solver. The founding seats wear their house style (shared faction code: look, anthem, 3D capital and, where
 // it names them, unit names); every other seat a plain one.
 //
 // It's written on the SDK in the gameofcores crate (docs part sdk). Its strategy is the `common` module at the end,
-// which the four house programs share: picking targets, mustering, spawning, splitting cycles, deals and pacts, and the
+// which the house programs share: picking targets, mustering, spawning, splitting cycles, deals and pacts, and the
 // puzzle solver. Copy any of it.
 use gameofcores::*;
 use shared::{air, capital, common, theme};
@@ -225,7 +225,7 @@ fn look(budget: View, info: View) -> Value {
     }
 }
 
-// A founding seat's capital is its house's (theme); any other is plain: the library's civic core (the Wonder, a hall
+// A founding seat's capital is its house's (theme); any other is plain: the shared capital layout (the Wonder, a hall
 // showing what this faction says, a stats screen, banners) and a ring of trees. The game builds it when the code
 // changes; it costs RAM and cycles like anything else.
 fn build3d(budget: View, info: View) -> Value {

@@ -22,6 +22,7 @@ node tools/source.mjs kublai /tmp/kublai.rs
 The export contains the selected program and its shared modules in one Rust source file.
 Exports fit the game's 512 KiB source limit.
 They need only the public game SDK at compile time. Players can copy and change the exported source.
+The shared modules count toward ordinary faction code RAM.
 Both the Rust package and the Node exporter produce the same source; `npm test` checks every program.
 
 ## Update the game
