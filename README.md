@@ -54,3 +54,8 @@ The lock file records the repository, commit and file hashes. Edit this reposito
 Ordinary game builds use the installed snapshot without fetching another repository.
 
 Run the game's Rust, viewer and copy checks before shipping a new snapshot.
+
+The default programs also build when a CPU RTS world enables structures.
+Their shared policy reads `me.rts.structureCosts` before issuing building orders.
+Both the uniform default program and the separate house programs use each seat's design.
+See [default buildings](docs/buildings.md) for their priorities and spending limits.

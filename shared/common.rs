@@ -1084,6 +1084,12 @@ use super::{air, theme};
     /// Runs a house's own strategy, with its own economic safety policy around every return path. Classic worlds
     /// keep the house's strategy. No engine allocation, exemption or rule is involved.
     pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
+        let mut orders = govern_units(world, me, share, strategy);
+        super::structures::apply(&mut orders, world, me);
+        orders
+    }
+
+    fn govern_units(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
         if !me.path("rts.cpu").truthy() { return strategy(); }
         if world.get("logistics").truthy() {
             let income=me.path("rts.cpu.income").num_or(20000.0);
