@@ -287,7 +287,7 @@ fn plan(orders: &mut Value, world: View, me: View, style: usize, own: &[View], u
         let key = format!("home-{province:.0}-{now:.0}");
         orders.set("structures", arr![obj! { "key" => key, "p" => province, "x" => x, "y" => y,
             "shell" => obj! { "radius" => w.r, "height" => height, "integrity" => integrity },
-            "ports" => w.ports, "appearance" => architecture(style, w.role, w.r), "budget" => w.quote + pl }]);
+            "ports" => w.ports, "appearance" => architecture(style, w.role), "budget" => w.quote + pl }]);
         break;
     }
 }
@@ -351,407 +351,197 @@ pub fn spot(p: View, sites: View, r: f64, units: &[View]) -> Option<(f64, f64)> 
 pub enum Role { Landmark, Hall, Yard, Works, Bastion, Bay }
 pub const ROLES: [Role; 6] = [Role::Landmark, Role::Hall, Role::Yard, Role::Works, Role::Bastion, Role::Bay];
 
+/// One piece of a building. Kind and tone are letters from KINDS and TONES; tone 0 is the kind's usual material.
 #[derive(Clone, Copy)]
-struct Pc { kind: &'static str, x: f64, y: f64, z: f64, w: f64, h: f64, d: f64, rot: f64, tone: &'static str }
-impl Pc {
-    fn d(&mut self, d: f64) -> &mut Self { self.d = d; self }
-    fn rot(&mut self, r: f64) -> &mut Self { self.rot = r; self }
-    fn tone(&mut self, t: &'static str) -> &mut Self { self.tone = t; self }
-}
+struct Pc { kind: u8, x: f64, y: f64, z: f64, w: f64, h: f64, d: f64, rot: f64, tone: u8 }
+const KINDS: &str = "pplatform hhall ttower rroof aarch ccolumn wwall xaccent Ddome sspire Ppyramid ddrum Ttiers kstack ggarden bbanner llight Sstatue";
+const TONES: &str = "Ffaction sstone mmarble bbrick wwood Mmetal ggold Gglass kdark jjade nsand";
+fn word(table: &str, c: u8) -> &str { table.split(' ').find(|w| w.as_bytes()[0] == c).map_or("", |w| &w[1..]) }
 struct Art(Vec<Pc>);
 impl Art {
-    fn add(&mut self, kind: &'static str, x: f64, y: f64, z: f64, w: f64, h: f64) -> &mut Pc {
-        self.0.push(Pc { kind, x, y, z, w, h, d: 0.0, rot: 0.0, tone: "" });
-        let n = self.0.len() - 1;
-        &mut self.0[n]
+    fn add(&mut self, kind: u8, x: f64, y: f64, z: f64, w: f64, h: f64, d: f64, tone: u8) {
+        self.0.push(Pc { kind, x, y, z, w, h, d, rot: 0.0, tone });
     }
     /// The engine's `appearance`: at most 40 pieces, inside its bounds, to the hundredth of a cell.
     fn value(&self, name: &str) -> Value {
         let r = |v: f64, lo: f64, hi: f64| (v.clamp(lo, hi) * 100.0).round() / 100.0;
         let mut pieces = Value::arr();
         for q in self.0.iter().take(40) {
-            let mut o = obj! { "kind" => q.kind, "x" => r(q.x, -8.0, 8.0), "y" => r(q.y, -8.0, 8.0), "z" => r(q.z, 0.0, 12.0),
-                "w" => r(q.w, 0.1, 12.0), "h" => r(q.h, 0.1, 16.0) };
+            let mut o = obj! { "kind" => word(KINDS, q.kind), "x" => r(q.x, -8.0, 8.0), "y" => r(q.y, -8.0, 8.0),
+                "z" => r(q.z, 0.0, 12.0), "w" => r(q.w, 0.1, 12.0), "h" => r(q.h, 0.1, 16.0) };
             if q.d > 0.0 { o.set("d", r(q.d, 0.1, 12.0)); }
             if q.rot != 0.0 { o.set("rot", r(q.rot, -360.0, 360.0)); }
-            if !q.tone.is_empty() { o.set("tone", q.tone); }
+            if q.tone != 0 { o.set("tone", word(TONES, q.tone)); }
             pieces.push(o);
         }
         obj! { "name" => name, "pieces" => pieces }
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
-enum Roof { Gable, Dome, Tiers, Stepped, Flat }
-#[derive(Clone, Copy, PartialEq)]
-enum Spire { Domed, Minaret, Needle, Observatory, Pagoda, Mast, Clock, Tank, Obelisk }
-/// A house's building kit: its walls, terraces, roofs and towers.
-struct Kit { wall: &'static str, base: &'static str, roof: Roof, spire: Spire, garden: bool, names: [&'static str; 6] }
+/// A house's building kit, a letter each: wall and terrace tones; roof (Dome, Stepped, Gable, Tiers or Flat); tower
+/// (domed, minaret, needle, observatory, pagoda, Mast, clock, tank or Obelisk); and y for gardens.
+struct Kit { wall: u8, base: u8, roof: u8, spire: u8, garden: bool }
+const KITS: [&str; 10] = ["msDdy", "nnSmy", "ssGny", "mmDoy", "wsTpn", "ssFnn", "GkFMn", "bnGcn", "MnGtn", "mmFOy"];
+/// Each house's names for its landmark, hall, yard, works, bastion and bay.
+const NAMES: [&str; 10] = [
+
+    "Pleasure dome|Khan's court|Caravan yard|Ore camp|Steppe bastion|Horse lines",
+    "Temple of the bow|Mandapa|Chariot yard|Forge ghat|Bow relay|Healing house",
+    "Sanctum cathedral|Chapter house|Commandery yard|Abbey works|Chapter keep|Infirmary",
+    "Salomon's House|Research court|Merchants' yard|Furnace house|Sea bastion|Physic hall",
+    "Longjiang pagoda|Admiralty hall|Treasure-ship yard|Rope works|Harbor fort|Dry dock",
+    "Great Reading Room|Assembly hall|People's depot|Red works|Committee fort|Workers' clinic",
+    "Address Zero|Pointer court|Cache depot|Heap works|Pointer spire|Patch bay",
+    "Kirkcaldy exchange|Exchange hall|Exchange depot|Pin factory|Customs fort|Mending house",
+    "Campion command|Mess hall|Supply dump|Bore works|Emu roost|Field hospital",
+    "Flux commons|Open courtyard|Depot|Works|Bastion|Workshop",
+];
 fn kit(style: usize) -> Kit {
-    let k = |wall, base, roof, spire, garden, names| Kit { wall, base, roof, spire, garden, names };
-    match style {
-        0 => k("marble", "stone", Roof::Dome, Spire::Domed, true,
-            ["Pleasure dome", "Khan's court", "Caravan yard", "Ore camp", "Steppe bastion", "Horse lines"]),
-        1 => k("sand", "sand", Roof::Stepped, Spire::Minaret, true,
-            ["Temple of the bow", "Mandapa", "Chariot yard", "Forge ghat", "Bow relay", "Healing house"]),
-        2 => k("stone", "stone", Roof::Gable, Spire::Needle, true,
-            ["Sanctum cathedral", "Chapter house", "Commandery yard", "Abbey works", "Chapter keep", "Infirmary"]),
-        3 => k("marble", "marble", Roof::Dome, Spire::Observatory, true,
-            ["Salomon's House", "Research court", "Merchants' yard", "Furnace house", "Sea bastion", "Physic hall"]),
-        4 => k("wood", "stone", Roof::Tiers, Spire::Pagoda, false,
-            ["Longjiang pagoda", "Admiralty hall", "Treasure-ship yard", "Rope works", "Harbor fort", "Dry dock"]),
-        5 => k("stone", "stone", Roof::Flat, Spire::Needle, false,
-            ["Great Reading Room", "Assembly hall", "People's depot", "Red works", "Committee fort", "Workers' clinic"]),
-        6 => k("glass", "dark", Roof::Flat, Spire::Mast, false,
-            ["Address Zero", "Pointer court", "Cache depot", "Heap works", "Pointer spire", "Patch bay"]),
-        7 => k("brick", "sand", Roof::Gable, Spire::Clock, false,
-            ["Kirkcaldy exchange", "Exchange hall", "Exchange depot", "Pin factory", "Customs fort", "Mending house"]),
-        8 => k("metal", "sand", Roof::Gable, Spire::Tank, false,
-            ["Campion command", "Mess hall", "Supply dump", "Bore works", "Emu roost", "Field hospital"]),
-        _ => k("marble", "marble", Roof::Flat, Spire::Obelisk, true,
-            ["Flux commons", "Open courtyard", "Depot", "Works", "Bastion", "Workshop"]),
-    }
+    let b = KITS[style.min(9)].as_bytes();
+    Kit { wall: b[0], base: b[1], roof: b[2], spire: b[3], garden: b[4] == b'y' }
 }
 /// The house roof over a block w × d centred at (x, y) whose walls end at z.
 fn roof(a: &mut Art, k: &Kit, x: f64, y: f64, z: f64, w: f64, d: f64) {
     let m = w.min(d);
     match k.roof {
-        Roof::Gable => { a.add("roof", x, y, z, w, (m * 0.5).min(1.1)).d(d).tone("faction"); }
-        Roof::Dome => {
-            a.add("accent", x, y, z, w + 0.06, 0.1).d(d + 0.06).tone(k.base);
-            a.add("drum", x, y, z + 0.1, m * 0.6, 0.35).tone(k.wall);
-            a.add("dome", x, y, z + 0.45, m * 0.64, m * 0.4).tone("faction");
+        b'G' => a.add(b'r', x, y, z, w, (m * 0.5).min(1.1), d, b'F'),
+        b'D' => {
+            a.add(b'x', x, y, z, w + 0.06, 0.1, d + 0.06, k.base);
+            a.add(b'd', x, y, z + 0.1, m * 0.6, 0.35, 0.0, k.wall);
+            a.add(b'D', x, y, z + 0.45, m * 0.64, m * 0.4, 0.0, b'F');
         }
-        Roof::Tiers => { a.add("tiers", x, y, z, w * 0.95, (m * 0.9).clamp(1.2, 2.4)).d(d * 0.95).tone("faction"); }
-        Roof::Stepped => { a.add("pyramid", x, y, z, w * 0.92, (m * 0.75).clamp(0.9, 2.2)).d(d * 0.92).tone("faction"); }
-        Roof::Flat => { a.add("accent", x, y, z, w * 0.9, 0.16).d(d * 0.9).tone("faction"); }
+        b'T' => a.add(b'T', x, y, z, w * 0.95, (m * 0.9).clamp(1.2, 2.4), d * 0.95, b'F'),
+        b'S' => a.add(b'P', x, y, z, w * 0.92, (m * 0.75).clamp(0.9, 2.2), d * 0.92, b'F'),
+        _ => a.add(b'x', x, y, z, w * 0.9, 0.16, d * 0.9, b'F'),
     }
 }
 /// A house tower w across and h tall at (x, y), standing on z.
 fn spire(a: &mut Art, k: &Kit, x: f64, y: f64, z: f64, w: f64, h: f64) {
+    let t = k.wall;
     match k.spire {
-        Spire::Domed => { a.add("drum", x, y, z, w, h).tone(k.wall); a.add("dome", x, y, z + h, w * 1.08, w * 0.62).tone("faction"); }
-        Spire::Minaret => {
-            a.add("drum", x, y, z, w * 0.72, h).tone(k.wall);
-            a.add("drum", x, y, z + h * 0.72, w * 0.95, 0.12).tone("gold");
-            a.add("dome", x, y, z + h, w * 0.8, w * 1.25).tone("faction");
+        b'd' => { a.add(b'd', x, y, z, w, h, 0.0, t); a.add(b'D', x, y, z + h, w * 1.08, w * 0.62, 0.0, b'F'); }
+        b'm' => {
+            a.add(b'd', x, y, z, w * 0.72, h, 0.0, t);
+            a.add(b'd', x, y, z + h * 0.72, w * 0.95, 0.12, 0.0, b'g');
+            a.add(b'D', x, y, z + h, w * 0.8, w * 1.25, 0.0, b'F');
         }
-        Spire::Needle => { a.add("tower", x, y, z, w, h).tone(k.wall); a.add("spire", x, y, z + h + 0.22, w * 0.95, h * 0.6).tone("faction"); }
-        Spire::Observatory => { a.add("tower", x, y, z, w, h).tone(k.wall); a.add("dome", x, y, z + h + 0.22, w * 0.88, w * 0.55).tone("glass"); }
-        Spire::Pagoda => { a.add("tiers", x, y, z, w * 1.3, h * 1.1).tone("faction"); }
-        Spire::Mast => {
-            a.add("hall", x, y, z, w * 0.85, h).d(w * 0.85).tone("glass");
-            a.add("accent", x, y, z + h, w * 0.6, 0.25).d(w * 0.6).tone("faction");
-            a.add("light", x, y, z + h + 0.25, 0.2, h * 0.45).tone("metal");
+        b'n' => { a.add(b't', x, y, z, w, h, 0.0, t); a.add(b's', x, y, z + h + 0.22, w * 0.95, h * 0.6, 0.0, b'F'); }
+        b'o' => { a.add(b't', x, y, z, w, h, 0.0, t); a.add(b'D', x, y, z + h + 0.22, w * 0.88, w * 0.55, 0.0, b'G'); }
+        b'p' => a.add(b'T', x, y, z, w * 1.3, h * 1.1, 0.0, b'F'),
+        b'M' => {
+            a.add(b'h', x, y, z, w * 0.85, h, w * 0.85, b'G');
+            a.add(b'x', x, y, z + h, w * 0.6, 0.25, w * 0.6, b'F');
+            a.add(b'l', x, y, z + h + 0.25, 0.2, h * 0.45, 0.0, b'M');
         }
-        Spire::Clock => {
-            a.add("tower", x, y, z, w, h).tone(k.wall);
-            a.add("accent", x, y - w / 2.0 - 0.03, z + h - w * 0.75, w * 0.55, w * 0.55).d(0.06).tone("gold");
-            a.add("spire", x, y, z + h + 0.22, w * 0.9, h * 0.4).tone("faction");
+        b'c' => {
+            a.add(b't', x, y, z, w, h, 0.0, t);
+            a.add(b'x', x, y - w / 2.0 - 0.03, z + h - w * 0.75, w * 0.55, w * 0.55, 0.06, b'g');
+            a.add(b's', x, y, z + h + 0.22, w * 0.9, h * 0.4, 0.0, b'F');
         }
-        Spire::Tank => {
-            a.add("column", x, y, z, 0.16, h * 0.7).tone("metal");
-            a.add("drum", x, y, z + h * 0.7, w * 1.2, h * 0.3).tone("metal");
-            a.add("spire", x, y, z + h, w * 1.25, w * 0.4).tone("faction");
+        b't' => {
+            a.add(b'c', x, y, z, 0.16, h * 0.7, 0.0, b'M');
+            a.add(b'd', x, y, z + h * 0.7, w * 1.2, h * 0.3, 0.0, b'M');
+            a.add(b's', x, y, z + h, w * 1.25, w * 0.4, 0.0, b'F');
         }
-        Spire::Obelisk => { a.add("statue", x, y, z, w * 0.9, h * 1.1).tone("marble"); }
+        _ => a.add(b'S', x, y, z, w * 0.9, h * 1.1, 0.0, b'm'),
     }
 }
 
-/// Site `style`'s building for `role` on a shell of radius `r`, with its design name.
-pub fn architecture(style: usize, role: Role, r: f64) -> Value {
+// Designs are written small, since a program pays for its length in memory: pieces `kind x,y,z,w,h,d,rot/tone` split by
+// `;`, a blank number is 0 and d and rot may be left off. `+x,y,z` repeats the last piece elsewhere (left off, z stays).
+// `<...>` draws its pieces mirrored east to west, then as written. `R` and `Q` are the kit's roof (x,y,z,w,d) and tower
+// (x,y,z,w,h). Pieces after `?` or `!` stand only with or without gardens, after `=` or `~` only with or without flat
+// roofs. Tones W and B are the kit's walls and terrace; V is the walls and X brick, both metal in a glass house.
+// Each design is drawn for its role's radius in `plan`.
+
+/// The hall, yard, works, bastion and bay. 
+const DESIGNS: [&str; 5] = [
+    // A civic hall: a terrace and steps, the hall under the house roof, a portico, wings, two towers, greens and banners.
+    "p,.1,,3.6,.35,3.1/B;p,-1.6,,1.4,.18,.45/B;h,.4,.35,2.2,1.5,1.5/W;R,.4,1.85,2.2,1.5;<c.9,-.62,.35,.2,1.25/m;+.3,-.62>;x,-.62,1.6,2.1,.2,.42/W;<h1.35,.65,.35,.75,1,1.2/W;x1.35,.65,1.35,.8,.14,1.25/F;Q1.4,1.25,.35,.55,2.3;?g1.2,-1,.35,.9,.1,.8;!S1.25,-1.05,.35,.42,1.5/k;b.85,-1.35,.35,.45,2;l.42,-1.42,.35,.16,.75/g>",
+    // A supply yard: warehouses under the house colour, stacked crates, a crane, a fence and a gate.
+    "p,,,2.8,.15,2.48/B;h-.24,.76,.15,2.08,1.15,.8/V;=x-.24,.76,1.3,1.91,.14,.74/F;~r-.24,.76,1.3,2.18,.36,.9/F;h-1,-.36,.15,.72,.9,1.2/V;=x-1,-.36,1.05,.66,.14,1.1/F;~r-1,-.36,1.05,.82,.32,1.3/F;x.12,-.36,.15,.32,.32/w;+.4,-.36;+.26,-.36,.47;+.12,-.72,.15;+.68,.08;+.68,-.24;c1.04,.24,.15,.14,2.4/M;x.68,.08,2.45,1.5,.1,.12,-25/M;w.72,-1.2,.15,1.04,.45,.12/w;a-.28,-1.2,.15,.72,1,.3/B;b1.24,-1.04,.15,.45,1.8;l1.2,.8,.15,.16,1.3/g",
+    // Extraction works: a shed, smoking stacks, tanks, a headframe and heaps of ore.
+    "p,,,2.63,.15,2.33/k;h-.34,.41,.15,1.65,1.3,1.05/X;r-.34,.41,1.45,1.73,.5,1.13/F;k.71,.83,.15,.42,2.3/b;k1.05,.45,.15,.36,1.8/b;d.86,-.41,.15,.8,.9/M;D.86,-.41,1.05,.8,.28/M;d.3,-.79,.15,.6,.7/M;D.3,-.79,.85,.6,.21/M;t-1.01,-.22,.15,.45,2.1/M;r-1.01,-.22,2.47,.6,.3,.6/F;P-.79,-.86,.15,.9,.5/k;P-.26,-.94,.15,.6,.35/n;l.26,-.15,.15,.16,1.2/g;b1.16,-.94,.15,.45,1.6",
+    // A bastion: curtain walls round a keep (the battery stands on top), towers at the corners and a gatehouse.
+    "p,,,2.72,.3,2.72/s;w,1.12,.3,2.24,1.1,.35/s;<w1.12,,.3,2.24,1.1,.35,90/s;w.76,-1.12,.3,.76,1.1,.35/s>;a,-1.12,.3,.76,1.5,.5/W;r,-1.12,1.8,.84,.35,.6/F;<Q1.12,1.12,.3,.7,1.8;Q1.12,-1.12,.3,.7,1.8>;h-.44,.44,.3,.8,.9,.64/W;t.2,.12,.3,.96,2.5/s;b.52,.44,3.02,.45,1.1;l-.44,-.6,.3,.16,.8/g",
+    // A repair bay: a workshop with a great door, a gantry crane, lamps and spares.
+    "p,,,2.55,.15,2.25/B;h,.45,.15,1.88,1.5,1.05/V;R,.45,1.65,1.875,1.05;a,-.09,.15,1.13,1.4,.2/B;<c.9,-.68,.15,.14,2/M;l.45,-.98,.15,.18,.9/g>;x,-.68,2.15,1.95,.14,.16/F;x-1.01,-.19,.15,.3,.3/w;+-.75,-.3;+1.01,-.22;b1.13,.94,.15,.45,2",
+];
+/// Each house's capital landmark.
+const LANDMARKS: [&str; 10] = [
+    // Xanadu: a stately pleasure-dome on a round terrace, gers at its corners, gardens and a gate
+    "a,-2.05,.35,1.3,1.5,.5/m;D,.15,2.17,2.3,1.2/F;d,.15,1.95,2.1,.22/g;d,.15,.65,2.3,1.3/m;d,,.35,3.9,.3/m;d,,,4.8,.35/s;g,1.9,.35,.75,.1,.75;r,-2.05,1.85,1.5,.45,.7/F;w.88,2.12,.35,1.5,.45,.2,157.5/m;w-.88,2.12,.35,1.5,.45,.2,202.5/m;w-2.12,.88,.35,1.5,.45,.2,247.5/m;w-2.12,-.88,.35,1.5,.45,.2,292.5/m;w-.88,-2.12,.35,1.5,.45,.2,337.5/m;w.88,-2.12,.35,1.5,.45,.2,360/m;<b2,-1,.35,.5,2.4;+1.6,1.7;c.55,-1.35,.65,.18,1.2/g;D1.3,-1.3,1.15,.86,.5/F;+1.3,1.3;d1.3,-1.3,.65,.8,.5/m;+1.3,1.3;g1.9,,.35,.75,.1,.75;l.9,-2.1,.35,.18,.9/g>",
+    // Kurukshetra: a temple on a raised plinth, its stepped tower over the sanctum, a pillared hall, shrines, a tank
+    "x,-.35,1.8,1.8,.16,1.05/n;c,-.65,.7,.18,1.1/n;+,-.05;D,.95,4.8,.5,.32/g;h,.95,.7,1.4,1.3,1.4/n;p,-1.65,,1.8,.1,.7/G;p,.45,.35,3.3,.35,2.9/n;p,.1,,4.6,.35,4.2/n;P,-.35,1.96,1.4,.9,.85/F;P,.95,2,1.55,2.8,1.55/F;<b1.75,-1.55,2.8,.4,.6;c1.75,-1.55,.35,.16,2.8/g;c.65,-.65,.7,.18,1.1/n;+.65,-.05;g1.9,.5,.35,.6,.1,1;h1.3,-.4,.7,.6,.6,.6/n;+1.3,1.35;l.6,-1.15,.35,.16,.7/g;P1.3,-.4,1.3,.62,1,.62/F;+1.3,1.35>",
+    // Sanctum: a cathedral with a long nave, a transept, twin west towers, a crossing spire, buttresses and a cloister
+    "a,-1.62,.3,.76,1.7,.4/m;d,1.7,.3,1.35,1.9/s;g1.5,-.75,.3,1,.1,1.2;h,.1,.3,1.4,2.2,3.1/s;h,.55,.3,3,2,1/s;p,,,4.4,.3,4.6/s;r,.1,2.5,1.5,1,3.2/F;r,.55,2.3,3.1,.9,1.1/F;s,.55,3.82,.8,2.6/F;s,1.7,2.2,1.45,.8/F;S-1.55,-1,.3,.5,1.6/m;t,.55,2.3,.8,1.3/s;w2.05,-.75,.3,1.3,.75,.22,90/s;<x.82,-.85,.3,.24,1.7,.5/s;+.82,-.25;+.82,1.15;b1.5,-2,.3,.5,2.2;l.32,-2.05,.3,.16,.7/g;s.72,-1.55,3.82,.68,1.7/F;t.72,-1.55,.3,.68,3.3/s>",
+    // Bensalem: Salomon's House, a glass-domed hall of experiments between two high towers, observatories, a pool
+    "x,.35,1.9,2.6,.12,1.8/m;D1.55,1.35,3.72,.62,.42/F;+-1.55,1.35,4.52;D,.35,2.55,1.4,.85/G;d,.35,2.05,1.3,.5/m;h,.35,.3,2.5,1.6,1.7/m;p,-1.65,.3,1.6,.1,.55/G;p,,,4.6,.3,4.4/m;r,-.75,1.65,2.3,.45,.5/m;S,-2.05,,.4,1.5/g;t1.55,1.35,.3,.7,3.2/m;t-1.55,1.35,.3,.7,4/m;<b1,-2,.3,.45,2;c.19,-.75,.3,.17,1.35/m;+.57,-.75;+.95,-.75;D1.7,-1.3,1.2,.78,.45/G;d1.7,-1.3,.3,.75,.9/m;g1.7,.1,.3,.75,.1,.8>",
+    // Longjiang: a great pagoda, a lighthouse, shipyard sheds, a basin with a junk, a gate of honour
+    "x1.85,-1.7,.35,.28,.28/w;+1.5,-1.6;+1.85,-1.4;x.15,-1.4,.65,.4,.22,.38/w;x.65,-1.4,.35,1.5,.3,.42/w;b.5,-1.4,.65,.42,1.4;+1,-1.4;c-1.05,-1.75,.3,.16,1.3/F;+-.35,-1.75;D1.6,1.15,3.74,.6,.4/F;d1.6,1.15,.3,.75,3/m;d1.6,1.15,3.3,.95,.14/k;g.85,.35,.3,.7,.1,.7;h-1.65,-.45,.3,.95,1.1,2.3/w;l-.45,-.75,.3,.18,.7/F;+.25,-.75;+-1.75,1.6;l1.6,1.15,3.44,.42,.3/g;p-.3,.65,.3,1.9,.3,1.9/m;p.65,-1.4,.3,2.5,.1,1.05/G;p,,,4.6,.3,4.2/s;r-.7,-1.75,1.6,1.05,.35,.32/F;r-1.65,-.45,1.4,1.05,.55,2.4/F;T1.65,-.15,.3,.75,2.3/F;T-.3,.65,.6,1.8,4.6/F",
+    // The Reading Room: a great domed drum in a court, an eight-column portico, monuments, banners, a lattice tower
+    "x,-1.3,1.9,3.15,.2,.5/m;D,.4,2.07,2.45,1.1/F;d1.75,1.95,2.55,.45,1/M;d1.75,1.95,1.55,.62,1/M;d1.75,1.95,.35,.8,1.2/M;d,.4,1.85,2.35,.22/m;d,.4,.35,2.6,1.5/s;p,,,4.6,.35,4.4/s;r,-1.3,2.1,3.15,.55,.55/m;s1.75,1.95,3.55,.45,1.2/F;<x1.75,.35,1.95,.85,.14,2.85/F;b1.75,-.95,1.95,.5,1.3;c.2,-1.3,.35,.19,1.55/m;+.6,-1.3;+1,-1.3;+1.4,-1.3;h1.75,.35,.35,.8,1.6,2.8/s;l.5,-1.85,.35,.16,.7/g;S1.85,-1.95,,.5,2.3/k>",
+    // Address Zero: three glass towers of different heights, a pool, the zero ring, masts and lamps
+    "x1.5,.25,3.05,.63,.3,.63/F;x-1.15,.95,5.45,.77,.3,.77/F;x.35,1.25,4.05,.84,.3,.84/F;x1.5,.25,1.79,.98,.12,.98/k;x-1.15,.95,3.11,1.18,.12,1.18/k;x.35,1.25,2.34,1.28,.12,1.28/k;c.35,1.25,4.35,.1,1.4/M;d-1.25,-1.2,.47,.75,.3/k;d-1.25,-1.2,.25,1.2,.22/F;h1.5,.25,.25,.9,2.8,.9/G;h-.2,-.25,.25,1,.7,.6/k;h-1.15,.95,.25,1.1,5.2,1.1/G;h.35,1.25,.25,1.2,3.8,1.2/G;l1.5,.25,3.35,.16,.9/F;+.35,1.25,4.35;+-1.15,.95,5.75;l1.95,-1.6,.25,.16,1.1/M;+1.3,-.75;+-.3,-.55;+-1.95,;l-1.25,-1.2,.77,.3,.2/F;p.35,-1.45,.25,2.4,.1,.9/G;p,,,4.6,.25,4.4/k",
+    // Kirkcaldy: an exchange with a portico and gilded dome, a clock tower, brick warehouses, a crane and crates
+    "x1.2,-1.2,.3,.32,.32/w;+1.55,-1.2;+1.85,-.75;+1.37,-1.2,.62;x1.6,.93,3.45,.5,.5,.1/g;x1.5,-.4,2.55,1.4,.1,.12,-30/M;c1.95,-.2,.3,.14,2.5/M;D,.45,2.95,.95,.6/g;d,.45,2.45,.9,.5/m;h-1.7,-.35,.3,.9,1.3,2/b;h,.45,.3,2.8,1.8,1.6/n;p,,,4.6,.3,4.2/n;r-1.7,-.35,1.6,1,.5,2.1/F;r,-.62,1.8,2.4,.45,.5/m;r,.45,2.1,2.9,.6,1.7/F;s1.6,1.35,4.42,.75,1.3/F;S,-1.85,,.45,1.4/k;t1.6,1.35,.3,.75,3.9/b;<b1,-1.6,.3,.45,2;c.2,-.62,.3,.18,1.5/m;+.6,-.62;+1,-.62;l.45,-1.65,.3,.16,.8/g>",
+    // Campion: a corrugated headquarters, barracks, a water tower, a windmill, a lookout and a parade ground
+    "x1.7,-.62,2.25,.1,1.3,.1/M;x.85,,.15,.3,.3/w;+1.15,;+1,,.45;x1.7,-.62,2.86,1.3,.1,.1/M;b.2,-1,3.09,.6,.1;c1.2,1,.15,.1,2.2/M;+1.9,1;+1.2,1.7;+1.9,1.7;c.2,-1,.19,.1,2.9/M;c1.7,-.55,.15,.12,2.8/M;d1.55,1.35,2.35,1,.8/M;h-1.7,-.6,.15,.85,.9,1.8/w;h-.3,.65,.15,2.7,1.2,1.3/M;l-.85,-.25,.15,.16,1.1/g;p.2,-1,.15,1.8,.1,1.2/k;p,,,4.6,.15,4.4/n;r-1.65,1.5,3.67,.85,.35,.85/F;r-1.7,-.6,1.05,.95,.4,1.9/F;r-.3,.65,1.35,2.8,.45,1.4/F;s1.55,1.35,3.15,1.05,.4/F;S.95,-1.75,.15,.45,1.3/k;t-1.65,1.5,.15,.65,3.3/w;w1.2,-2.1,.15,1.4,.35,.1/w;w-.6,-2.1,.15,1.6,.35,.1/w",
+    // Flux: white blocks cantilevered over a garden court, a glass gallery, pilotis, a pool and an obelisk
+    "x1.6,-.4,3.65,.8,.2,.8/F;x.45,.95,2.65,2.55,.14,1.25/F;b-1.9,1.75,.25,.5,2.4;c.9,.55,.25,.14,1.3/m;+1.5,.55;g.2,-.55,.25,1,.1,.9;g-1.25,-.9,.25,1.4,.1,1.2;h1.6,-.4,.25,.75,3.4,.75/m;h-.65,.75,.25,2.3,1.3,1.3/m;h.45,.95,1.55,2.5,1.1,1.2/G;l-.9,-1.35,.25,.16,.9/F;+.5,-1.25;+-1.95,;p-.2,-1.75,.25,2.4,.1,.55/G;p,,,4.6,.25,4.4/m;S1.6,-1.6,.25,.4,2.6/m",
+];
+
+/// Draws `src` into `a`; sx is -1 for the mirrored half of a `<...>`.
+fn draw(a: &mut Art, k: &Kit, src: &str, sx: f64) {
+    let mut rest = src;
+    while !rest.is_empty() {
+        if let Some(b) = rest.strip_prefix('<') {
+            let end = b.find('>').unwrap_or(b.len());
+            draw(a, k, &b[..end], -sx);
+            draw(a, k, &b[..end], sx);
+            rest = b.get(end + 1..).unwrap_or("").trim_start_matches(';');
+            continue;
+        }
+        let end = rest.find([';', '<']).unwrap_or(rest.len());
+        piece(a, k, &rest[..end], sx);
+        rest = rest[end..].trim_start_matches(';');
+    }
+}
+fn piece(a: &mut Art, k: &Kit, s: &str, sx: f64) {
+    let (s, ok) = match s.bytes().next() {
+        Some(b'?') => (&s[1..], k.garden),
+        Some(b'!') => (&s[1..], !k.garden),
+        Some(b'=') => (&s[1..], k.roof == b'F'),
+        Some(b'~') => (&s[1..], k.roof != b'F'),
+        _ => (s, true),
+    };
+    if !ok || s.is_empty() { return; }
+    let (body, tone) = s[1..].split_once('/').unwrap_or((&s[1..], ""));
+    let v: Vec<f64> = body.split(',').map(|n| n.parse().unwrap_or(0.0)).collect();
+    let g = |i: usize| v.get(i).copied().unwrap_or(0.0);
+    let x = g(0) * sx;
+    match s.as_bytes()[0] {
+        b'R' => roof(a, k, x, g(1), g(2), g(3), g(4)),
+        b'Q' => spire(a, k, x, g(1), g(2), g(3), g(4)),
+        b'+' => if let Some(&last) = a.0.last() { a.0.push(Pc { x, y: g(1), z: v.get(2).copied().unwrap_or(last.z), ..last }); },
+        kind => {
+            let tone = match tone.bytes().next().unwrap_or(0) {
+                b'W' => k.wall,
+                b'B' => k.base,
+                b'V' => if k.wall == b'G' { b'M' } else { k.wall },
+                b'X' => if k.wall == b'G' { b'M' } else { b'b' },
+                t => t,
+            };
+            a.0.push(Pc { kind, x, y: g(1), z: g(2), w: g(3), h: g(4), d: g(5), rot: g(6), tone });
+        }
+    }
+}
+
+/// Site `style`'s building for `role`, with its design name.
+pub fn architecture(style: usize, role: Role) -> Value {
     let k = kit(style);
     let mut a = Art(Vec::new());
-    let name = match role {
-        Role::Landmark => { landmark(&mut a, &k, style, r / 2.5); k.names[0] }
-        Role::Hall => { hall(&mut a, &k, r / 2.0); k.names[1] }
-        Role::Yard => { yard(&mut a, &k, r / 2.0); k.names[2] }
-        Role::Works => { works(&mut a, &k, r / 2.0); k.names[3] }
-        Role::Bastion => { bastion(&mut a, &k, r / 2.0); k.names[4] }
-        Role::Bay => { bay(&mut a, &k, r / 2.0); k.names[5] }
-    };
-    a.value(name)
-}
-
-/// A civic hall: a terrace and steps, the hall under the house roof, a portico, wings, two towers, greens and banners.
-fn hall(a: &mut Art, k: &Kit, f: f64) {
-    a.add("platform", 0.0, 0.1 * f, 0.0, 3.6 * f, 0.35).d(3.1 * f).tone(k.base);
-    a.add("platform", 0.0, -1.6 * f, 0.0, 1.4 * f, 0.18).d(0.45).tone(k.base);
-    a.add("hall", 0.0, 0.4 * f, 0.35, 2.2 * f, 1.5).d(1.5 * f).tone(k.wall);
-    roof(a, k, 0.0, 0.4 * f, 1.85, 2.2 * f, 1.5 * f);
-    for x in [-0.9, -0.3, 0.3, 0.9] { a.add("column", x * f, -0.62 * f, 0.35, 0.2, 1.25).tone("marble"); }
-    a.add("accent", 0.0, -0.62 * f, 1.6, 2.1 * f, 0.2).d(0.42).tone(k.wall);
-    for s in [-1.0, 1.0] {
-        a.add("hall", s * 1.35 * f, 0.65 * f, 0.35, 0.75 * f, 1.0).d(1.2 * f).tone(k.wall);
-        a.add("accent", s * 1.35 * f, 0.65 * f, 1.35, 0.8 * f, 0.14).d(1.25 * f).tone("faction");
-        spire(a, k, s * 1.4 * f, 1.25 * f, 0.35, 0.55, 2.3);
-        if k.garden { a.add("garden", s * 1.2 * f, -1.0 * f, 0.35, 0.9 * f, 0.1).d(0.8 * f); }
-        else { a.add("statue", s * 1.25 * f, -1.05 * f, 0.35, 0.42, 1.5).tone("dark"); }
-        a.add("banner", s * 0.85 * f, -1.35 * f, 0.35, 0.45, 2.0);
-        a.add("light", s * 0.42 * f, -1.42 * f, 0.35, 0.16, 0.75).tone("gold");
-    }
-}
-/// A supply yard: warehouses under the house colour, stacked crates, a crane, a fence and a gate.
-fn yard(a: &mut Art, k: &Kit, f: f64) {
-    let shed = |a: &mut Art, x: f64, y: f64, w: f64, h: f64, d: f64| {
-        a.add("hall", x, y, 0.15, w, h).d(d).tone(if k.wall == "glass" { "metal" } else { k.wall });
-        if k.roof == Roof::Flat { a.add("accent", x, y, 0.15 + h, w * 0.92, 0.14).d(d * 0.92).tone("faction"); }
-        else { a.add("roof", x, y, 0.15 + h, w + 0.1, (w.min(d) * 0.45).min(0.6)).d(d + 0.1).tone("faction"); }
-    };
-    a.add("platform", 0.0, 0.0, 0.0, 3.5 * f, 0.15).d(3.1 * f).tone(k.base);
-    shed(a, -0.3 * f, 0.95 * f, 2.6 * f, 1.15, 1.0 * f);
-    shed(a, -1.25 * f, -0.45 * f, 0.9 * f, 0.9, 1.5 * f);
-    for (x, y, z) in [(0.15, -0.45, 0.15), (0.5, -0.45, 0.15), (0.32, -0.45, 0.47), (0.15, -0.9, 0.15), (0.85, 0.1, 0.15), (0.85, -0.3, 0.15)] {
-        a.add("accent", x * f, y * f, z, 0.32, 0.32).tone("wood");
-    }
-    a.add("column", 1.3 * f, 0.3 * f, 0.15, 0.14, 2.4).tone("metal");
-    a.add("accent", 0.85 * f, 0.1 * f, 2.45, 1.5, 0.1).d(0.12).rot(-25.0).tone("metal");
-    a.add("wall", 0.9 * f, -1.5 * f, 0.15, 1.3 * f, 0.45).d(0.12).tone("wood");
-    a.add("arch", -0.35 * f, -1.5 * f, 0.15, 0.9 * f, 1.0).d(0.3).tone(k.base);
-    a.add("banner", 1.55 * f, -1.3 * f, 0.15, 0.45, 1.8);
-    a.add("light", 1.5 * f, 1.0 * f, 0.15, 0.16, 1.3).tone("gold");
-}
-/// Extraction works: a shed, smoking stacks, tanks, a headframe and heaps of ore.
-fn works(a: &mut Art, k: &Kit, f: f64) {
-    a.add("platform", 0.0, 0.0, 0.0, 3.5 * f, 0.15).d(3.1 * f).tone("dark");
-    a.add("hall", -0.45 * f, 0.55 * f, 0.15, 2.2 * f, 1.3).d(1.4 * f).tone(if k.wall == "glass" { "metal" } else { "brick" });
-    a.add("roof", -0.45 * f, 0.55 * f, 1.45, 2.3 * f, 0.5).d(1.5 * f).tone("faction");
-    a.add("stack", 0.95 * f, 1.1 * f, 0.15, 0.42, 2.3).tone("brick");
-    a.add("stack", 1.4 * f, 0.6 * f, 0.15, 0.36, 1.8).tone("brick");
-    for (x, y, w, h) in [(1.15, -0.55, 0.8, 0.9), (0.4, -1.05, 0.6, 0.7)] {
-        a.add("drum", x * f, y * f, 0.15, w, h).tone("metal");
-        a.add("dome", x * f, y * f, 0.15 + h, w, w * 0.35).tone("metal");
-    }
-    a.add("tower", -1.35 * f, -0.3 * f, 0.15, 0.45, 2.1).tone("metal");
-    a.add("roof", -1.35 * f, -0.3 * f, 2.47, 0.6, 0.3).d(0.6).tone("faction");
-    a.add("pyramid", -1.05 * f, -1.15 * f, 0.15, 0.9, 0.5).tone("dark");
-    a.add("pyramid", -0.35 * f, -1.25 * f, 0.15, 0.6, 0.35).tone("sand");
-    a.add("light", 0.35 * f, -0.2 * f, 0.15, 0.16, 1.2).tone("gold");
-    a.add("banner", 1.55 * f, -1.25 * f, 0.15, 0.45, 1.6);
-}
-/// A bastion: curtain walls round a keep (the battery stands on top), towers at the corners and a gatehouse.
-fn bastion(a: &mut Art, k: &Kit, f: f64) {
-    let e = 1.4 * f;
-    a.add("platform", 0.0, 0.0, 0.0, 3.4 * f, 0.3).d(3.4 * f).tone("stone");
-    a.add("wall", 0.0, e, 0.3, 2.8 * f, 1.1).d(0.35).tone("stone");
-    a.add("wall", -e, 0.0, 0.3, 2.8 * f, 1.1).d(0.35).rot(90.0).tone("stone");
-    a.add("wall", e, 0.0, 0.3, 2.8 * f, 1.1).d(0.35).rot(90.0).tone("stone");
-    for s in [-1.0, 1.0] { a.add("wall", s * 0.95 * f, -e, 0.3, 0.95 * f, 1.1).d(0.35).tone("stone"); }
-    a.add("arch", 0.0, -e, 0.3, 0.95 * f, 1.5).d(0.5).tone(k.wall);
-    a.add("roof", 0.0, -e, 1.8, 1.05 * f, 0.35).d(0.6).tone("faction");
-    for (x, y) in [(-1.0, 1.0), (1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)] { spire(a, k, x * e, y * e, 0.3, 0.7, 1.8); }
-    a.add("hall", -0.55 * f, 0.55 * f, 0.3, 1.0 * f, 0.9).d(0.8 * f).tone(k.wall);
-    a.add("tower", 0.25 * f, 0.15 * f, 0.3, 1.2 * f, 2.5).tone("stone");
-    a.add("banner", 0.65 * f, 0.55 * f, 3.02, 0.45, 1.1);
-    a.add("light", -0.55 * f, -0.75 * f, 0.3, 0.16, 0.8).tone("gold");
-}
-/// A repair bay: a workshop with a great door, a gantry crane, lamps and spares.
-fn bay(a: &mut Art, k: &Kit, f: f64) {
-    a.add("platform", 0.0, 0.0, 0.0, 3.4 * f, 0.15).d(3.0 * f).tone(k.base);
-    a.add("hall", 0.0, 0.6 * f, 0.15, 2.5 * f, 1.5).d(1.4 * f).tone(if k.wall == "glass" { "metal" } else { k.wall });
-    roof(a, k, 0.0, 0.6 * f, 1.65, 2.5 * f, 1.4 * f);
-    a.add("arch", 0.0, -0.12 * f, 0.15, 1.5 * f, 1.4).d(0.2).tone(k.base);
-    for x in [-1.2, 1.2] { a.add("column", x * f, -0.9 * f, 0.15, 0.14, 2.0).tone("metal"); }
-    a.add("accent", 0.0, -0.9 * f, 2.15, 2.6 * f, 0.14).d(0.16).tone("faction");
-    for x in [-0.6, 0.6] { a.add("light", x * f, -1.3 * f, 0.15, 0.18, 0.9).tone("gold"); }
-    for (x, y) in [(-1.35, -0.25), (-1.0, -0.4), (1.35, -0.3)] { a.add("accent", x * f, y * f, 0.15, 0.3, 0.3).tone("wood"); }
-    a.add("banner", 1.5 * f, 1.25 * f, 0.15, 0.45, 2.0);
-}
-
-/// Each house's capital landmark (radius 2.5 at f = 1).
-fn landmark(a: &mut Art, k: &Kit, style: usize, f: f64) {
-    let s = f;
-    match style {
-        0 => { // Xanadu: a stately pleasure-dome on a round terrace, gers at its corners, gardens and a gate
-            a.add("drum", 0.0, 0.0, 0.0, 4.8 * s, 0.35).tone("stone");
-            a.add("drum", 0.0, 0.0, 0.35, 3.9 * s, 0.3).tone("marble");
-            for (x, y) in [(-1.9, 0.0), (1.9, 0.0), (0.0, 1.9)] { a.add("garden", x * s, y * s, 0.35, 0.75 * s, 0.1).d(0.75 * s); }
-            a.add("drum", 0.0, 0.15 * s, 0.65, 2.3 * s, 1.3).tone("marble");
-            a.add("drum", 0.0, 0.15 * s, 1.95, 2.1 * s, 0.22).tone("gold");
-            a.add("dome", 0.0, 0.15 * s, 2.17, 2.3 * s, 1.2).tone("faction");
-            for (x, y) in [(-1.3, -1.3), (1.3, -1.3), (-1.3, 1.3), (1.3, 1.3)] {
-                a.add("drum", x * s, y * s, 0.65, 0.8 * s, 0.5).tone("marble");
-                a.add("dome", x * s, y * s, 1.15, 0.86 * s, 0.5).tone("faction");
-            }
-            a.add("arch", 0.0, -2.05 * s, 0.35, 1.3 * s, 1.5).d(0.5).tone("marble");
-            a.add("roof", 0.0, -2.05 * s, 1.85, 1.5 * s, 0.45).d(0.7).tone("faction");
-            for x in [-0.55, 0.55] { a.add("column", x * s, -1.35 * s, 0.65, 0.18, 1.2).tone("gold"); }
-            for i in 0..6 {
-                let t = (i as f64 * 45.0 + 67.5).to_radians();
-                a.add("wall", 2.3 * s * t.cos(), 2.3 * s * t.sin(), 0.35, 1.5 * s, 0.45).d(0.2).rot(i as f64 * 45.0 + 67.5 + 90.0).tone("marble");
-            }
-            for (x, y) in [(-2.0, -1.0), (2.0, -1.0), (-1.6, 1.7), (1.6, 1.7)] { a.add("banner", x * s, y * s, 0.35, 0.5, 2.4); }
-            for x in [-0.9, 0.9] { a.add("light", x * s, -2.1 * s, 0.35, 0.18, 0.9).tone("gold"); }
-        }
-        1 => { // Kurukshetra: a temple on a raised plinth, its stepped tower over the sanctum, a pillared hall, shrines, a tank
-            a.add("platform", 0.0, 0.1 * s, 0.0, 4.6 * s, 0.35).d(4.2 * s).tone("sand");
-            a.add("platform", 0.0, 0.45 * s, 0.35, 3.3 * s, 0.35).d(2.9 * s).tone("sand");
-            a.add("hall", 0.0, 0.95 * s, 0.7, 1.4 * s, 1.3).d(1.4 * s).tone("sand");
-            a.add("pyramid", 0.0, 0.95 * s, 2.0, 1.55 * s, 2.8).d(1.55 * s).tone("faction");
-            a.add("dome", 0.0, 0.95 * s, 4.8, 0.5, 0.32).tone("gold");
-            for x in [-0.65, 0.0, 0.65] { for y in [-0.05, -0.65] { a.add("column", x * s, y * s, 0.7, 0.18, 1.1).tone("sand"); } }
-            a.add("accent", 0.0, -0.35 * s, 1.8, 1.8 * s, 0.16).d(1.05 * s).tone("sand");
-            a.add("pyramid", 0.0, -0.35 * s, 1.96, 1.4 * s, 0.9).d(0.85 * s).tone("faction");
-            for (x, y) in [(-1.3, 1.35), (1.3, 1.35), (-1.3, -0.4), (1.3, -0.4)] {
-                a.add("hall", x * s, y * s, 0.7, 0.6, 0.6).d(0.6).tone("sand");
-                a.add("pyramid", x * s, y * s, 1.3, 0.62, 1.0).d(0.62).tone("faction");
-            }
-            a.add("platform", 0.0, -1.65 * s, 0.0, 1.8 * s, 0.1).d(0.7 * s).tone("glass");
-            for x in [-1.75, 1.75] { a.add("column", x * s, -1.55 * s, 0.35, 0.16, 2.8).tone("gold"); a.add("banner", x * s, -1.55 * s, 2.8, 0.4, 0.6); }
-            for x in [-0.6, 0.6] { a.add("light", x * s, -1.15 * s, 0.35, 0.16, 0.7).tone("gold"); }
-            for x in [-1.9, 1.9] { a.add("garden", x * s, 0.5 * s, 0.35, 0.6 * s, 0.1).d(1.0 * s); }
-        }
-        2 => { // Sanctum: a cathedral with a long nave, a transept, twin west towers, a crossing spire, buttresses and a cloister
-            a.add("platform", 0.0, 0.0, 0.0, 4.4 * s, 0.3).d(4.6 * s).tone("stone");
-            a.add("hall", 0.0, 0.1 * s, 0.3, 1.4 * s, 2.2).d(3.1 * s).tone("stone");
-            a.add("roof", 0.0, 0.1 * s, 2.5, 1.5 * s, 1.0).d(3.2 * s).tone("faction");
-            a.add("hall", 0.0, 0.55 * s, 0.3, 3.0 * s, 2.0).d(1.0 * s).tone("stone");
-            a.add("roof", 0.0, 0.55 * s, 2.3, 3.1 * s, 0.9).d(1.1 * s).tone("faction");
-            a.add("drum", 0.0, 1.7 * s, 0.3, 1.35 * s, 1.9).tone("stone");
-            a.add("spire", 0.0, 1.7 * s, 2.2, 1.45 * s, 0.8).tone("faction");
-            a.add("tower", 0.0, 0.55 * s, 2.3, 0.8 * s, 1.3).tone("stone");
-            a.add("spire", 0.0, 0.55 * s, 3.82, 0.8 * s, 2.6).tone("faction");
-            for x in [-0.72, 0.72] { a.add("tower", x * s, -1.55 * s, 0.3, 0.68 * s, 3.3).tone("stone"); a.add("spire", x * s, -1.55 * s, 3.82, 0.68 * s, 1.7).tone("faction"); }
-            a.add("arch", 0.0, -1.62 * s, 0.3, 0.76 * s, 1.7).d(0.4).tone("marble");
-            for x in [-0.82, 0.82] { for y in [-0.85, -0.25, 1.15] { a.add("accent", x * s, y * s, 0.3, 0.24, 1.7).d(0.5).tone("stone"); } }
-            a.add("garden", 1.5 * s, -0.75 * s, 0.3, 1.0 * s, 0.1).d(1.2 * s);
-            a.add("wall", 2.05 * s, -0.75 * s, 0.3, 1.3 * s, 0.75).d(0.22).rot(90.0).tone("stone");
-            a.add("statue", -1.55 * s, -1.0 * s, 0.3, 0.5, 1.6).tone("marble");
-            for x in [-1.5, 1.5] { a.add("banner", x * s, -2.0 * s, 0.3, 0.5, 2.2); }
-            for x in [-0.32, 0.32] { a.add("light", x * s, -2.05 * s, 0.3, 0.16, 0.7).tone("gold"); }
-        }
-        3 => { // Bensalem: Salomon's House, a glass-domed hall of experiments between two high towers, observatories, a pool
-            a.add("platform", 0.0, 0.0, 0.0, 4.6 * s, 0.3).d(4.4 * s).tone("marble");
-            a.add("hall", 0.0, 0.35 * s, 0.3, 2.5 * s, 1.6).d(1.7 * s).tone("marble");
-            a.add("accent", 0.0, 0.35 * s, 1.9, 2.6 * s, 0.12).d(1.8 * s).tone("marble");
-            a.add("drum", 0.0, 0.35 * s, 2.05, 1.3 * s, 0.5).tone("marble");
-            a.add("dome", 0.0, 0.35 * s, 2.55, 1.4 * s, 0.85).tone("glass");
-            for (x, h) in [(-1.55, 4.0), (1.55, 3.2)] {
-                a.add("tower", x * s, 1.35 * s, 0.3, 0.7 * s, h).tone("marble");
-                a.add("dome", x * s, 1.35 * s, 0.52 + h, 0.62 * s, 0.42).tone("faction");
-            }
-            for x in [-0.95, -0.57, -0.19, 0.19, 0.57, 0.95] { a.add("column", x * s, -0.75 * s, 0.3, 0.17, 1.35).tone("marble"); }
-            a.add("roof", 0.0, -0.75 * s, 1.65, 2.3 * s, 0.45).d(0.5 * s).tone("marble");
-            for x in [-1.7, 1.7] {
-                a.add("drum", x * s, -1.3 * s, 0.3, 0.75 * s, 0.9).tone("marble");
-                a.add("dome", x * s, -1.3 * s, 1.2, 0.78 * s, 0.45).tone("glass");
-                a.add("garden", x * s, 0.1 * s, 0.3, 0.75 * s, 0.1).d(0.8 * s);
-            }
-            a.add("platform", 0.0, -1.65 * s, 0.3, 1.6 * s, 0.05).d(0.55 * s).tone("glass");
-            a.add("statue", 0.0, -2.05 * s, 0.0, 0.4, 1.5).tone("gold");
-            for x in [-1.0, 1.0] { a.add("banner", x * s, -2.0 * s, 0.3, 0.45, 2.0); }
-        }
-        4 => { // Longjiang: a great pagoda, a lighthouse, shipyard sheds, a basin with a junk, a gate of honour
-            a.add("platform", 0.0, 0.0, 0.0, 4.6 * s, 0.3).d(4.2 * s).tone("stone");
-            a.add("platform", -0.3 * s, 0.65 * s, 0.3, 1.9 * s, 0.3).d(1.9 * s).tone("marble");
-            a.add("tiers", -0.3 * s, 0.65 * s, 0.6, 1.8 * s, 4.6).tone("faction");
-            a.add("drum", 1.6 * s, 1.15 * s, 0.3, 0.75 * s, 3.0).tone("marble");
-            a.add("drum", 1.6 * s, 1.15 * s, 3.3, 0.95 * s, 0.14).tone("dark");
-            a.add("light", 1.6 * s, 1.15 * s, 3.44, 0.42, 0.3).tone("gold");
-            a.add("dome", 1.6 * s, 1.15 * s, 3.74, 0.6 * s, 0.4).tone("faction");
-            a.add("hall", -1.65 * s, -0.45 * s, 0.3, 0.95 * s, 1.1).d(2.3 * s).tone("wood");
-            a.add("roof", -1.65 * s, -0.45 * s, 1.4, 1.05 * s, 0.55).d(2.4 * s).tone("faction");
-            a.add("platform", 0.65 * s, -1.4 * s, 0.3, 2.5 * s, 0.05).d(1.05 * s).tone("glass");
-            a.add("accent", 0.65 * s, -1.4 * s, 0.35, 1.5 * s, 0.3).d(0.42 * s).tone("wood");
-            a.add("accent", 0.15 * s, -1.4 * s, 0.65, 0.4, 0.22).d(0.38 * s).tone("wood");
-            for x in [0.5, 1.0] { a.add("banner", x * s, -1.4 * s, 0.65, 0.42, 1.4); }
-            for x in [-1.05, -0.35] { a.add("column", x * s, -1.75 * s, 0.3, 0.16, 1.3).tone("faction"); }
-            a.add("roof", -0.7 * s, -1.75 * s, 1.6, 1.05 * s, 0.35).d(0.32).tone("faction");
-            a.add("tiers", 1.65 * s, -0.15 * s, 0.3, 0.75 * s, 2.3).tone("faction");
-            for (x, y) in [(-0.45, -0.75), (0.25, -0.75), (-1.75, 1.6)] { a.add("light", x * s, y * s, 0.3, 0.18, 0.7).tone("faction"); }
-            for (x, y) in [(1.85, -1.4), (1.5, -1.6), (1.85, -1.7)] { a.add("accent", x * s, y * s, 0.35, 0.28, 0.28).tone("wood"); }
-            a.add("garden", 0.85 * s, 0.35 * s, 0.3, 0.7 * s, 0.1).d(0.7 * s);
-        }
-        5 => { // The Reading Room: a great domed drum in a court, an eight-column portico, monuments, banners, a lattice tower
-            a.add("platform", 0.0, 0.0, 0.0, 4.6 * s, 0.35).d(4.4 * s).tone("stone");
-            a.add("drum", 0.0, 0.4 * s, 0.35, 2.6 * s, 1.5).tone("stone");
-            a.add("drum", 0.0, 0.4 * s, 1.85, 2.35 * s, 0.22).tone("marble");
-            a.add("dome", 0.0, 0.4 * s, 2.07, 2.45 * s, 1.1).tone("faction");
-            for x in [-1.75, 1.75] {
-                a.add("hall", x * s, 0.35 * s, 0.35, 0.8 * s, 1.6).d(2.8 * s).tone("stone");
-                a.add("accent", x * s, 0.35 * s, 1.95, 0.85 * s, 0.14).d(2.85 * s).tone("faction");
-                a.add("banner", x * s, -0.95 * s, 1.95, 0.5, 1.3);
-            }
-            for i in 0..8 { a.add("column", (-1.4 + i as f64 * 0.4) * s, -1.3 * s, 0.35, 0.19, 1.55).tone("marble"); }
-            a.add("accent", 0.0, -1.3 * s, 1.9, 3.15 * s, 0.2).d(0.5).tone("marble");
-            a.add("roof", 0.0, -1.3 * s, 2.1, 3.15 * s, 0.55).d(0.55).tone("marble");
-            for x in [-1.85, 1.85] { a.add("statue", x * s, -1.95 * s, 0.0, 0.5, 2.3).tone("dark"); }
-            for (z, w) in [(0.35, 0.8), (1.55, 0.62), (2.55, 0.45)] { a.add("drum", 1.75 * s, 1.95 * s, z, w, if z < 1.0 { 1.2 } else { 1.0 }).tone("metal"); }
-            a.add("spire", 1.75 * s, 1.95 * s, 3.55, 0.45, 1.2).tone("faction");
-            for x in [-0.5, 0.5] { a.add("light", x * s, -1.85 * s, 0.35, 0.16, 0.7).tone("gold"); }
-        }
-        6 => { // Address Zero: three glass towers of different heights, a pool, the zero ring, masts and lamps
-            a.add("platform", 0.0, 0.0, 0.0, 4.6 * s, 0.25).d(4.4 * s).tone("dark");
-            a.add("platform", 0.35 * s, -1.45 * s, 0.25, 2.4 * s, 0.05).d(0.9 * s).tone("glass");
-            for (x, y, w, h) in [(-1.15, 0.95, 1.1, 5.2), (0.35, 1.25, 1.2, 3.8), (1.5, 0.25, 0.9, 2.8)] {
-                a.add("hall", x * s, y * s, 0.25, w * s, h).d(w * s).tone("glass");
-                a.add("accent", x * s, y * s, 0.25 + h * 0.55, w * s + 0.08, 0.12).d(w * s + 0.08).tone("dark");
-                a.add("accent", x * s, y * s, 0.25 + h, w * s * 0.7, 0.3).d(w * s * 0.7).tone("faction");
-                a.add("light", x * s, y * s, 0.55 + h, 0.16, 0.9).tone("faction");
-            }
-            a.add("drum", -1.25 * s, -1.2 * s, 0.25, 1.2 * s, 0.22).tone("faction");
-            a.add("drum", -1.25 * s, -1.2 * s, 0.47, 0.75 * s, 0.3).tone("dark");
-            a.add("light", -1.25 * s, -1.2 * s, 0.77, 0.3, 0.2).tone("faction");
-            for (x, y) in [(-0.3, -0.55), (1.3, -0.75), (-1.95, 0.0), (1.95, -1.6)] { a.add("light", x * s, y * s, 0.25, 0.16, 1.1).tone("metal"); }
-            a.add("hall", -0.2 * s, -0.25 * s, 0.25, 1.0 * s, 0.7).d(0.6 * s).tone("dark");
-            a.add("column", 0.35 * s, 1.25 * s, 4.35, 0.08, 1.4).tone("metal");
-        }
-        7 => { // Kirkcaldy: an exchange with a portico and gilded dome, a clock tower, brick warehouses, a crane and crates
-            a.add("platform", 0.0, 0.0, 0.0, 4.6 * s, 0.3).d(4.2 * s).tone("sand");
-            a.add("hall", 0.0, 0.45 * s, 0.3, 2.8 * s, 1.8).d(1.6 * s).tone("sand");
-            a.add("roof", 0.0, 0.45 * s, 2.1, 2.9 * s, 0.6).d(1.7 * s).tone("faction");
-            for x in [-1.0, -0.6, -0.2, 0.2, 0.6, 1.0] { a.add("column", x * s, -0.62 * s, 0.3, 0.18, 1.5).tone("marble"); }
-            a.add("roof", 0.0, -0.62 * s, 1.8, 2.4 * s, 0.45).d(0.5).tone("marble");
-            a.add("drum", 0.0, 0.45 * s, 2.45, 0.9 * s, 0.5).tone("marble");
-            a.add("dome", 0.0, 0.45 * s, 2.95, 0.95 * s, 0.6).tone("gold");
-            a.add("tower", 1.6 * s, 1.35 * s, 0.3, 0.75 * s, 3.9).tone("brick");
-            a.add("accent", 1.6 * s, 1.35 * s - 0.42 * s, 3.45, 0.5, 0.5).d(0.06).tone("gold");
-            a.add("spire", 1.6 * s, 1.35 * s, 4.42, 0.75 * s, 1.3).tone("faction");
-            a.add("hall", -1.7 * s, -0.35 * s, 0.3, 0.9 * s, 1.3).d(2.0 * s).tone("brick");
-            a.add("roof", -1.7 * s, -0.35 * s, 1.6, 1.0 * s, 0.5).d(2.1 * s).tone("faction");
-            for (x, y, z) in [(1.2, -1.2, 0.3), (1.55, -1.2, 0.3), (1.37, -1.2, 0.62), (1.85, -0.75, 0.3)] { a.add("accent", x * s, y * s, z, 0.32, 0.32).tone("wood"); }
-            a.add("column", 1.95 * s, -0.2 * s, 0.3, 0.14, 2.5).tone("metal");
-            a.add("accent", 1.5 * s, -0.4 * s, 2.55, 1.4, 0.1).d(0.12).rot(-30.0).tone("metal");
-            for x in [-1.0, 1.0] { a.add("banner", x * s, -1.6 * s, 0.3, 0.45, 2.0); }
-            for x in [-0.45, 0.45] { a.add("light", x * s, -1.65 * s, 0.3, 0.16, 0.8).tone("gold"); }
-            a.add("statue", 0.0, -1.85 * s, 0.0, 0.45, 1.4).tone("dark");
-        }
-        8 => { // Campion: a corrugated headquarters, barracks, a water tower, a windmill, a lookout and a parade ground
-            a.add("platform", 0.0, 0.0, 0.0, 4.6 * s, 0.15).d(4.4 * s).tone("sand");
-            a.add("hall", -0.3 * s, 0.65 * s, 0.15, 2.7 * s, 1.2).d(1.3 * s).tone("metal");
-            a.add("roof", -0.3 * s, 0.65 * s, 1.35, 2.8 * s, 0.45).d(1.4 * s).tone("faction");
-            a.add("hall", -1.7 * s, -0.6 * s, 0.15, 0.85 * s, 0.9).d(1.8 * s).tone("wood");
-            a.add("roof", -1.7 * s, -0.6 * s, 1.05, 0.95 * s, 0.4).d(1.9 * s).tone("faction");
-            for (dx, dy) in [(-0.35, -0.35), (0.35, -0.35), (-0.35, 0.35), (0.35, 0.35)] { a.add("column", 1.55 * s + dx, 1.35 * s + dy, 0.15, 0.1, 2.2).tone("metal"); }
-            a.add("drum", 1.55 * s, 1.35 * s, 2.35, 1.0, 0.8).tone("metal");
-            a.add("spire", 1.55 * s, 1.35 * s, 3.15, 1.05, 0.4).tone("faction");
-            a.add("column", 1.7 * s, -0.55 * s, 0.15, 0.12, 2.8).tone("metal");
-            a.add("accent", 1.7 * s, -0.62 * s, 2.86, 1.3, 0.08).d(0.06).tone("metal");
-            a.add("accent", 1.7 * s, -0.62 * s, 2.25, 0.08, 1.3).d(0.06).tone("metal");
-            a.add("tower", -1.65 * s, 1.5 * s, 0.15, 0.65, 3.3).tone("wood");
-            a.add("roof", -1.65 * s, 1.5 * s, 3.67, 0.85, 0.35).d(0.85).tone("faction");
-            a.add("platform", 0.2 * s, -1.0 * s, 0.15, 1.8 * s, 0.04).d(1.2 * s).tone("dark");
-            a.add("column", 0.2 * s, -1.0 * s, 0.19, 0.08, 2.9).tone("metal");
-            a.add("banner", 0.2 * s, -1.0 * s, 3.09, 0.6, 0.1);
-            a.add("statue", 0.95 * s, -1.75 * s, 0.15, 0.45, 1.3).tone("dark");
-            for (x, w) in [(-0.6, 1.6), (1.2, 1.4)] { a.add("wall", x * s, -2.1 * s, 0.15, w * s, 0.35).d(0.08).tone("wood"); }
-            for (x, y, z) in [(0.85, 0.0, 0.15), (1.15, 0.0, 0.15), (1.0, 0.0, 0.45)] { a.add("accent", x * s, y * s, z, 0.3, 0.3).tone("wood"); }
-            a.add("light", -0.85 * s, -0.25 * s, 0.15, 0.16, 1.1).tone("gold");
-        }
-        _ => { // Flux: white blocks cantilevered over a garden court, a glass gallery, pilotis, a pool and an obelisk
-            a.add("platform", 0.0, 0.0, 0.0, 4.6 * s, 0.25).d(4.4 * s).tone("marble");
-            a.add("hall", -0.65 * s, 0.75 * s, 0.25, 2.3 * s, 1.3).d(1.3 * s).tone("marble");
-            a.add("hall", 0.45 * s, 0.95 * s, 1.55, 2.5 * s, 1.1).d(1.2 * s).tone("glass");
-            a.add("accent", 0.45 * s, 0.95 * s, 2.65, 2.55 * s, 0.14).d(1.25 * s).tone("faction");
-            for x in [0.9, 1.5] { a.add("column", x * s, 0.55 * s, 0.25, 0.14, 1.3).tone("marble"); }
-            a.add("hall", 1.6 * s, -0.4 * s, 0.25, 0.75 * s, 3.4).d(0.75 * s).tone("marble");
-            a.add("accent", 1.6 * s, -0.4 * s, 3.65, 0.8 * s, 0.2).d(0.8 * s).tone("faction");
-            for (x, y, w, d) in [(-1.25, -0.9, 1.4, 1.2), (0.2, -0.55, 1.0, 0.9)] { a.add("garden", x * s, y * s, 0.25, w * s, 0.1).d(d * s); }
-            a.add("platform", -0.2 * s, -1.75 * s, 0.25, 2.4 * s, 0.05).d(0.55 * s).tone("glass");
-            a.add("statue", 1.6 * s, -1.6 * s, 0.25, 0.4, 2.6).tone("marble");
-            for (x, y) in [(-1.95, 0.0), (0.5, -1.25), (-0.9, -1.35)] { a.add("light", x * s, y * s, 0.25, 0.16, 0.9).tone("faction"); }
-            a.add("banner", -1.9 * s, 1.75 * s, 0.25, 0.5, 2.4);
-            let _ = k;
-        }
-    }
+    let i = ROLES.iter().position(|r| *r == role).unwrap_or(1);
+    draw(&mut a, &k, if i == 0 { LANDMARKS[style.min(9)] } else { DESIGNS[i - 1] }, 1.0);
+    a.value(NAMES[style.min(9)].split('|').nth(i).unwrap_or(""))
 }
