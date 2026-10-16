@@ -468,6 +468,14 @@ fn strategy(world: View, me: View) -> Value {
     if miners < jmax(8.0, (total * 0.4).floor()) && miners < common::miner_room(me, &plan) {
         spawn(&mut orders, "miner", MINER, vec![]);
     }
+    // A small air wing only if Flight ever arrives (stolen, most likely): a tenth of the army, between 2 and 4 fliers.
+    let wings = count("wing");
+    if spawning(&orders) < 3 && has("flight") && wings < jmin(4.0, jmax(2.0, (total / 10.0).floor())) {
+        let frame=common::airframe(me,wings);
+        let serial=me.path("units.spawned").num_or(0.0)+spawning(&orders) as f64+1.0;
+        spawn_build(&mut orders,"wing",||frame.build(),mods(me,"wing"),Some(format!("{} {serial:.0}",frame.name)));
+    }
+
     // The exploits, once Cloak allows stealth and there's a rival capital to visit: one at 10 units, a second at 24 and a
     // third at 40 while the bank can feed them (a spy's errands cost ◆). One every 20 s at most, so the queue can't
     // double them up.
@@ -507,14 +515,6 @@ fn strategy(world: View, me: View) -> Value {
     if spawning(&orders) < 3 && has("repair") && has("dash") && repairers < jmax(1.0, (skirms / 5.0).floor()) {
         spawn(&mut orders, "repairer", SCREEN, mods(me, "repair"));
     }
-    // A small air wing only if Flight ever arrives (stolen, most likely): a tenth of the army, between 2 and 4 fliers.
-    let wings = count("wing");
-    if spawning(&orders) < 3 && has("flight") && wings < jmin(4.0, jmax(2.0, (total / 10.0).floor())) {
-        let frame=common::airframe(me,wings);
-        let serial=me.path("units.spawned").num_or(0.0)+spawning(&orders) as f64+1.0;
-        spawn_build(&mut orders,"wing",||frame.build(),mods(me,"wing"),Some(format!("{} {serial:.0}",frame.name)));
-    }
-
     // Absolute controller allowances keep an unlocked specialist viable after miners and screens have consumed their
     // ordinary route passes. A war unit's call fits one route search for the units abroad (march).
     let income = cpu.get("income").or(0.0);

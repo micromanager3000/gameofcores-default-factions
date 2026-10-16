@@ -1168,13 +1168,19 @@ fn scout(units: View, world: View, me: View) -> Vec<Value> {
     let mut ids: Vec<f64> = units.iter().map(|u| num(u.get("id"))).collect();
     ids.sort_by(|a, b| a.total_cmp(b));
     let pilgrims = ids.len().div_ceil(2);
+    let mut budget = ScoutBudget::new(me);
     for turn in 0..units.len() {
-        if short(me) {
+        if !budget.room(me) {
             break;
         }
         let u = rotate(units, world, turn);
         let rank = ids.iter().position(|&i| i == num(u.get("id"))).unwrap_or(0);
-        if rank < pilgrims && pilgrim(u, world, me, rank) {
+        if !budget.admits(u, world, me, rank < pilgrims) {
+            continue;
+        }
+        let began = cycles_left();
+        if rank < pilgrims && pilgrim(u, world, me, rank, &budget) {
+            budget.finish(began, true);
             continue;
         }
         if u.get("doing").str() == "move" {
@@ -1184,13 +1190,69 @@ fn scout(units: View, world: View, me: View) -> Vec<Value> {
         if next >= 0.0 {
             order(obj! { "id" => u.get("id"), "do" => "move", "target" => next, "power" => obj! { "drive" => 840, "armor" => 0, "weapon" => 0 } });
         }
+        budget.finish(began, false);
     }
     Vec::new()
 }
 
+// Admit the cold plan, route, carried RAM and submitted order together. The measured
+// cost includes all four, so later scouts leave room to finish this callback.
+struct ScoutBudget {
+    next: f64,
+    wander: f64,
+}
+
+impl ScoutBudget {
+    fn new(me: View) -> Self {
+        if me.get("rts").truthy() {
+            orders::set_reserve(1100.0);
+            orders::set_first(1400.0);
+        }
+        Self { next: 1400.0, wander: 700.0 }
+    }
+
+    fn room(&self, me: View) -> bool {
+        !me.get("rts").truthy() || cycles_left() >= self.next.min(self.wander) + 600.0
+    }
+
+    fn admits(&self, u: View, world: View, me: View, pilgrim: bool) -> bool {
+        if !me.get("rts").truthy() { return true; }
+        let page = me.get("ramProvince").key(u.get("at").num()).key(0.0);
+        let bytes = page.get("bytes");
+        let read = if pilgrim && plan::known(me, u).is_none() && bytes.is_bytes() && bytes.len() >= 2 {
+            let b = bytes.bytes();
+            4.0 * f64::from(u16::from_le_bytes([b[0], b[1]]))
+        } else { 0.0 };
+        let index = if realm::indexed(world) { 0.0 } else { 4.0 * world.get("provinces").len() as f64 };
+        cycles_left() >= (if pilgrim { self.next } else { self.wander }) + read + index + 600.0
+    }
+
+    fn route(&self, u: View, target: f64, world: View, me: View) -> bool {
+        if !me.get("rts").truthy() { return true; }
+        let from = if u.get("to").num_or(-1.0) >= 0.0 { u.get("to").num() } else { u.get("at").num() };
+        let index = realm::index(world);
+        let here = index.get(from);
+        // Home routes walk and serialize every step without a search-budget check.
+        let steps = if from == target || realm::reach(here, me).contains(&target) { 0.0 } else {
+            let goal = index.get(target);
+            let hops = if eq(goal.get("owner"), me.get("id")) { goal.get("hops").num_or(0.0) } else {
+                goal.get("adj").iter().map(|id| index.at(id)).filter(|p| eq(p.get("owner"), me.get("id")))
+                    .map(|p| p.get("hops").num_or(0.0)).fold(f64::INFINITY, f64::min)
+            };
+            here.get("hops").num_or(0.0).max(0.0) + if hops.is_finite() { hops.max(0.0) + 1.0 } else { 0.0 }
+        };
+        cycles_left() >= self.next + 60.0 * steps + 600.0
+    }
+
+    fn finish(&mut self, began: f64, pilgrim: bool) {
+        let next = if pilgrim { &mut self.next } else { &mut self.wander };
+        *next = next.max((began - cycles_left()) * 1.5 + 400.0);
+    }
+}
+
 // A pilgrim walks to the holy site the plan names for it and stays, preaching where it stands. True when it is one for
 // now (on its way, at its site, or ordered there); false when there is no site, so it scouts instead.
-fn pilgrim(u: View, world: View, me: View, rank: usize) -> bool {
+fn pilgrim(u: View, world: View, me: View, rank: usize, budget: &ScoutBudget) -> bool {
     if !plan::here(me, u) {
         // abroad it keeps to its site: on the way, or standing in land that is neither ours nor a partner's
         if u.get("doing").str() == "move" {
@@ -1207,6 +1269,9 @@ fn pilgrim(u: View, world: View, me: View, rank: usize) -> bool {
     let site = sites.at(rank % sites.len()).num();
     if site.is_nan() || site < 0.0 {
         return false;
+    }
+    if !budget.route(u, site, world, me) {
+        return true;
     }
     if let Some(mut o) = orders::to(u, "move", site, world, me, ()) {
         o.set("power", obj! { "drive" => 840, "armor" => 0, "weapon" => 0 });
