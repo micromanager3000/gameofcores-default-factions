@@ -416,8 +416,7 @@ fn strategy(world: View, me: View) -> Value {
         plan.set("field", field);
     }
     let cpu = rts_cpu(me);
-    // cpu && cpu.available && cpu.available.fabrication, less about what this think costs (the last one's): fabrication
-    // is charged right after think
+    // Fabrication has its own lane. Think reduces the shared bank once.
     let available = if cpu.truthy() { cpu.get("available") } else { cpu };
     let fab = if available.truthy() { available.get("fabrication") } else { available };
     let fabrication = if !rts.truthy() {
@@ -425,7 +424,7 @@ fn strategy(world: View, me: View) -> Value {
     } else if fab.is_undef() {
         rts.get("bank").value()
     } else {
-        Value::Num(n(fab) - me.path("compute.used.think").or(0.0))
+        Value::Num(common::fabrication_room(me).unwrap_or_else(|| n(fab)))
     };
     let mut orders = obj! {
         "policy" => obj! { "extraction" => if defend >= 0.0 { 0.38 } else { 0.5 }, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true },

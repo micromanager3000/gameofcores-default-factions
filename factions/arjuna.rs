@@ -438,6 +438,15 @@ fn strategy(world: View, me: View) -> Value {
         spawn(&mut orders, "miner", MINER, vec![]);
     }
     let wings = count("wing");
+    // Recruit the first affordable vimana before replacing the whole ground army. The shared economy guard
+    // still charges its actual upkeep; additional wings require another 30,000 cycles of income each.
+    let want_wings = if !emu && has("flight") && total >= 8.0 && income >= 18000.0 {
+        jmin(jmin(8.0, jmax(1.0, (income / 30000.0).floor())), (total * 0.25).floor())
+    } else { 0.0 };
+    if wings < want_wings {
+        let archer = has("airWeapons") && (wings as i64) % 3 == 2;
+        spawn(&mut orders, "wing", if archer { WING_SHOT } else { WING }, mods(me, "wing"));
+    }
     if screens < jmax(3.0, ((skirms + guns + 1.0) * 0.42).floor()) {
         spawn(&mut orders, "screen", if emu {EMU_SCREEN}else{SCREEN}, mods(me, "screen"));
     }
@@ -451,14 +460,6 @@ fn strategy(world: View, me: View) -> Value {
     }
     if has("ranged") && skirms < jmax(4.0, screens * 2.0) {
         spawn(&mut orders, "skirm", if emu {EMU_SKIRM}else{SKIRM}, mods(me, "skirm"));
-    }
-    // Vimanas once Flight allows them and the army on the ground stands: one for every 30,000 cycles of income (each
-    // costs about 1,500 a second to keep and as much again up on a sortie), up to 8, and never more than a quarter of
-    // the army. With Air weapons every third one carries a bow.
-    let want_wings = if !emu && has("flight") && total >= 12.0 { jmin(jmin(8.0, (income / 30000.0).floor()), (total * 0.25).floor()) } else { 0.0 };
-    if wings < want_wings {
-        let archer = has("airWeapons") && (wings as i64) % 3 == 2;
-        spawn(&mut orders, "wing", if archer { WING_SHOT } else { WING }, mods(me, "wing"));
     }
     if spawning(&orders) < 3 && has("scan") && has("ranged") && sentries < 2.0 {
         spawn(&mut orders, "sentry", SENTRY, mods(me, "sentry"));

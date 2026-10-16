@@ -50,9 +50,9 @@ fn kite_shot_body() -> Value {
 }
 
 // The junks: every build is 10 points, and range costs 2 a step. Each carries the hull and one more module.
-// A warjunk is an ironclad gun ship; a picket holds a crossing, sees far and still has guns; a corsair is fast.
+// Warjunks carry a small hold for recovered cargo. Pickets hold crossings; corsairs carry more loot.
 fn warjunk_body() -> Value {
-    obj! { "hp" => 3, "speed" => 2, "strength" => 3, "carry" => 0, "vision" => 0, "range" => 1 }
+    obj! { "hp" => 3, "speed" => 2, "strength" => 2, "carry" => 1, "vision" => 0, "range" => 1 }
 }
 fn picket_body(guns: bool) -> Value {
     if guns {
@@ -1468,7 +1468,7 @@ fn prize_intel(world: View, me: View, log: &Value) -> Intel {
 }
 
 /// One junk a second at most, toward the fleet the plan needs: a picket for every crossing and the next landing, then
-/// warjunks and a corsair (three once rival ships are about). True when one was ordered.
+/// warjunks, then up to two corsairs when visible cargo can pay for a raid. True when one was ordered.
 fn naval_spawn(orders: &mut Value, me: View, naval: &Naval, rival_ships: f64, threatened: bool) -> bool {
     let techs = me.get("techs");
     let has = |t: &str| techs.get(t).truthy();
@@ -1645,7 +1645,7 @@ fn junks(units: View, world: View, me: View, role: u8) -> Value {
             }
             continue;
         }
-        if role == 2 && common::recover_ship(u,world,me) { continue; }
+        if role != 1 && common::recover_ship(u,world,me) { continue; }
         let id = u.get("id").num();
         let k = ids.iter().position(|&x| x == id).unwrap_or(0);
         let carried = mem::get(u.get("ramUnit"), 1);
@@ -1748,7 +1748,7 @@ fn junk_reflex(u: View, ns: View, pool: &mut Pool) -> Option<Value> {
     let modules = r.get("modules");
     let reach = u.get("reach").num_or(1.0);
     let merchant=u.get("type").str()=="corsair" && r.get("cargo").truthy();
-    let carrying=merchant && logistics::cargo(u)>0.0;
+    let carrying=logistics::cargo(u)>0.0;
     let (mut port, mut star) = (0, 0);
     let mut ship: Option<View> = None;
     let mut shot: Option<View> = None;
