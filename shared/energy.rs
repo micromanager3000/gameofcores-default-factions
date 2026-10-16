@@ -228,7 +228,7 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
         "shell" => obj! { "radius" => r, "height" => 2.0, "integrity" => 1.0 },
         "ports" => arr![obj! { "kind" => pick.kind, "capacity" => pick.cap }],
         "appearance" => look(pick.kind, pick.cap, seat_style(me)), "budget" => pick.cost * 1.2 + 4000.0 * price(me) };
-    if orders.get("structures").is_arr() { orders.entry("structures").push(site); } else { orders.set("structures", arr![site]); }
+    orders.entry("structures").push(site);
 }
 
 fn price(me: View) -> f64 { me.path("rts.costs.priceLevel").num_or(1.0).max(0.01) }
