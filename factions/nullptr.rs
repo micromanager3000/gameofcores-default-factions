@@ -304,45 +304,95 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     Some(field)
 }
 
-fn think(world: View, me: View) -> Value {
-    // A nearly empty callback only opens the next allowance. Existing type schedules and orders stand.
-    if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
-        return obj! { "compute" => obj! { "cpu" => obj! {
+fn think_emergency() -> Value {
+    obj! { "compute" => obj! { "cpu" => obj! {
             "limits" => obj! { "think" => 24000, "control" => 0.5, "upkeep" => 0.65,
                 "research" => 0, "influence" => 0, "fabrication" => 0, "visuals" => 0,
                 "reflex" => 0.15, "duel" => 0.08, "challenge" => 0.02,
                 "drive" => 0.08, "armor" => 0, "weapon" => 0.08,
                 "abilities" => 0, "cloak" => 0, "gate" => 0 },
             "reserve" => obj! {}, "upkeepOrder" => vec!["miner"]
-        } } };
-    }
-    // Recovery's map and unit scans also need fuel when income falls sharply.
-    // A policy-only turn lets the next call recover without repeating those scans.
-    if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
-        let income = me.path("rts.cpu.income").num_or(20000.0).max(1.0);
-        let mut types = obj! {};
-        for ty in me.get("types").keys() { types.set(ty, obj! { "share" => 0, "every" => 8 }); }
-        types.set("miner", obj! { "cycles" => (income * 0.4).max(4000.0), "every" => 1 });
-        let mut cpu = obj! {
-            "limits" => obj! {
-                "think" => (me.path("compute.thinkPeak").num_or(0.0) * 1.5 + 2000.0).max(24000.0),
-                "control" => 0.5, "upkeep" => 0.65, "research" => 0, "influence" => 0,
-                "fabrication" => 0, "visuals" => 0, "reflex" => 0.15, "duel" => 0.08,
-                "challenge" => 0.02, "drive" => 0.08, "armor" => 0.05, "weapon" => 0.08,
-                "abilities" => 0, "cloak" => 0, "gate" => 0
-            },
-            "reserve" => obj! {}, "upkeepOrder" => vec!["miner"]
+        } } }
+}
+
+fn think_recovery(me: View) -> Value {
+    let income = me.path("rts.cpu.income").num_or(20000.0).max(1.0);
+    let mut types = obj! {};
+    for ty in me.get("types").keys() { types.set(ty, obj! { "share" => 0, "every" => 8 }); }
+    types.set("miner", obj! { "cycles" => (income * 0.4).max(4000.0), "every" => 1 });
+    let mut cpu = obj! {
+        "limits" => obj! {
+            "think" => (me.path("compute.thinkPeak").num_or(0.0) * 1.5 + 2000.0).max(24000.0),
+            "control" => 0.5, "upkeep" => 0.65, "research" => 0, "influence" => 0,
+            "fabrication" => 0, "visuals" => 0, "reflex" => 0.15, "duel" => 0.08,
+            "challenge" => 0.02, "drive" => 0.08, "armor" => 0.05, "weapon" => 0.08,
+            "abilities" => 0, "cloak" => 0, "gate" => 0
+        },
+        "reserve" => obj! {}, "upkeepOrder" => vec!["miner"]
+    };
+    common::fit_cpu(&mut cpu, me);
+    // Shared miner recovery reads this capital page before using local mining rights.
+    let mut recovery = mem::get(me.get("ramCapital"), 244);
+    if !matches!(recovery, Value::Obj(_)) { recovery = obj! {}; }
+    recovery.set("r", true);
+    return obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
+        "ram" => mem::put(244, &recovery, "local", None, 1).unwrap_or_default(),
+        "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0,
+        "memo" => "Recovering production" };
+}
+
+// Output serialization runs after think returns; RAM writes are paid from what it leaves.
+fn think_return_cost(orders: &Value) -> f64 {
+    let began = cycles_left();
+    let encoded = orders.to_json();
+    let serialization = began - cycles_left();
+    let ram: f64 = orders.get("ram").items().iter().map(|op| {
+        let bytes = op.get("bytes");
+        if bytes.is_undef() { 1.0 } else { (bytes.len() as f64 / 2.0).ceil().max(1.0) }
+    }).sum();
+    let messages: f64 = orders.get("send").items().iter().take(8).map(|message| {
+        let bytes = match message.get("body") {
+            Value::Str(body) => body.len(),
+            Value::Bytes(body) => body.len(),
+            Value::Arr(body) => body.len(),
+            Value::Null | Value::Undef => 0,
+            // A literal {"$b": ...} is also accepted; its JSON is longer than its decoded bytes.
+            body => body.to_json().len(),
         };
-        common::fit_cpu(&mut cpu, me);
-        // Shared miner recovery reads this capital page before using local mining rights.
-        let mut recovery = mem::get(me.get("ramCapital"), 244);
-        if !matches!(recovery, Value::Obj(_)) { recovery = obj! {}; }
-        recovery.set("r", true);
-        return obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
-            "ram" => mem::put(244, &recovery, "local", None, 1).unwrap_or_default(),
-            "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0 };
+        50.0 + bytes as f64 / 2.0
+    }).sum();
+    serialization * 1.5 + encoded.len() as f64 / 32.0 + ram + messages + 600.0
+}
+
+fn think_room(orders: &Value, work: f64) -> bool {
+    if cycles_left() < 2500.0 + work { return false; }
+    let tail = think_return_cost(orders);
+    cycles_left() >= tail + work
+}
+
+fn think(world: View, me: View) -> Value {
+    if !me.path("rts.cpu").truthy() {
+        return common::govern(world, me, 0.4, || strategy(world, me));
     }
-    common::govern(world, me, 0.4, || strategy(world, me))
+    if cycles_left() < 3000.0 { return think_emergency(); }
+    // The recent peak includes execution and ABI serialization, but excludes RAM application.
+    let peak = me.path("compute.thinkPeak").num_or(0.0);
+    let writes = me.get("ramCapital").len() as f64 * 32.0 + 32.0;
+    if cycles_left() < 18000.0 || cycles_left() < peak * 1.1 + writes + 600.0 {
+        return think_recovery(me);
+    }
+    let orders = common::govern(world, me, 0.4, || {
+        let mut orders = strategy(world, me);
+        // Governance scans visible bodies after strategy when it checks proposed recruits.
+        let review = 1500.0 + world.get("units").len() as f64 * 15.0
+            + me.path("units.total").num_or(0.0) * 100.0;
+        if !orders.get("spawn").is_empty() && !think_room(&orders, review) {
+            orders.set("spawn", Value::arr());
+        }
+        orders
+    });
+    if !think_room(&orders, 0.0) { return think_emergency(); }
+    orders
 }
 
 fn strategy(world: View, me: View) -> Value {
@@ -362,6 +412,12 @@ fn strategy(world: View, me: View) -> Value {
     // the best land first, marked down where the army couldn't hold on to it (common::can_hold)
     let hold = common::can_hold(world, me, false);
     let ranked = realm::rank(world, me, rim, |w, m, q| common::score(w, m, q) - if hold(q) { 0.0 } else { common::OVER_WATER });
+    // Survey scans provinces for mines and defense, and may scan visible fighters for a picket.
+    // Admit that work before it starts, retaining the CPU policy and finalization allowance.
+    // At five fighters or fewer, even one invader mobilizes everyone without a picket census.
+    let survey = 60.0 * world.get("provinces").len() as f64
+        + if common::fighters(me) > 5.0 { 40.0 * world.get("units").len() as f64 } else { 0.0 };
+    if rts.truthy() && cycles_left() < survey + 7000.0 { return think_recovery(me); }
     let mut plan = common::survey(world, me, &ranked, 2.0);
     // the hunt's census is budgeted at about 50 cycles a unit in sight: only when think can still finish after it
     if has("flight") {
@@ -395,6 +451,11 @@ fn strategy(world: View, me: View) -> Value {
         "priceLevel" => common::price_level(me),
     };
     plan::share(&mut orders, &plan, me);
+    if rts.truthy() && cycles_left() < 7000.0 {
+        let mut recovery = if cycles_left() < 3000.0 { think_emergency() } else { think_recovery(me) };
+        recovery.set("memo", "Recovering production");
+        return recovery;
+    }
 
     let count = |k: &str| bt.get(k).or(0.0);
     let (miners, screens, runners, skirms, lancers) = (count("miner"), count("screen"), count("runner"), count("skirm"), count("lancer"));
@@ -471,6 +532,7 @@ fn strategy(world: View, me: View) -> Value {
     let mut policy = cpu_policy(me, &plan, &type_calls);
     common::fit_cpu(&mut policy, me);
     orders.entry("compute").set("cpu", policy);
+    if rts.truthy() && !think_room(&orders, 3000.0) { return orders; }
     // the ledger: techs stolen so far, counted when a tech a spy was copying arrives (page 225)
     let ledger = mem::get(me.get("ramCapital"), LEDGER);
     let mut stolen = vor0(&ledger.get("stolen"));
@@ -502,14 +564,13 @@ fn strategy(world: View, me: View) -> Value {
     orders.set("memo", nullptr_ext::memo(world, me, &spies, stolen, sab, skirms, screens));
     // A short second keeps what's decided so far (the plan, spawns and the CPU policy): trade and diplomacy wait a
     // second rather than run think out of cycles and lose it all.
-    if rts.truthy() && cycles_left() < 5000.0 {
-        return orders;
-    }
+    let diplomacy = 3000.0 + 500.0 * world.get("factions").len() as f64;
+    if rts.truthy() && !think_room(&orders, diplomacy) { return orders; }
     let pact_leader = realm::leader(world);
     let at = mem::get(me.get("ramCapital"), CLOCK);
     let mut clock = Clock { at: if at.truthy() { at } else { Value::obj() }, changed: false };
     warlord(&mut orders, world, me, &plan, &mut clock, held);
-    if !rts.truthy() || cycles_left() > 2000.0 {
+    if !rts.truthy() || think_room(&orders, 2500.0) {
         let pact = |m: View| me.get("pacts").is_empty() && pact_leader.is_none_or(|l| !same(m.get("from"), l.get("id")));
         common::answer(&mut orders, me, world, pact, &techs);
         nullptr_ext::keep_fund(&mut orders, me, held);
