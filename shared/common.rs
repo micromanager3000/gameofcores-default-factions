@@ -1011,7 +1011,10 @@ use super::{air, theme};
                     && me.get("bank").num_or(0.0)>=me.path("costs.unit").num_or(1e9)
                     && me.path("rts.cpu.bank").num_or(0.0)>=fabrication(me,0.0)+income {
                     out.entry("compute").entry("cpu").entry("limits").set("fabrication",fabrication(me,0.0)+100.0);
-                    out.set("spawn",vec![obj!{"type"=>"miner"}]);
+                    let serial=me.path("units.spawned").num_or(0.0)+1.0;
+                    let names=theme::of(me.get("seat"),-1.0).and_then(|h|h.names_for("miner"));
+                    let label=names.map_or_else(||format!("miner-{serial:.0}"),|list|name(me,list,serial));
+                    out.set("spawn",vec![obj!{"type"=>"miner","name"=>label}]);
                 }
                 return logistics_budget(world,me,out);
             }
