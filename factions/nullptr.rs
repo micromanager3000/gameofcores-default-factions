@@ -471,7 +471,7 @@ fn strategy(world: View, me: View) -> Value {
     // Maintain a small mining base first, no bigger than what our mines can use (common::miner_room: past that a miner
     // stands idle); then rotate combat specialties instead of massing one dominant body. Three spawns is also the
     // engine's normal cap.
-    if miners < jmax(8.0, (total * 0.4).floor()) && miners < common::miner_room(me, &plan) {
+    if miners < jmax(6.0, (total * 0.3).floor()) && miners < common::miner_room(me, &plan) {
         spawn(&mut orders, "miner", MINER, vec![]);
     }
     // A small air wing only if Flight ever arrives (stolen, most likely): a tenth of the army, between 2 and 4 fliers.

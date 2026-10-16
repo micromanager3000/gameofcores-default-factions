@@ -448,7 +448,7 @@ fn strategy(world: View, me: View) -> Value {
     // engine's normal cap.
     // (the horde: three in ten units mine, the rest ride; more skirmishers and lancers to each screen than the founders
     // field, so a mustered army reaches a capital's siege odds)
-    if miners < jmax(8.0, (total * 0.3).floor()) && miners < common::miner_room(me, &plan) {
+    if miners < jmax(6.0, (total * 0.3).floor()) && miners < common::miner_room(me, &plan) {
         spawn(&mut orders, "miner", MINER, vec![]);
     }
     if screens < jmax(4.0, ((skirms + guns + 1.0) * 0.5).floor()) {
