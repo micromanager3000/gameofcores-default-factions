@@ -100,6 +100,10 @@ fn strategy(world: View, me: View) -> Value {
         "spy" => obj! { "share" => 0.15, "every" => 0 },
     };
     common::budget(&mut orders, world, me, &common::Budget { research: 0.1, techs: &research_techs, types: Some(&types), ..common::Budget::default() });
+    if world.get("logistics").truthy() {
+        // Leave room for the governor's body-cost review after planning a recruit.
+        orders.entry("compute").entry("cpu").entry("limits").set("think",(me.path("compute.thinkPeak").num_or(0.0)*1.6+6000.0).max(20000.0));
+    }
     orders
 }
 
