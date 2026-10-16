@@ -560,8 +560,8 @@ use super::{air, theme};
         targets.iter().copied().find(|q| last >= 0.0 && q.get("id").num() == last).or_else(|| targets.first().copied().filter(View::truthy))
     }
 
-    /// How many of your units stand at province `stage` or in `attack`, of every type but those at work in your mines or
-    /// studying, so units of two types that muster together count together. 0 while fewer than `need` of your units of
+    /// How many ground combat units stand at province `stage` or in `attack`.
+    /// Workers, scouts, ships and aircraft do not count. Units of two combat types muster together. 0 while fewer than `need` of your units of
     /// any type stand there (no pass over the units then). think only: put it in the plan as `ready`, and [`muster`]
     /// sends the plan's units in once it reaches `need`.
     pub fn ready(world: View, me: View, stage: f64, attack: f64, need: f64) -> f64 {

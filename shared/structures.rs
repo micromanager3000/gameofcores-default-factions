@@ -50,7 +50,7 @@ fn open_slot(p: View, me: View) -> Option<usize> {
 /// Clear visible hostile buildings once nearby soldiers have room to fire.
 /// Short orders leave normal combat in control when an enemy army arrives.
 fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: View, now: f64) {
-    let hostile: Vec<View> = sites.iter().filter(|s| s.get("state").str() != "ruin"
+    let hostile: Vec<View> = sites.iter().take_while(|_| cycles_left() > 6500.0).filter(|s| s.get("state").str() != "ruin"
         && realm::is_rival(world, me, s.get("owner").num_or(-1.0))).collect();
     if hostile.is_empty() { return; }
     let mut attacks = Value::arr();
@@ -61,7 +61,7 @@ fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: Vie
             || matches!(u.get("doing").str(), "gather" | "study") { continue; }
         let reach = if u.path("build.range").num_or(0.0) > 0.0 { 3.0 + u.path("build.range").num() } else { 1.5 };
         let conduct = u.get("conduct");
-        let target = hostile.iter().copied().filter(|s| {
+        let target = hostile.iter().copied().take_while(|_| cycles_left() > 4500.0).filter(|s| {
             let protected = conduct.get("seconds").num_or(0.0) > 0.0 && same(conduct.get("from"), s.get("owner"));
             !protected && near(u, *s, reach + s.get("radius").num_or(0.0))
         }).min_by(|a, b| {
@@ -109,7 +109,6 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     let bank = me.path("rts.cpu.bank").num_or(0.0);
     let safe = orders.get("memo").str() != "Recovering production" && me.path("units.stalled").num_or(0.0) == 0.0
         && bank > income.max(1000.0 * price(me)) && me.path("rts.cpu.last.upkeep").num_or(0.0) < income * 0.7;
-    if safe && cycles_left() > 8000.0 { besiege(orders, world, me, &units, sites, now); }
     let mut jobs = Value::arr();
     let mut services = Value::arr();
     for s in &own {
@@ -155,6 +154,7 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     }
     if !jobs.is_empty() { orders.set("structureJobs", jobs); }
     if !services.is_empty() { orders.set("structureService", services); }
+    if safe && cycles_left() > 8000.0 { besiege(orders, world, me, &units, sites, now); }
     if !safe || now < 35.0 || now % 30.0 >= 10.0 || own.len() >= d.limit
         || own.iter().any(|s| s.get("state").str() != "ready") || sites.len() >= 250 || cycles_left() < 6000.0 { return; }
     let mut land: Vec<View> = world.get("provinces").iter().filter(|p| same(p.get("owner"), id)
