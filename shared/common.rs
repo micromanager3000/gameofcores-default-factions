@@ -1092,8 +1092,14 @@ use super::{air, theme};
     fn govern_units(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
         if !me.path("rts.cpu").truthy() { return strategy(); }
         if world.get("logistics").truthy() {
+            // A starved army still needs the full crew-aware recovery policy. Its paid upkeep can be zero.
+            if me.path("units.stalled").num_or(0.0)>0.0 {
+                return logistics_budget(world, me, recovery(world, me));
+            }
             let income=me.path("rts.cpu.income").num_or(20000.0);
-            if income<30000.0 || me.path("rts.cpu.bank").num_or(0.0)<income*4.0 || cycles_left()<12000.0 {
+            // A working crew with savings may resume strategy between irregular cargo deliveries.
+            let starting=income<30000.0 && me.path("units.total").num_or(0.0)<4.0;
+            if starting || me.path("rts.cpu.bank").num_or(0.0)<income*4.0 || cycles_left()<12000.0 {
                 let mut out=recovery_policy(me);
                 let have=me.path("units.byType");
                 if me.path("rts.cpu.last.upkeep").num_or(0.0)>income*0.65 && me.path("rts.cpu.bank").num_or(0.0)<income*4.0 {
