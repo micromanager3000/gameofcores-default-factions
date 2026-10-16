@@ -124,6 +124,16 @@ fn a_quiet_planning_second_preserves_other_lanes_and_raises_a_stale_limit() {
     assert_eq!(cpu.get("upkeepOrder"),&arr!["miner","wing"]);
     assert!(orders.get("ram").is_empty() && orders.get("spawn").is_empty());
 }
+
+#[test]
+fn distant_workers_do_not_hide_an_open_town_from_army_planning() {
+    let args=views(&[obj!{"factions"=>arr![]},obj!{"id"=>0},
+        obj!{"owner"=>1,"cores"=>4,"garrison"=>20,"townGarrison"=>0},
+        obj!{"owner"=>1,"cores"=>3,"garrison"=>2,"townGarrison"=>2},
+        obj!{"owner"=>1,"cores"=>4,"garrison"=>20}]);
+    assert!(common::score(args[0],args[1],args[2])>common::score(args[0],args[1],args[3]));
+    assert_eq!(common::town_defenders(args[4]),20.0,"older observations keep their fallback");
+}
 #[test]
 fn flight_research_waits_for_recovery_and_preserves_emu_doctrine() {
     for state in ["stalled","poor","costly","emu"] {

@@ -173,7 +173,7 @@ fn pick_target(world: View, me: View) -> Option<View> {
     let ranked = realm::rank(world, me, common::frontier(world, me), |w, m, q| {
         let owner = q.get("owner").num();
         let enemy = if owner >= 0.0 && realm::is_rival(w, m, owner) { 7.0 } else { 0.0 };
-        enemy + q.get("cores").or(0.0) * 2.0 - q.get("garrison").or(0.0) * 1.6 - if q.get("capital").truthy() { 3.0 } else { 0.0 }
+        enemy + q.get("cores").or(0.0) * 2.0 - common::town_defenders(q) * 1.6 - if q.get("capital").truthy() { 3.0 } else { 0.0 }
             - if hold(q) { 0.0 } else { common::OVER_WATER }
     });
     ranked.first().copied()
