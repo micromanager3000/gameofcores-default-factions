@@ -31,10 +31,10 @@ const GHOST: Build = &[("hp", 1.0), ("speed", 3.0), ("strength", 1.0), ("carry",
 const WING: Build = &[("hp", 2.0), ("speed", 2.0), ("strength", 3.0), ("carry", 0.0), ("vision", 0.0), ("wings", 1.0)];
 const WING_SHOT: Build = &[("hp", 2.0), ("speed", 2.0), ("strength", 1.0), ("carry", 0.0), ("vision", 0.0), ("wings", 1.0), ("range", 1.0)];
 
-// What to research, in order: the cheap first tier, then Flight (its crossings come first), then Air weapons (through
-// Artillery), then the economy and the rest.
+// Establish mining and a mobile archer screen, then pursue Flight and its crossings.
+// Ground upgrades follow Flight; Air weapons still requires Artillery.
 const TECHS: [&str; 19] = [
-    "extraction", "dash", "ranged", "armor", "antiAir", "pierce", "flight", "artillery", "airWeapons", "computeBoost", "scan", "repair",
+    "extraction", "dash", "ranged", "flight", "armor", "antiAir", "pierce", "artillery", "airWeapons", "computeBoost", "scan", "repair",
     "capture", "influence", "cloak", "stealth", "seaTraversal", "mountainTraversal", "gate",
 ];
 
@@ -309,10 +309,35 @@ fn think(world: View, me: View) -> Value {
     if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
         return emergency_recovery_policy();
     }
-    if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
-        return common::govern(world, me, 0.4, || recovery_policy(me));
+    let mut orders = if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
+        common::govern(world, me, 0.4, || recovery_policy(me))
+    } else {
+        common::govern(world, me, 0.4, || strategy(world, me))
+    };
+    flight_progress(&mut orders, world, me);
+    orders
+}
+
+// A healthy cargo crew can fund the Flight path while the full army planner waits for savings.
+// Keep emergency recovery closed when upkeep is unpaid or the bank cannot cover two seconds of income.
+fn flight_progress(orders: &mut Value, world: View, me: View) {
+    if cycles_left() < 4000.0 || me.get("seat").num_or(-1.0) == 8.0
+        || !world.get("logistics").truthy() || me.path("techs.flight").truthy()
+        || me.path("units.total").num_or(0.0) < 4.0 || me.path("units.stalled").num_or(0.0) > 0.0 { return; }
+    let income = me.path("rts.cpu.income").num_or(0.0);
+    if income <= 0.0 || me.path("rts.cpu.bank").num_or(0.0) < income * 2.0
+        || me.path("rts.cpu.last.upkeep").num_or(0.0) > income * 0.5
+        || orders.get("compute").get("cpu").get("limits").get("research").num_or(0.0) > 0.0 { return; }
+    for tech in ["seaTraversal", "mountainTraversal", "flight"] {
+        let spec = world.get("techs").get(tech);
+        if me.get("techs").get(tech).truthy() || !spec.truthy() { continue; }
+        if !spec.get("requires").iter().all(|t| me.get("techs").get(t.str()).truthy()) { return; }
+        orders.set("research", tech);
+        let cpu = orders.entry("compute").entry("cpu");
+        cpu.entry("limits").set("research", 0.12);
+        cpu.entry("reserve").set("research", 0.02);
+        return;
     }
-    common::govern(world, me, 0.4, || strategy(world, me))
 }
 
 // At the bottom of a short think slice, update only the CPU budget needed for the next one. Leave type schedules and

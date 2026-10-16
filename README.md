@@ -76,3 +76,14 @@ The default programs also build when a CPU RTS world enables structures.
 Their shared policy reads `me.rts.structureCosts` before issuing building orders.
 Both the uniform default program and the separate house programs use each seat's design.
 See [default buildings](docs/buildings.md) for their priorities and spending limits.
+
+## Cargo and Flight checks
+
+Run `npm run test:behavior -- ../gameofcores` against a game checkout with its public SDK.
+The tests exercise route selection, load reservations, idle retirement and Arjuna's research policy.
+They run the exported faction code. Full game simulations and metered callback checks still run in the game repository.
+
+Freighters reserve reachable loads and use a receiving dock connected to the capital.
+An empty freighter retires after two minutes without movement. Loaded, hired and passenger ships are preserved.
+Recruitment requires a reachable outbound load and waits after an idle retirement.
+Arjuna pursues Flight after mining, Dash and Ranged. A funded recovery crew can continue that research while the army planner waits.
