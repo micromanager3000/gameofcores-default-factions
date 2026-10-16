@@ -218,3 +218,20 @@ fn capital_assault_counts_armed_ground_units_before_siege_headcount() {
     let args=views(&[obj!{"logistics"=>obj!{},"units"=>vec![wing;12]},obj!{"id"=>1,"allies"=>arr![]},capital]);
     assert_eq!(common::capital_assault(args[0],args[1],args[2]),None,"aircraft cannot replace a ground assault");
 }
+
+#[test]
+fn passage_stays_useful_until_only_one_crown_rival_remains() {
+    let deal=obj!{"from"=>2,"give"=>obj!{"passage"=>obj!{"units"=>12,"seconds"=>600}},"ask"=>obj!{"coin"=>100}};
+    let me=obj!{"id"=>1,"bank"=>1000,"allies"=>arr![3],"units"=>obj!{"total"=>10,"cap"=>24},"contracts"=>arr![]};
+    let faction=|id|obj!{"id"=>id,"alive"=>true};
+    let mut world=obj!{"logistics"=>obj!{},"crown"=>obj!{"maxBloc"=>3},"factions"=>vec![faction(1),faction(2),faction(3)],"provinces"=>arr![]};
+    let args=views(&[deal.clone(),me.clone(),world.clone()]);
+    assert!(!common::fair(args[0],args[1],args[2],&[]),"the last opponent must remain reachable");
+    world.entry("factions").push(faction(4));
+    let args=views(&[deal.clone(),me.clone(),world.clone()]);
+    assert!(common::fair(args[0],args[1],args[2],&[]),"peace with one of several opponents can still pay");
+    world.set("factions",vec![faction(1),faction(2),faction(3)]);
+    world.entry("crown").set("maxBloc",1);
+    let args=views(&[deal,me,world]);
+    assert!(common::fair(args[0],args[1],args[2],&[]),"a pact too large to claim cannot assume its current partners will win together");
+}

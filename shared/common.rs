@@ -1881,6 +1881,7 @@ use super::{air, theme};
     /// another minute: it buys none of them twice. It sells no passage to a faction whose units stand in your land, unless it renews passage
     /// that faction has from you (passage ends the moment its holder attacks). It takes no mine lease in a province
     /// you're besieging, and no passage from a faction whose land you're besieging: either would stop your own siege.
+    /// In logistics worlds it declines new passage from its last Crown rival; existing contracts still expire normally.
     /// With `world` undefined it sells no land and no passage.
     pub fn fair(m: View, me: View, world: View, techs: &[&str]) -> bool {
         let (give, ask) = (m.get("give"), m.get("ask"));
@@ -1896,6 +1897,14 @@ use super::{air, theme};
         };
         if held("passage") || held("sight") || held("relay") {
             return false;
+        }
+        // Keep existing passage until it expires, but do not renew peace with the last Crown rival.
+        // Buying that right repeatedly would remove every remaining opponent from our frontier.
+        if world.get("logistics").truthy() && give.get("passage").truthy()
+            && (me.get("allies").len() + 1) as f64 <= world.path("crown.maxBloc").num_or(0.0) {
+            let mut rivals = world.get("factions").iter().filter(|f|
+                f.get("alive").truthy() && f.get("id").num() != me_id && !realm::is_ally(me, f.get("id").num()));
+            if rivals.next().is_some_and(|f| f.get("id").num() == from) && rivals.next().is_none() { return false; }
         }
         let hire = give.get("hire");
         let units = give.get("units").len() as f64 + if hire.get("units").truthy() { hire.get("units").len() as f64 } else { hire.get("count").or(0.0) };
