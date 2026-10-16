@@ -35,6 +35,9 @@ Recipients accept explicit grants priced at no more than 0.25 ◆ per HP.
 Standing jobs refresh every five seconds and expire after 45 seconds without renewal.
 Recovery clears their paid allocations. The planner reserves headroom for returning orders and writing RAM.
 Nearby combat units attack hostile buildings when no enemy army needs their weapon cooldown.
+In worlds with site maintenance, buildings become eligible for retirement after five minutes.
+The planner keeps profitable supply, faith, extraction, civic work in unsettled provinces, active defenses and repair clients.
+An idle site without those uses is demolished, ending its maintenance bill without a refund.
 
 These buildings do not change the world's rules or enable structures themselves.
 Start a supported world with `hypercycle-sim watch --cpu-rts --structures`.

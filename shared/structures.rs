@@ -49,6 +49,36 @@ fn open_slot(p: View, me: View) -> Option<usize> {
     }).map(|(i, _)| i)
 }
 
+// Construction can pay back and still become obsolete when its army moves away.
+// Give a new site five minutes, then keep only services with a current use.
+fn obsolete(s: View, own: &[View], units: &[View], world: View, me: View, now: f64) -> bool {
+    let period = me.path("rts.structureCosts.maintenancePeriod").num_or(0.0);
+    if period <= 0.0 || now % 30.0 != 0.0 || cycles_left() < 7500.0 { return false; }
+    let Some(born) = s.get("key").str().strip_prefix("home-").and_then(|key| key.rsplit('-').next()).and_then(|t| t.parse::<f64>().ok()) else { return false; };
+    if now - born < 300.0 { return false; }
+    let bill = s.get("buildCost").num_or(0.0) * price(me) / period;
+    if bill <= 0.0 { return false; }
+    let mut returns: Vec<f64> = units.iter().filter(|u| near(**u, s, 8.0)).map(|u| supply_return(me, *u)).collect();
+    returns.sort_by(|a,b| b.total_cmp(a));
+    let supplied = own.iter().filter(|other| other.get("id").num() < s.get("id").num()
+        && same(other.get("p"), s.get("p")) && port(**other,"logistics")
+        && (other.get("x").num()-s.get("x").num()).hypot(other.get("y").num()-s.get("y").num()) < 16.0).count()*6;
+    if port(s,"logistics") && returns.iter().skip(supplied).take(6).sum::<f64>() > bill { return false; }
+    let province = world.get("provinces").iter().find(|p| same(p.get("id"),s.get("p")));
+    if let Some(p) = province {
+        if same(p.get("owner"),me.get("id")) {
+            if port(s,"support") && (p.get("risk").num_or(0.0)>0.1 || (same(p.path("faith.by"),me.get("id")) && p.path("faith.zeal").num_or(0.0)>0.0)) { return false; }
+            if port(s,"extract") && open_slot(p,me).is_some() { return false; }
+        }
+    }
+    // A battery facing an enemy, or a court with an injured client, still has work.
+    !world.get("units").iter().any(|u| cycles_left()<5000.0 ||
+        (port(s,"weapon") && realm::is_rival(world,me,u.get("owner").num_or(-1.0))
+            && near(u,s,s.path("weapon.range").num_or(5.0)+2.0)) ||
+        (port(s,"repair") && (same(u.get("owner"),me.get("id")) || realm::is_ally(me,u.get("owner").num_or(-1.0)))
+            && u.get("hp").num() < u.get("hpMax").num_or(0.0) && near(u,s,6.0)))
+}
+
 /// Clear visible hostile buildings once nearby soldiers have room to fire.
 /// Short orders leave normal combat in control when an enemy army arrives.
 fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: View, now: f64) {
@@ -114,9 +144,14 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
         && bank > income.max(1000.0 * price(me)) && me.path("rts.cpu.last.upkeep").num_or(0.0) < income * 0.7;
     let mut jobs = Value::arr();
     let mut services = Value::arr();
+    let mut retired = Value::arr();
     for s in &own {
         if cycles_left() < 4500.0 || jobs.len() >= 24 { break; }
         if s.get("state").str() != "ready" { continue; }
+        if obsolete(*s, &own, &units, world, me, now) {
+            retired.push(obj! {"id"=>s.get("id")});
+            continue;
+        }
         let mut j = obj! { "id" => s.get("id"), "extract" => 0, "extractSlot" => 0, "faith" => 0, "civic" => 0,
             "watch" => 0, "watchWater" => -1, "supply" => 0, "guard" => false, "target" => 0,
             "repair" => 0, "repairSite" => s.get("id"), "budget" => 0, "until" => now + 45.0 };
@@ -162,7 +197,8 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
         let mut offered = Value::arr();
         for s in &own {
             if cycles_left() < 5000.0 || offered.len() >= 4 { break; }
-            if s.get("state").str() != "ready" || !port(*s, "repair") { continue; }
+            if s.get("state").str() != "ready" || !port(*s, "repair")
+                || retired.items().iter().any(|r| r.get("id").num() == s.get("id").num()) { continue; }
             if let Some(guest) = world.get("units").iter().take_while(|_| cycles_left() > 4500.0).find(|u|
                 realm::is_ally(me, u.get("owner").num()) && u.get("owner").num() != id.num()
                 && u.get("hp").num() < u.get("hpMax").num_or(0.0) && near(*u, *s, 6.0)) {
@@ -189,6 +225,7 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
         }
     }
     if !jobs.is_empty() { orders.set("structureJobs", jobs); }
+    if !retired.is_empty() { orders.set("structureDemolish", retired); }
     if !services.is_empty() { orders.set("structureService", services); }
     if safe && cycles_left() > 8000.0 { besiege(orders, world, me, &units, sites, now); }
     if !safe || now < 35.0 || now % 30.0 >= 10.0

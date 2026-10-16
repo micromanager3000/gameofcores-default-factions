@@ -153,3 +153,30 @@ fn ground_carriers_collect_cargo_from_an_alternate_receiving_dock() {
     let orders:Vec<Value>=abi::TEST_ORDERS.with(|o|o.take()).iter().map(|s|Value::parse(s)).collect();
     assert!(orders.iter().any(|o|o.get("cargo").get("load").get("p").num()==1.0),"{orders:?}");
 }
+
+#[test]
+fn buildings_retire_only_after_their_services_lose_a_use() {
+    let site=obj!{"id"=>10,"owner"=>0,"p"=>0,"x"=>0,"y"=>0,"key"=>"home-0-60","state"=>"ready",
+        "buildCost"=>6000,"hp"=>100,"maxHp"=>100,"ports"=>arr!["support","logistics","weapon","repair"]};
+    let base_world=obj!{"seconds"=>600,"provinces"=>arr![obj!{"id"=>0,"owner"=>0,"risk"=>0}],"units"=>arr![],
+        "factions"=>arr![obj!{"id"=>0,"alive"=>true},obj!{"id"=>1,"alive"=>true},obj!{"id"=>2,"alive"=>true}]};
+    let base_me=obj!{"id"=>0,"seat"=>0,"allies"=>arr![1],"rts"=>obj!{"structures"=>arr![site],
+        "structureCosts"=>obj!{"maintenancePeriod"=>600},"costs"=>obj!{"priceLevel"=>1,"upkeep"=>obj!{"base"=>100}},
+        "cpu"=>obj!{"bank"=>500000,"income"=>10000,"last"=>obj!{"upkeep"=>1000}}}};
+    for reason in ["idle","new","supplied","faith","loyalty","enemy","repair","legacy"] {
+        let mut world=base_world.clone(); let mut me=base_me.clone();
+        match reason {
+            "new"=>world.set("seconds",300),
+            "supplied"=>world.set("units",arr![obj!{"id"=>1,"owner"=>0,"hp"=>5,"hpMax"=>5,"pos"=>obj!{"p"=>0,"x"=>0,"y"=>0}}]),
+            "faith"=>item(world.entry("provinces"),0).set("faith",obj!{"by"=>0,"zeal"=>20}),
+            "loyalty"=>item(world.entry("provinces"),0).set("risk",0.2),
+            "enemy"=>world.set("units",arr![obj!{"id"=>1,"owner"=>2,"hp"=>5,"hpMax"=>5,"pos"=>obj!{"p"=>0,"x"=>2,"y"=>0}}]),
+            "repair"=>world.set("units",arr![obj!{"id"=>1,"owner"=>1,"hp"=>2,"hpMax"=>5,"pos"=>obj!{"p"=>0,"x"=>2,"y"=>0}}]),
+            "legacy"=>me.entry("rts").entry("structureCosts").set("maintenancePeriod",0),
+            _=>(),
+        }
+        let args=views(&[world,me]); let mut out=obj!{};
+        shared::structures::apply(&mut out,args[0],args[1]);
+        assert_eq!(!out.get("structureDemolish").is_empty(),reason=="idle","{reason}: {out:?}");
+    }
+}
