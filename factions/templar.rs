@@ -1132,11 +1132,14 @@ fn bulwark(units: View, world: View, me: View) {
 }
 
 fn artillery(units: View, world: View, me: View) {
+    let mut budget = RouteBudget::new(me);
     for turn in 0..units.len() {
-        if short(me) {
+        if !budget.room(me) {
             break;
         }
         let u = rotate(units, world, turn);
+        if !budget.admits(u, world, me, true) { continue; }
+        let began = cycles_left();
         let r = u.get("rts");
         let p = plan::of(me, u);
         let target = if common::defends(&p, u) >= 0.0 {
@@ -1148,6 +1151,7 @@ fn artillery(units: View, world: View, me: View) {
         };
         let travelling = !eqv(u.get("at"), &target) || num(u.get("to")) >= 0.0;
         if travelling {
+            if !budget.route(u, vnum(&target), world, me) { continue; }
             // A deployed gun has zero movement. Pack it in the same order that gives
             // it the new route, including when the target changed under its feet.
             let o = carry(orders::to(u, "fight", vnum(&target), world, me, ()), u, &p, me);
@@ -1162,6 +1166,7 @@ fn artillery(units: View, world: View, me: View) {
             // reflex choose shell targets. Do not plant guns at their home province.
             order(obj! { "id" => u.get("id"), "deploy" => true, "power" => obj! { "drive" => 120, "armor" => 180, "weapon" => 650 } });
         }
+        budget.finish(began, true);
     }
 }
 
