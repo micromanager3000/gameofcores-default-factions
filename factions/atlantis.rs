@@ -1023,21 +1023,22 @@ fn lane(b: View, name: &str, left: f64) -> f64 {
 }
 
 #[allow(unused_assignments)] // the lanes left, kept as they're spent even after the last read
-fn reflex(units: View, near: View) -> Value {
-    let mut out = Vec::new();
+fn reflex(units: View, near: View) -> Vec<Value> {
     let n = units.len();
     let start = if n > 0 { ((units.at(0).get("rts").get("bank").or(0.0) / 211.0).floor() % n as f64) as usize } else { 0 };
-    // Each unit's turn needs half again what the dearest turn so far took (2,000 before the first), and returning the
-    // orders costs about what giving them did, so keep both back. A flat 3,200 kept a call made with less, as a small
-    // fight's often is, from striking at all.
-    let (mut returning, mut turn_cost) = (0.0, 2000.0_f64);
+    // A rich first reaction can exceed a short callback's entire allowance.
+    // Submit each order once and leave room for the callback's return.
+    let mut turn_cost = 4000.0_f64;
     for turn in 0..n {
-        if cycles_left() < turn_cost + returning {
+        if cycles_left() < turn_cost + 400.0 {
             break;
         }
         let began = cycles_left();
         let u = units.at((start + turn) % n);
         let ns = near.key(u.get("id").num());
+        if cycles_left() < 3400.0 + 160.0 * ns.len() as f64 {
+            break;
+        }
         let r = u.get("rts");
         let modules = r.get("modules");
         let (mut threat, mut best, mut shell_target): (Option<View>, Option<View>, Option<View>) = (None, None, None);
@@ -1221,14 +1222,12 @@ fn reflex(units: View, near: View) -> Value {
             }
         }
         if best.is_some() || o.get("step").truthy() || o.get("ability").truthy() || o.get("deploy").truthy() {
-            let before = cycles_left();
-            order(o.clone());
-            returning += before - cycles_left();
-            out.push(o);
+            if cycles_left() < 700.0 { break; }
+            order(o);
         }
         turn_cost = turn_cost.max(1.5 * (began - cycles_left()));
     }
-    out.into()
+    Vec::new()
 }
 
 // ---- Puzzles ----

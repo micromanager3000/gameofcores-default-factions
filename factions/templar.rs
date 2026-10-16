@@ -19,7 +19,7 @@ fn build(hp: f64, speed: f64, strength: f64, carry: f64, vision: f64, range: Opt
     b
 }
 fn miner_body() -> Value {
-    build(2.0, 2.0, 0.0, 5.0, 1.0, None)
+    build(2.0, 3.0, 0.0, 5.0, 0.0, None)
 }
 fn line_body() -> Value {
     build(4.0, 2.0, 3.0, 0.0, 1.0, None)
@@ -37,10 +37,10 @@ fn scout_body() -> Value {
     build(2.0, 4.0, 0.0, 0.0, 4.0, None)
 }
 
-// The order researches extraction, then equips its first defensive line.
-// Influence and faith follow armor, ranged fire, capture and dash.
+// Extraction and armor equip the first line. Influence and faith support expansion
+// before the order adds ranged weapons and specialist capabilities.
 const TECHS: [&str; 20] = [
-    "extraction", "armor", "ranged", "capture", "dash", "influence", "faith", "repair", "scan", "antiAir", "artillery", "pierce",
+    "extraction", "armor", "influence", "faith", "ranged", "capture", "dash", "repair", "scan", "antiAir", "artillery", "pierce",
     "computeBoost", "seaTraversal", "mountainTraversal", "flight", "gate", "cloak", "stealth", "airWeapons",
 ];
 const FAITHS: [&str; 8] = [
@@ -1307,7 +1307,8 @@ fn terrain_step(u: View, x: f64, y: f64) -> Option<Value> {
 }
 
 fn reflex(units: View, near: View) -> Vec<Value> {
-    let mut out = Vec::new();
+    // A small event allowance cannot cover pool setup and a complete reaction.
+    if cycles_left() < 2800.0 { return Vec::new(); }
     let first = units.at(0).get("rts");
     let budget = first.get("budget");
     let mut bank_left = max(0.0, or(first.get("bank"), 0.0) - cycles_left() - 700.0);
@@ -1316,17 +1317,17 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         (available("weapon"), available("armor"), available("drive"), available("abilities"));
     let n = units.len() as f64;
     let start = if n > 0.0 { (or(units.at(0).get("rts").get("bank"), 0.0) / 211.0).floor() % n } else { 0.0 };
-    // Each unit's turn needs half again what the dearest turn so far took (2,000 before the first), and returning the
-    // orders costs about what giving them did, so keep both back. A flat 3,200 kept a call made with less, as a small
-    // fight's often is, from striking at all.
-    let (mut returning, mut turn_cost) = (0.0, 2000.0_f64);
+    // Orders commit once through order(). Leave room for the next contact's scan.
+    let mut turn_cost = 2400.0_f64;
     for turn in 0..units.len() {
-        if cycles_left() < turn_cost + returning {
+        if cycles_left() < turn_cost {
             break;
         }
         let began = cycles_left();
         let u = units.key((start + turn as f64) % n);
         let ns = near.key(num(u.get("id")));
+        let role_cost = if matches!(u.get("type").str(), "artillery" | "medic") { 3200.0 } else { 2200.0 };
+        if cycles_left() < role_cost + ns.len() as f64 * 100.0 { continue; }
         let mods = u.get("rts").get("modules");
         let (mut threat, mut best, mut score, mut ground): (Option<View>, Option<View>, f64, f64) = (None, None, 99.0, 0.0);
         for t in ns.iter() {
@@ -1492,14 +1493,11 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         bank_left = left;
         o.set("power", obj! { "drive" => drive, "armor" => armor, "weapon" => weapon });
         if best.is_some() || step || o.get("ability").truthy() || o.get("deploy").truthy() {
-            let before = cycles_left();
-            order(o.clone());
-            returning += before - cycles_left();
-            out.push(o);
+            order(o);
         }
         turn_cost = turn_cost.max(1.5 * (began - cycles_left()));
     }
-    out
+    Vec::new()
 }
 
 // ---- puzzles ----

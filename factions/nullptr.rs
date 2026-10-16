@@ -203,7 +203,14 @@ fn cpu_policy(me: View, plan: &Value, type_calls: &Value) -> Value {
         }
     }
     let invaded = vn(plan.get("defend")) >= 0.0 || or0(plan.get("threat")) > 0.0;
-    let income = rts_cpu(me).get("income").or(0.0);
+    let cpu = rts_cpu(me);
+    let income = cpu.get("income").or(0.0);
+    // When land loss makes combat spend exceed income, research waits before the bank empties.
+    let running: f64 = cpu.get("last").entries().filter(|(lane, _)| *lane != "research")
+        .map(|(_, cost)| cost.num_or(0.0)).sum();
+    let research = if invaded && cpu.get("bank").num_or(0.0) < income * 90.0 {
+        (0.85 - running / income.max(1.0)).clamp(0.0, 0.3)
+    } else { 0.3 };
     let pick = |a: f64, b: f64| if invaded { a } else { b };
     obj! {
         "limits" => obj! {
@@ -214,7 +221,7 @@ fn cpu_policy(me: View, plan: &Value, type_calls: &Value) -> Value {
             // ceiling instead of splitting a sub-4k purse across them, and grow it with income as the calls grow.
             "control" => round(jmax(jmax(pick(50000.0, 42000.0), income * 0.6), fielded)),
             "reflex" => pick(0.30, 0.20),
-            "research" => 0.3,
+            "research" => research,
             // the exploits are dear to keep (stealth costs 180 cycles a second a level): room for them before anyone stalls
             "upkeep" => 0.45,
             "drive" => pick(0.18, 0.11),
