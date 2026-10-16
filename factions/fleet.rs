@@ -1820,7 +1820,7 @@ fn junk_reflex(u: View, ns: View, pool: &mut Pool) -> Option<Value> {
         if u.get("type").str() == "corsair" && hurt && t.get("d").num() < 6.0 {
             // run: away from it, dashing if it can
             o.set("head", obj! { "x" => -t.get("dx").num(), "y" => -t.get("dy").num() });
-            if transferring {o.set("cargo",obj!{"cancel"=>true});}
+            if transferring {o.set("cargo",Value::Null);}
             if modules.has_str("dash") && ready("dash") && pool.take("abilities", 900.0) {
                 o.set("ability", "dash");
             }
