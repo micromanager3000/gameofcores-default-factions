@@ -56,6 +56,10 @@ built from the kit. Each landmark is drawn by hand.
 
 Roofs, domes, spires and banners take the owner's colour, so a city reads as its faction's from above.
 
+A program pays for its length in memory, so the designs are written small. Each house's kit, names and landmark are a
+line of `shared/buildings.txt`. A house program carries only its own line; the default program carries every line, so
+it builds in the style of its seat.
+
 ## Operating them
 
 Ready buildings supply nearby grounded units only when the upkeep discount exceeds service costs.

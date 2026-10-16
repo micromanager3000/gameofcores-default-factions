@@ -14,12 +14,18 @@ fn main() {
     }
     shared.push_str("}\n");
     example_shared.push_str("}\n");
+    // Each house's buildings, a line a house in seat order: a house program carries only its own (a program pays for
+    // its length in memory), the default program every house's, since it wears the seat's style.
+    println!("cargo:rerun-if-changed=shared/buildings.txt");
+    let arts: Vec<String> = fs::read_to_string("shared/buildings.txt").expect("building art").lines()
+        .filter(|l| !l.is_empty() && !l.starts_with('#')).map(|l| format!("{l:?}")).collect();
     let names = ["kublai", "arjuna", "templar", "atlantis", "fleet", "manifesto", "nullptr", "nations", "default"];
     let mut constants = String::new();
-    for name in names {
+    for (seat, name) in names.into_iter().enumerate() {
         let path = format!("factions/{name}.rs");
         println!("cargo:rerun-if-changed={path}");
-        let source = fs::read_to_string(path).expect("faction source") + &shared;
+        let own = if name == "default" { arts.join(", ") } else { arts[seat].clone() };
+        let source = fs::read_to_string(path).expect("faction source") + &shared + &format!("const ARTS: &[&str] = &[{own}];\n");
         fs::write(out.join(format!("{name}.rs")), source).expect("assembled source");
         constants.push_str(&format!("({name:?}, include_str!(concat!(env!(\"OUT_DIR\"), \"/{name}.rs\"))),\n"));
     }

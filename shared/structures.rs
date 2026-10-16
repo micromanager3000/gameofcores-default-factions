@@ -378,26 +378,10 @@ impl Art {
     }
 }
 
-/// A house's building kit, a letter each: wall and terrace tones; roof (Dome, Stepped, Gable, Tiers or Flat); tower
-/// (domed, minaret, needle, observatory, pagoda, Mast, clock, tank or Obelisk); and y for gardens.
+/// A house's building kit (shared/buildings.txt).
 struct Kit { wall: u8, base: u8, roof: u8, spire: u8, garden: bool }
-const KITS: [&str; 10] = ["msDdy", "nnSmy", "ssGny", "mmDoy", "wsTpn", "ssFnn", "GkFMn", "bnGcn", "MnGtn", "mmFOy"];
-/// Each house's names for its landmark, hall, yard, works, bastion and bay.
-const NAMES: [&str; 10] = [
-
-    "Pleasure dome|Khan's court|Caravan yard|Ore camp|Steppe bastion|Horse lines",
-    "Temple of the bow|Mandapa|Chariot yard|Forge ghat|Bow relay|Healing house",
-    "Sanctum cathedral|Chapter house|Commandery yard|Abbey works|Chapter keep|Infirmary",
-    "Salomon's House|Research court|Merchants' yard|Furnace house|Sea bastion|Physic hall",
-    "Longjiang pagoda|Admiralty hall|Treasure-ship yard|Rope works|Harbor fort|Dry dock",
-    "Great Reading Room|Assembly hall|People's depot|Red works|Committee fort|Workers' clinic",
-    "Address Zero|Pointer court|Cache depot|Heap works|Pointer spire|Patch bay",
-    "Kirkcaldy exchange|Exchange hall|Exchange depot|Pin factory|Customs fort|Mending house",
-    "Campion command|Mess hall|Supply dump|Bore works|Emu roost|Field hospital",
-    "Flux commons|Open courtyard|Depot|Works|Bastion|Workshop",
-];
-fn kit(style: usize) -> Kit {
-    let b = KITS[style.min(9)].as_bytes();
+fn kit(code: &str) -> Kit {
+    let b = code.as_bytes();
     Kit { wall: b[0], base: b[1], roof: b[2], spire: b[3], garden: b[4] == b'y' }
 }
 /// The house roof over a block w × d centred at (x, y) whose walls end at z.
@@ -467,29 +451,6 @@ const DESIGNS: [&str; 5] = [
     // A repair bay: a workshop with a great door, a gantry crane, lamps and spares.
     "p,,,2.55,.15,2.25/B;h,.45,.15,1.88,1.5,1.05/V;R,.45,1.65,1.875,1.05;a,-.09,.15,1.13,1.4,.2/B;<c.9,-.68,.15,.14,2/M;l.45,-.98,.15,.18,.9/g>;x,-.68,2.15,1.95,.14,.16/F;x-1.01,-.19,.15,.3,.3/w;+-.75,-.3;+1.01,-.22;b1.13,.94,.15,.45,2",
 ];
-/// Each house's capital landmark.
-const LANDMARKS: [&str; 10] = [
-    // Xanadu: a stately pleasure-dome on a round terrace, gers at its corners, gardens and a gate
-    "a,-2.05,.35,1.3,1.5,.5/m;D,.15,2.17,2.3,1.2/F;d,.15,1.95,2.1,.22/g;d,.15,.65,2.3,1.3/m;d,,.35,3.9,.3/m;d,,,4.8,.35/s;g,1.9,.35,.75,.1,.75;r,-2.05,1.85,1.5,.45,.7/F;w.88,2.12,.35,1.5,.45,.2,157.5/m;w-.88,2.12,.35,1.5,.45,.2,202.5/m;w-2.12,.88,.35,1.5,.45,.2,247.5/m;w-2.12,-.88,.35,1.5,.45,.2,292.5/m;w-.88,-2.12,.35,1.5,.45,.2,337.5/m;w.88,-2.12,.35,1.5,.45,.2,360/m;<b2,-1,.35,.5,2.4;+1.6,1.7;c.55,-1.35,.65,.18,1.2/g;D1.3,-1.3,1.15,.86,.5/F;+1.3,1.3;d1.3,-1.3,.65,.8,.5/m;+1.3,1.3;g1.9,,.35,.75,.1,.75;l.9,-2.1,.35,.18,.9/g>",
-    // Kurukshetra: a temple on a raised plinth, its stepped tower over the sanctum, a pillared hall, shrines, a tank
-    "x,-.35,1.8,1.8,.16,1.05/n;c,-.65,.7,.18,1.1/n;+,-.05;D,.95,4.8,.5,.32/g;h,.95,.7,1.4,1.3,1.4/n;p,-1.65,,1.8,.1,.7/G;p,.45,.35,3.3,.35,2.9/n;p,.1,,4.6,.35,4.2/n;P,-.35,1.96,1.4,.9,.85/F;P,.95,2,1.55,2.8,1.55/F;<b1.75,-1.55,2.8,.4,.6;c1.75,-1.55,.35,.16,2.8/g;c.65,-.65,.7,.18,1.1/n;+.65,-.05;g1.9,.5,.35,.6,.1,1;h1.3,-.4,.7,.6,.6,.6/n;+1.3,1.35;l.6,-1.15,.35,.16,.7/g;P1.3,-.4,1.3,.62,1,.62/F;+1.3,1.35>",
-    // Sanctum: a cathedral with a long nave, a transept, twin west towers, a crossing spire, buttresses and a cloister
-    "a,-1.62,.3,.76,1.7,.4/m;d,1.7,.3,1.35,1.9/s;g1.5,-.75,.3,1,.1,1.2;h,.1,.3,1.4,2.2,3.1/s;h,.55,.3,3,2,1/s;p,,,4.4,.3,4.6/s;r,.1,2.5,1.5,1,3.2/F;r,.55,2.3,3.1,.9,1.1/F;s,.55,3.82,.8,2.6/F;s,1.7,2.2,1.45,.8/F;S-1.55,-1,.3,.5,1.6/m;t,.55,2.3,.8,1.3/s;w2.05,-.75,.3,1.3,.75,.22,90/s;<x.82,-.85,.3,.24,1.7,.5/s;+.82,-.25;+.82,1.15;b1.5,-2,.3,.5,2.2;l.32,-2.05,.3,.16,.7/g;s.72,-1.55,3.82,.68,1.7/F;t.72,-1.55,.3,.68,3.3/s>",
-    // Bensalem: Salomon's House, a glass-domed hall of experiments between two high towers, observatories, a pool
-    "x,.35,1.9,2.6,.12,1.8/m;D1.55,1.35,3.72,.62,.42/F;+-1.55,1.35,4.52;D,.35,2.55,1.4,.85/G;d,.35,2.05,1.3,.5/m;h,.35,.3,2.5,1.6,1.7/m;p,-1.65,.3,1.6,.1,.55/G;p,,,4.6,.3,4.4/m;r,-.75,1.65,2.3,.45,.5/m;S,-2.05,,.4,1.5/g;t1.55,1.35,.3,.7,3.2/m;t-1.55,1.35,.3,.7,4/m;<b1,-2,.3,.45,2;c.19,-.75,.3,.17,1.35/m;+.57,-.75;+.95,-.75;D1.7,-1.3,1.2,.78,.45/G;d1.7,-1.3,.3,.75,.9/m;g1.7,.1,.3,.75,.1,.8>",
-    // Longjiang: a great pagoda, a lighthouse, shipyard sheds, a basin with a junk, a gate of honour
-    "x1.85,-1.7,.35,.28,.28/w;+1.5,-1.6;+1.85,-1.4;x.15,-1.4,.65,.4,.22,.38/w;x.65,-1.4,.35,1.5,.3,.42/w;b.5,-1.4,.65,.42,1.4;+1,-1.4;c-1.05,-1.75,.3,.16,1.3/F;+-.35,-1.75;D1.6,1.15,3.74,.6,.4/F;d1.6,1.15,.3,.75,3/m;d1.6,1.15,3.3,.95,.14/k;g.85,.35,.3,.7,.1,.7;h-1.65,-.45,.3,.95,1.1,2.3/w;l-.45,-.75,.3,.18,.7/F;+.25,-.75;+-1.75,1.6;l1.6,1.15,3.44,.42,.3/g;p-.3,.65,.3,1.9,.3,1.9/m;p.65,-1.4,.3,2.5,.1,1.05/G;p,,,4.6,.3,4.2/s;r-.7,-1.75,1.6,1.05,.35,.32/F;r-1.65,-.45,1.4,1.05,.55,2.4/F;T1.65,-.15,.3,.75,2.3/F;T-.3,.65,.6,1.8,4.6/F",
-    // The Reading Room: a great domed drum in a court, an eight-column portico, monuments, banners, a lattice tower
-    "x,-1.3,1.9,3.15,.2,.5/m;D,.4,2.07,2.45,1.1/F;d1.75,1.95,2.55,.45,1/M;d1.75,1.95,1.55,.62,1/M;d1.75,1.95,.35,.8,1.2/M;d,.4,1.85,2.35,.22/m;d,.4,.35,2.6,1.5/s;p,,,4.6,.35,4.4/s;r,-1.3,2.1,3.15,.55,.55/m;s1.75,1.95,3.55,.45,1.2/F;<x1.75,.35,1.95,.85,.14,2.85/F;b1.75,-.95,1.95,.5,1.3;c.2,-1.3,.35,.19,1.55/m;+.6,-1.3;+1,-1.3;+1.4,-1.3;h1.75,.35,.35,.8,1.6,2.8/s;l.5,-1.85,.35,.16,.7/g;S1.85,-1.95,,.5,2.3/k>",
-    // Address Zero: three glass towers of different heights, a pool, the zero ring, masts and lamps
-    "x1.5,.25,3.05,.63,.3,.63/F;x-1.15,.95,5.45,.77,.3,.77/F;x.35,1.25,4.05,.84,.3,.84/F;x1.5,.25,1.79,.98,.12,.98/k;x-1.15,.95,3.11,1.18,.12,1.18/k;x.35,1.25,2.34,1.28,.12,1.28/k;c.35,1.25,4.35,.1,1.4/M;d-1.25,-1.2,.47,.75,.3/k;d-1.25,-1.2,.25,1.2,.22/F;h1.5,.25,.25,.9,2.8,.9/G;h-.2,-.25,.25,1,.7,.6/k;h-1.15,.95,.25,1.1,5.2,1.1/G;h.35,1.25,.25,1.2,3.8,1.2/G;l1.5,.25,3.35,.16,.9/F;+.35,1.25,4.35;+-1.15,.95,5.75;l1.95,-1.6,.25,.16,1.1/M;+1.3,-.75;+-.3,-.55;+-1.95,;l-1.25,-1.2,.77,.3,.2/F;p.35,-1.45,.25,2.4,.1,.9/G;p,,,4.6,.25,4.4/k",
-    // Kirkcaldy: an exchange with a portico and gilded dome, a clock tower, brick warehouses, a crane and crates
-    "x1.2,-1.2,.3,.32,.32/w;+1.55,-1.2;+1.85,-.75;+1.37,-1.2,.62;x1.6,.93,3.45,.5,.5,.1/g;x1.5,-.4,2.55,1.4,.1,.12,-30/M;c1.95,-.2,.3,.14,2.5/M;D,.45,2.95,.95,.6/g;d,.45,2.45,.9,.5/m;h-1.7,-.35,.3,.9,1.3,2/b;h,.45,.3,2.8,1.8,1.6/n;p,,,4.6,.3,4.2/n;r-1.7,-.35,1.6,1,.5,2.1/F;r,-.62,1.8,2.4,.45,.5/m;r,.45,2.1,2.9,.6,1.7/F;s1.6,1.35,4.42,.75,1.3/F;S,-1.85,,.45,1.4/k;t1.6,1.35,.3,.75,3.9/b;<b1,-1.6,.3,.45,2;c.2,-.62,.3,.18,1.5/m;+.6,-.62;+1,-.62;l.45,-1.65,.3,.16,.8/g>",
-    // Campion: a corrugated headquarters, barracks, a water tower, a windmill, a lookout and a parade ground
-    "x1.7,-.62,2.25,.1,1.3,.1/M;x.85,,.15,.3,.3/w;+1.15,;+1,,.45;x1.7,-.62,2.86,1.3,.1,.1/M;b.2,-1,3.09,.6,.1;c1.2,1,.15,.1,2.2/M;+1.9,1;+1.2,1.7;+1.9,1.7;c.2,-1,.19,.1,2.9/M;c1.7,-.55,.15,.12,2.8/M;d1.55,1.35,2.35,1,.8/M;h-1.7,-.6,.15,.85,.9,1.8/w;h-.3,.65,.15,2.7,1.2,1.3/M;l-.85,-.25,.15,.16,1.1/g;p.2,-1,.15,1.8,.1,1.2/k;p,,,4.6,.15,4.4/n;r-1.65,1.5,3.67,.85,.35,.85/F;r-1.7,-.6,1.05,.95,.4,1.9/F;r-.3,.65,1.35,2.8,.45,1.4/F;s1.55,1.35,3.15,1.05,.4/F;S.95,-1.75,.15,.45,1.3/k;t-1.65,1.5,.15,.65,3.3/w;w1.2,-2.1,.15,1.4,.35,.1/w;w-.6,-2.1,.15,1.6,.35,.1/w",
-    // Flux: white blocks cantilevered over a garden court, a glass gallery, pilotis, a pool and an obelisk
-    "x1.6,-.4,3.65,.8,.2,.8/F;x.45,.95,2.65,2.55,.14,1.25/F;b-1.9,1.75,.25,.5,2.4;c.9,.55,.25,.14,1.3/m;+1.5,.55;g.2,-.55,.25,1,.1,.9;g-1.25,-.9,.25,1.4,.1,1.2;h1.6,-.4,.25,.75,3.4,.75/m;h-.65,.75,.25,2.3,1.3,1.3/m;h.45,.95,1.55,2.5,1.1,1.2/G;l-.9,-1.35,.25,.16,.9/F;+.5,-1.25;+-1.95,;p-.2,-1.75,.25,2.4,.1,.55/G;p,,,4.6,.25,4.4/m;S1.6,-1.6,.25,.4,2.6/m",
-];
 
 /// Draws `src` into `a`; sx is -1 for the mirrored half of a `<...>`.
 fn draw(a: &mut Art, k: &Kit, src: &str, sx: f64) {
@@ -537,11 +498,13 @@ fn piece(a: &mut Art, k: &Kit, s: &str, sx: f64) {
     }
 }
 
-/// Site `style`'s building for `role`, with its design name.
+/// Site `style`'s building for `role`, with its design name. A house program holds only its own house's art (`ARTS`,
+/// from shared/buildings.txt), so it builds in its own style in any seat; the default program holds every house's.
 pub fn architecture(style: usize, role: Role) -> Value {
-    let k = kit(style);
+    let f: Vec<&str> = crate::ARTS[style.min(crate::ARTS.len() - 1)].split('|').collect();
+    let k = kit(f[0]);
     let mut a = Art(Vec::new());
     let i = ROLES.iter().position(|r| *r == role).unwrap_or(1);
-    draw(&mut a, &k, if i == 0 { LANDMARKS[style.min(9)] } else { DESIGNS[i - 1] }, 1.0);
-    a.value(NAMES[style.min(9)].split('|').nth(i).unwrap_or(""))
+    draw(&mut a, &k, if i == 0 { f[7] } else { DESIGNS[i - 1] }, 1.0);
+    a.value(f[1 + i])
 }
