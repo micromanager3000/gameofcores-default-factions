@@ -328,7 +328,7 @@ fn flight_progress(orders: &mut Value, world: View, me: View) {
     if income <= 0.0 || me.path("rts.cpu.bank").num_or(0.0) < income * 2.0
         || me.path("rts.cpu.last.upkeep").num_or(0.0) > income * 0.5
         || orders.get("compute").get("cpu").get("limits").get("research").num_or(0.0) > 0.0 { return; }
-    for tech in ["seaTraversal", "mountainTraversal", "flight"] {
+    for tech in ["extraction", "dash", "ranged", "seaTraversal", "mountainTraversal", "flight"] {
         let spec = world.get("techs").get(tech);
         if me.get("techs").get(tech).truthy() || !spec.truthy() { continue; }
         if !spec.get("requires").iter().all(|t| me.get("techs").get(t.str()).truthy()) { return; }

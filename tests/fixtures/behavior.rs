@@ -35,8 +35,7 @@ fn maintain(world: &mut Value, me: &mut Value, units: &Value, now: f64) -> Value
     world.set("seconds", now);
     world.set("units", units.clone());
     let args = views(&[world.clone(), me.clone()]);
-    let mut orders = obj! {};
-    common::maintain_freighters(&mut orders, args[0], args[1]);
+    let orders = common::govern(args[0], args[1], 0.4, || obj! {});
     me.set("ramCapital", ram_pages(&orders));
     orders
 }
@@ -103,8 +102,7 @@ fn arjuna_prioritizes_flight_before_optional_ground_upgrades() {
 #[test]
 fn healthy_recovery_keeps_flight_research_moving() {
     let (world,me,_)=fixture();let args=views(&[world,me]);
-    let mut orders=obj!{"compute"=>obj!{"cpu"=>obj!{"limits"=>obj!{"research"=>0}}}};
-    flight_progress(&mut orders,args[0],args[1]);
+    let orders=think(args[0],args[1]);
     assert_eq!(orders.get("research").str(),"flight");
     assert_eq!(orders.get("compute").get("cpu").get("limits").get("research").num(),0.12);
 }
@@ -118,8 +116,7 @@ fn flight_research_waits_for_recovery_and_preserves_emu_doctrine() {
             "costly"=>me.entry("rts").entry("cpu").entry("last").set("upkeep",30000),
             _=>me.set("seat",8),
         }
-        let args=views(&[world,me]);let mut orders=obj!{"compute"=>obj!{"cpu"=>obj!{"limits"=>obj!{"research"=>0}}}};
-        flight_progress(&mut orders,args[0],args[1]);
+        let args=views(&[world,me]);let orders=think(args[0],args[1]);
         assert!(orders.get("research").is_undef(),"{state}");
     }
 }

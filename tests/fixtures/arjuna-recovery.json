@@ -1,0 +1,156 @@
+[
+  {
+    "seconds": 1,
+    "logistics": {
+      "docks": [
+        {
+          "p": 0,
+          "water": 0
+        },
+        {
+          "p": 1,
+          "water": 1
+        },
+        {
+          "p": 2,
+          "water": 2
+        }
+      ]
+    },
+    "provinces": [
+      {
+        "id": 0,
+        "owner": 1,
+        "adj": [],
+        "hops": 0
+      },
+      {
+        "id": 1,
+        "owner": 1,
+        "adj": []
+      },
+      {
+        "id": 2,
+        "owner": 1,
+        "adj": []
+      }
+    ],
+    "waters": [
+      {
+        "id": 0,
+        "adj": [
+          1
+        ]
+      },
+      {
+        "id": 1,
+        "adj": [
+          0
+        ]
+      },
+      {
+        "id": 2,
+        "adj": []
+      }
+    ],
+    "techs": {
+      "extraction": {
+        "requires": [],
+        "offer": 1000
+      },
+      "dash": {
+        "requires": [],
+        "offer": 1000
+      },
+      "ranged": {
+        "requires": [],
+        "offer": 1000
+      },
+      "armor": {
+        "requires": [],
+        "offer": 1000
+      },
+      "seaTraversal": {
+        "requires": [],
+        "offer": 1000
+      },
+      "mountainTraversal": {
+        "requires": [],
+        "offer": 1000
+      },
+      "flight": {
+        "requires": [
+          "seaTraversal",
+          "mountainTraversal"
+        ],
+        "offer": 1000
+      }
+    },
+    "units": []
+  },
+  {
+    "id": 1,
+    "seat": 1,
+    "capital": 0,
+    "provinces": 3,
+    "bank": 1000,
+    "ramCapital": {},
+    "techs": {
+      "extraction": true,
+      "dash": true,
+      "ranged": true,
+      "seaTraversal": true,
+      "mountainTraversal": true
+    },
+    "units": {
+      "total": 12,
+      "stalled": 0,
+      "queued": 0,
+      "cap": 20,
+      "byType": {
+        "miner": 6,
+        "hauler": 4,
+        "freighter": 2
+      }
+    },
+    "compute": {
+      "cycles": 40000,
+      "thinkPeak": 12000,
+      "rentMax": 0,
+      "rentRate": 1
+    },
+    "costs": {
+      "unit": 50,
+      "upkeep": 100
+    },
+    "rts": {
+      "cpu": {
+        "income": 40000,
+        "bank": 120000,
+        "capacity": 1000000,
+        "last": {
+          "upkeep": 12000
+        }
+      },
+      "logistics": {
+        "depots": [
+          {
+            "p": 0,
+            "dock": true,
+            "cycles": 0
+          },
+          {
+            "p": 1,
+            "dock": true,
+            "cycles": 20000
+          },
+          {
+            "p": 2,
+            "dock": true,
+            "cycles": 1000000
+          }
+        ]
+      }
+    }
+  }
+]

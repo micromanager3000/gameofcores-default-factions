@@ -330,7 +330,7 @@ use super::{air, theme};
 
     /// Retire empty ships that make no progress for two minutes. Loaded ships and passenger decks stay intact.
     /// The capital records positions because an unfunded unit callback cannot retire its own hull.
-    pub fn maintain_freighters(orders: &mut Value, world: View, me: View) {
+    fn maintain_freighters(orders: &mut Value, world: View, me: View) {
         if !world.get("logistics").truthy() || cycles_left() < 5500.0 { return; }
         let old = mem::get(me.get("ramCapital"), FREIGHT_PAGE);
         let now = world.get("seconds").num_or(0.0);
