@@ -138,7 +138,7 @@ fn spawn(orders: &mut Value, ty: &str, b: Build, modules: Vec<&str>) -> bool {
 // miners: a flier whose call runs short can't be ordered down, and its burn climbs the longer it stays up.
 const TYPES: [(&str, f64, f64); 10] = [
     ("miner", 5000.0, 1.0),
-    ("wing", 5000.0, 1.0),
+    ("wing", 8000.0, 2.0),
     ("screen", 6000.0, 1.0),
     ("runner", 6000.0, 1.0),
     ("skirm", 6000.0, 1.0),
@@ -585,8 +585,8 @@ fn warlord(orders: &mut Value, world: View, me: View, plan: &Value, clock: &mut 
         }
     }
     // largesse in the most restless province we hold, so land we took doesn't revolt straight back to its neighbour: it
-    // waits only on a bank under a quarter of a unit's price once this second's spawns are paid
-    if coin > n(me.get("costs").get("unit")) / 4.0 && due(clock, "largesse", 10.0, now) {
+    // waits until 60◆ remains after this second's spawns
+    if coin >= 60.0 && due(clock, "largesse", 10.0, now) {
         let mut worst: Option<View> = None;
         for p in world.get("provinces").iter() {
             if same(p.get("owner"), me_id) && n(p.get("risk")) > 0.04 && worst.is_none_or(|w| n(p.get("risk")) > n(w.get("risk"))) {
@@ -831,25 +831,18 @@ fn wing(units: View, world: View, me: View) {
         return;
     }
     if rts && cycles_left() < 6000.0 {
-        // short of cycles, only the way home: a flier past its turn comes down, since an unpaid one crashes
-        for u in units.iter() {
-            if cycles_left() < 300.0 {
-                break;
-            }
-            let a = u.path("rts.air");
-            if a.truthy() && a.get("aloft").truthy() && n(a.get("heat")) >= TURN - 10.0 && !is_str(u.get("doing"), "move") {
-                order(obj! { "id" => u.get("id"), "land" => true });
-            }
-        }
+        // A short call still flies the army's target and lands hot aircraft.
+        common::fly(units, world, me);
         return;
     }
+
     let geo = sky::Geo::new(world, me, 12.0);
     // the strike is in the plan our land holds: read where a vimana stands on it (abroad, none is needed)
     let pl = match units.iter().find(|u| plan::here(me, *u)) {
         Some(u) => plan::of(me, u),
         None => Rc::new(Value::obj()),
     };
-    let target = vn(pl.get("sky"));
+    let target = if vn(pl.get("sky")) >= 0.0 { vn(pl.get("sky")) } else { vn(pl.get("attack")) };
     let target = if target.is_nan() { -1.0 } else { target };
     let verb = if is_str_v(pl.get("skyVerb"), "raid") { "raid" } else { "fight" };
     let by_id = realm::index(world);

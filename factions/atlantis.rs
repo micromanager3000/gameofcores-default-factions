@@ -784,8 +784,8 @@ fn landlord(orders: &mut Value, world: View, me: View, clock: &mut Clock, calm: 
             }
         }
     }
-    // largesse (60◆) is paid before spawns (payable): it waits only on a bank under a quarter of a unit's price
-    if me.get("bank").num() > me.get("costs").get("unit").num() / 4.0 && due(clock, "largesse", 10.0, now) {
+    // largesse (60◆) is paid before spawns (payable): it requires at least 60◆ in the bank
+    if me.get("bank").num() >= 60.0 && due(clock, "largesse", 10.0, now) {
         let mut worst: Option<View> = None;
         for p in world.get("provinces").iter() {
             let risk = p.get("risk").num();

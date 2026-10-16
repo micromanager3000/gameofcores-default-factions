@@ -1609,7 +1609,7 @@ fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
         // those the plan sends to defend (common::defends), the rest on the target
         let defend = Value::Num(common::defends(&pl, u));
         let goal = if num(&defend) >= 0.0 { &defend } else { pl.get("target") };
-        let verb = if num(&defend) >= 0.0 { "fight" } else { "capture" };
+        let verb = if num(&defend) >= 0.0 || u.get("air").truthy() || u.path("build.wings").truthy() { "fight" } else { "capture" };
         // A route is expensive code.  The engine already retains an accepted
         // order, so recalculate only when the strategic destination changes.
         let doing = u.get("doing").str();

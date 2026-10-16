@@ -700,7 +700,7 @@ fn warlord(orders: &mut Value, world: View, me: View, plan: &Value, clock: &mut 
     }
     // largesse in the most restless province we hold, so land we took doesn't revolt straight back to its neighbour: it
     // waits only on a bank under a quarter of a unit's price once this second's spawns are paid
-    if coin > n(me.get("costs").get("unit")) / 4.0 && due(clock, "largesse", 25.0, now) {
+    if coin >= 60.0 && due(clock, "largesse", 25.0, now) {
         let mut worst: Option<View> = None;
         for p in world.get("provinces").iter() {
             if same(p.get("owner"), me_id) && n(p.get("risk")) > 0.08 && worst.is_none_or(|w| n(p.get("risk")) > n(w.get("risk"))) {

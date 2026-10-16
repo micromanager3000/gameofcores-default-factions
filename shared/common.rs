@@ -1232,7 +1232,7 @@ use super::{air, theme};
     /// A cheap fallback used by every house's low-budget branch. Even when a map scan cannot fit, clear optional
     /// standing spending and old reserves, and leave real controller cycles for miners on the following second.
     pub fn recovery(world: View, me: View) -> Value {
-        let review=10000.0+40.0*world.get("provinces").len() as f64+35.0*world.get("units").len() as f64;
+        let review=16000.0+70.0*world.get("provinces").len() as f64+100.0*world.get("units").len() as f64;
         if cycles_left() < review {
             let mut orders = recovery_policy(me);
             ram(&mut orders, mem::put(RECOVERY_PAGE, &obj! { "r" => true }, "local", None, 1).unwrap_or_default());
