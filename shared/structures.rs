@@ -155,6 +155,39 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
         }
         jobs.push(j);
     }
+    // Nearby allies can use a funded repair court. Merchant houses charge a
+    // small accepted fee; other houses donate a bounded amount to their pact.
+    let grants = me.path("rts.structureGrants");
+    if safe && cycles_left() > 6500.0 {
+        let mut offered = Value::arr();
+        for s in &own {
+            if cycles_left() < 5000.0 || offered.len() >= 4 { break; }
+            if s.get("state").str() != "ready" || !port(*s, "repair") { continue; }
+            if let Some(guest) = world.get("units").iter().take_while(|_| cycles_left() > 4500.0).find(|u|
+                realm::is_ally(me, u.get("owner").num()) && u.get("owner").num() != id.num()
+                && u.get("hp").num() < u.get("hpMax").num_or(0.0) && near(*u, *s, 6.0)) {
+                if !grants.iter().any(|g| same(g.get("site"), s.get("id")) && same(g.get("user"), guest.get("owner"))
+                    && g.get("until").num_or(0.0) > now) {
+                    offered.push(obj! {"site"=>s.get("id"),"user"=>guest.get("owner"),"quota"=>6,"rate"=>0.5,
+                        "price"=>if style == 7 {0.25} else {0.0},"until"=>now+60.0,"payer"=>"owner"});
+                }
+            }
+        }
+        if !offered.is_empty() { orders.set("structureGrants", offered); }
+    }
+    if safe && cycles_left() > 4500.0 {
+        for grant in grants.iter() {
+            if cycles_left() < 3500.0 || services.len() >= 8 { break; }
+            if !same(grant.get("user"), id) || grant.get("quota").num_or(0.0) <= 0.0 || grant.get("until").num_or(0.0) <= now
+                || grant.get("price").num_or(0.0) > 0.25 { continue; }
+            let site = sites.iter().find(|s| same(s.get("id"), grant.get("site")) && s.get("state").str() == "ready");
+            if let Some(site) = site {
+                if let Some(u) = units.iter().find(|u| near(**u, site, 6.0) && u.get("hp").num() < u.get("hpMax").num_or(0.0)) {
+                    services.push(obj! {"site"=>site.get("id"),"target"=>u.get("id"),"amount"=>0.5,"maxPrice"=>0.25});
+                }
+            }
+        }
+    }
     if !jobs.is_empty() { orders.set("structureJobs", jobs); }
     if !services.is_empty() { orders.set("structureService", services); }
     if safe && cycles_left() > 8000.0 { besiege(orders, world, me, &units, sites, now); }
