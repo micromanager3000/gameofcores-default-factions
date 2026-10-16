@@ -40,7 +40,10 @@ fn strategy(world: View, me: View) -> Value {
     let techs = me.get("techs");
     let has = |a: &str, b: &str| techs.get(a).truthy() || techs.get(b).truthy();
     let mut mix = if has("ranged", "archery") {
-        vec![("miner", 0.6), ("guard", 0.22), ("longbow", 0.13), ("scout", 0.05)]
+        if world.get("logistics").truthy() && me.path("units.byType.guard").num_or(0.0)>=1.0 && me.path("units.byType.longbow").num_or(0.0)==0.0 {
+            // A small cargo economy pairs its first guard with ranged support before adding more melee upkeep.
+            vec![("miner", 0.55), ("guard", 0.1), ("longbow", 0.3), ("scout", 0.05)]
+        } else {vec![("miner", 0.6), ("guard", 0.22), ("longbow", 0.13), ("scout", 0.05)]}
     } else {
         vec![("miner", 0.6), ("guard", 0.35), ("scout", 0.05)]
     };

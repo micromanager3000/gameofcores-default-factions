@@ -1246,14 +1246,24 @@ use super::{air, theme};
         let review=16000.0+70.0*world.get("provinces").len() as f64+100.0*world.get("units").len() as f64;
         if cycles_left() < review {
             let mut orders = recovery_policy(me);
-            ram(&mut orders, mem::put(RECOVERY_PAGE, &obj! { "r" => true }, "local", None, 1).unwrap_or_default());
+            let now=world.get("seconds").num_or(0.0);
+            let stalled=me.path("units.stalled").num_or(0.0)>0.0;
+            let old=mem::get(me.get("ramCapital"),RECOVERY_PAGE);
+            let since=if stalled {old.get("s").num_or(now).min(now)}else{now};
+            ram(&mut orders, mem::put(RECOVERY_PAGE, &obj! { "r" => true,"s"=>since }, "local", None, 1).unwrap_or_default());
             // A short callback can still reduce an unpaid army without ranking every body.
-            if me.path("units.stalled").num_or(0.0)>0.0 && me.path("rts.cpu.bank").num_or(0.0)<me.path("rts.cpu.income").num_or(20000.0) {
+            if stalled && now-since>=RECOVERY_WAIT && (me.path("rts.cpu.bank").num_or(0.0)<me.path("rts.cpu.income").num_or(20000.0)*4.0
+                || me.path("units.total").num_or(0.0)>me.path("units.cap").num_or(512.0)) {
                 let mut retire=Vec::new();
+                let mut miners=0;let mut defender=false;
                 for u in world.get("units").iter(){
                     if cycles_left()<2500.0 || retire.len()>=2 {break;}
                     if u.get("owner").num()!=me.get("id").num() || u.get("hired").truthy(){continue;}
-                    if !matches!(u.get("type").str(),"miner"|"hauler"|"freighter") && u.get("at").num()!=me.get("capital").num(){retire.push(u.get("id").value());}
+                    let ty=u.get("type").str();
+                    if matches!(ty,"hauler"|"freighter") || logistics::cargo(u)>0.0 || u.path("rts.cargo.job").truthy(){continue;}
+                    if ty=="miner" {miners+=1;if miners<=6 || u.get("doing").str()=="gather"{continue;}}
+                    else if !defender && u.get("at").num()==me.get("capital").num(){defender=true;continue;}
+                    retire.push(u.get("id").value());
                 }
                 orders.set("disband",retire);
             }
