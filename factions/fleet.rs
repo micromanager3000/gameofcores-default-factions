@@ -760,9 +760,9 @@ fn strategy(world: View, me: View) -> Value {
             ("needle", 5500.0, 3.0),
             ("kite", 5000.0, 3.0),
             ("scout", 5000.0, 8.0),
-            ("warjunk", 5000.0, 2.0),
-            ("picket", 4000.0, 4.0),
-            ("corsair", 5000.0, 2.0),
+            ("warjunk", 8000.0, 3.0),
+            ("picket", 6000.0, 6.0),
+            ("corsair", 8000.0, 3.0),
         ],
         me.get("rts").get("cpu").get("income").or(0.0),
         available_control,
@@ -1601,6 +1601,8 @@ fn quarry(u: View, me: View, world: View, role: u8) -> Option<View> {
     let mut best: Option<View> = None;
     let mut score = 1e9;
     for c in me.path("rts.sea.contacts").iter() {
+        // Contact and escort searches share this call's budget with routing and RAM writes.
+        if cycles_left() < 3000.0 { break; }
         if !c.get("ship").truthy() {
             continue;
         }
@@ -1619,8 +1621,9 @@ fn quarry(u: View, me: View, world: View, role: u8) -> Option<View> {
         if (role==2 || !armed) && world.get("logistics").truthy() {
             let load=c.path("cargo.load").num_or(0.0);
             if armed || load<2.0 || u.get("hp").num()<u.get("hpMax").num()*0.7 {continue;}
-            let escorted=me.path("rts.sea.contacts").iter().any(|guard|guard.get("id").num()!=c.get("id").num()
-                && guard.get("ship").truthy()&&guard.get("water").num_or(-1.0)==w&&guard.path("build.range").num_or(0.0)>0.0);
+            // An unfinished escort check is unsafe to raid. Keep the previous course until the next call.
+            let escorted=me.path("rts.sea.contacts").iter().any(|guard|cycles_left()<2500.0 || (guard.get("id").num()!=c.get("id").num()
+                && guard.get("ship").truthy()&&guard.get("water").num_or(-1.0)==w&&guard.path("build.range").num_or(0.0)>0.0));
             if escorted {continue;}
             // The public load band supplies a lower bound; exact rival cargo stays private.
             let prize=c.path("build.carry").num_or(0.0)*160000.0*common::price_level(me)*if load>=3.0 {1.0}else{0.5};
@@ -1652,7 +1655,7 @@ fn junks(units: View, world: View, me: View, role: u8) -> Value {
     ids.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let contacts = me.path("rts.sea.contacts").len();
     for turn in 0..units.len() {
-        if rts(me) && cycles_left() < 2200.0 {
+        if rts(me) && cycles_left() < 3500.0 {
             break;
         }
         let u = nth(units, turn, world);
