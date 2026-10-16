@@ -208,10 +208,10 @@ fn scout(units: View, world: View, me: View) -> Vec<Value> {
 fn reflex(units: View, near: View) -> Vec<Value> {
     let mut out = Vec::new();
     let mut turn_cost=1800.0_f64;
-    let mut classic_turn_cost=500.0_f64;
+    let mut classic_turn_cost=120.0_f64;
     for u in units.iter() {
         let seen = near.key(n(u.get("id")));
-        if cycles_left() < if u.get("rts").truthy() {turn_cost}else{classic_turn_cost.max(120.0 + 30.0 * seen.len() as f64)} {
+        if cycles_left() < if u.get("rts").truthy() {turn_cost}else{classic_turn_cost.max(280.0 + 50.0 * seen.len() as f64)} {
             break;
         }
         let began=cycles_left();
