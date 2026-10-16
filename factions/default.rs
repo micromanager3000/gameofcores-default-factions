@@ -204,14 +204,14 @@ fn scout(units: View, world: View, me: View) -> Vec<Value> {
 }
 
 // Units in contact: each strikes the nearest rival it can hit (reflex::can_hit), and holds its ground doing so on an
-// aggressive order. Orders commit as they are made. CPU RTS keeps room for the most expensive prior turn;
-// classic combat retains its smaller targeting allowance.
+// aggressive order. Orders commit as they are made. Both rulesets keep room for the most expensive prior turn.
 fn reflex(units: View, near: View) -> Vec<Value> {
     let mut out = Vec::new();
     let mut turn_cost=1800.0_f64;
+    let mut classic_turn_cost=500.0_f64;
     for u in units.iter() {
         let seen = near.key(n(u.get("id")));
-        if cycles_left() < if u.get("rts").truthy() {turn_cost}else{120.0 + 30.0 * seen.len() as f64} {
+        if cycles_left() < if u.get("rts").truthy() {turn_cost}else{classic_turn_cost.max(120.0 + 30.0 * seen.len() as f64)} {
             break;
         }
         let began=cycles_left();
@@ -230,6 +230,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         order(o.clone());
         out.push(o);
         turn_cost=turn_cost.max(1.5*(began-cycles_left()));
+        classic_turn_cost=classic_turn_cost.max(1.5*(began-cycles_left()));
     }
     out
 }
