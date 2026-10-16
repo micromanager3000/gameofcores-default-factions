@@ -691,23 +691,92 @@ fn war_order(u: View, world: View, me: View) -> Option<Value> {
     o
 }
 
+// Route searches must leave room for plan carry, submission and the callback return.
+// Admission measures that whole operation, including cold plan reads and RAM writes.
+struct ControlBudget {
+    next: f64,
+    seen: Vec<f64>,
+}
+
+impl ControlBudget {
+    fn new(me: View) -> Self {
+        if me.get("rts").truthy() {
+            orders::set_reserve(1100.0);
+            orders::set_first(1400.0);
+        }
+        Self { next: 1800.0, seen: Vec::new() }
+    }
+
+    fn admits(&mut self, u: View, world: View, me: View) -> bool {
+        if !me.get("rts").truthy() { return true; }
+        let page = me.get("ramProvince").key(u.get("at").num()).key(0.0);
+        let stamp = page.get("t").num_or(-1.0);
+        let cold = page.truthy() && !self.seen.contains(&stamp);
+        let bytes = page.get("bytes");
+        let read = if cold && bytes.is_bytes() && bytes.len() >= 2 {
+            let b = bytes.bytes();
+            4.0 * f64::from(u16::from_le_bytes([b[0], b[1]]))
+        } else { 0.0 };
+        let index_cost = if realm::indexed(world) { 0.0 } else { 4.0 * world.get("provinces").len() as f64 };
+        if cycles_left() < self.next + read + index_cost + 600.0 { return false; }
+        let p = plan::of(me, u);
+        if cold { self.seen.push(stamp); }
+        let defend = common::defends(&p, u);
+        let attack = p.get("attack").num_or(-1.0);
+        let target = if defend >= 0.0 { defend } else if attack >= 0.0 { attack } else { me.get("capital").num() };
+        let from = if u.get("to").num_or(-1.0) >= 0.0 { u.get("to").num() } else { u.get("at").num() };
+        let index = realm::index(world);
+        let here = index.get(from);
+        // Home-route walking and serializing its steps also consume execution fuel.
+        let steps = if from == target || realm::reach(here, me).contains(&target) { 0.0 } else {
+            let q = index.get(target);
+            let goal = if q.get("owner").num_or(-1.0) == me.get("id").num() { q.get("hops").num_or(0.0) } else {
+                q.get("adj").iter().map(|id| index.at(id)).filter(|a| a.get("owner").num_or(-1.0) == me.get("id").num())
+                    .map(|a| a.get("hops").num_or(0.0)).fold(f64::INFINITY, f64::min)
+            };
+            here.get("hops").num_or(0.0).max(0.0) + if goal.is_finite() { goal.max(0.0) + 1.0 } else { 0.0 }
+        };
+        cycles_left() >= self.next + 60.0 * steps + 600.0
+    }
+
+    fn has_room(&self, me: View) -> bool {
+        !me.get("rts").truthy() || cycles_left() >= self.next + 600.0
+    }
+
+    fn finish(&mut self, began: f64) {
+        self.next = self.next.max((began - cycles_left()) * 1.5 + 400.0);
+    }
+
+    fn submit(o: Value) -> bool {
+        if cycles_left() < 600.0 { return false; }
+        order(o);
+        true
+    }
+}
+
 // The war units' turn, from a rotating start so each gets its turn when cycles run short. A call with room for a route
 // search and the orders after it takes the units abroad first: one of them may need the search (path::to), which
 // serves every unit sent the same way. A call handed less than one order's worth (the control lane ran short after
 // think) keeps its standing orders.
 fn march(units: View, world: View, me: View) {
-    let list: Vec<View> = units.iter().collect();
-    march_all(&list, world, me);
+    let mut list = Vec::new();
+    let start = world.get("seconds").num_or(0.0) as usize;
+    for i in 0..units.len() {
+        if me.get("rts").truthy() && cycles_left() < 3200.0 { break; }
+        list.push(units.at((start + i) % units.len()));
+    }
+    march_all(&list, world, me, false);
 }
 
-fn march_all(units: &[View], world: View, me: View) {
+fn march_all(units: &[View], world: View, me: View, rotate: bool) {
     if me.get("rts").truthy() && cycles_left() < 2200.0 {
         return;
     }
     let first = cycles_left() >= 300.0 * world.get("provinces").len() as f64 + 3000.0;
     let (mut queue, mut home) = (Vec::new(), Vec::new());
-    let k = world.get("seconds").or(0.0).floor() as usize;
+    let k = if rotate { world.get("seconds").or(0.0).floor() as usize } else { 0 };
     for i in 0..units.len() {
+        if me.get("rts").truthy() && cycles_left() < 3000.0 { break; }
         let u = units[(i + k) % units.len()];
         if !first || plan::here(me, u) {
             home.push(u);
@@ -718,14 +787,15 @@ fn march_all(units: &[View], world: View, me: View) {
     // the units abroad go to the front, the last one met first
     queue.reverse();
     queue.extend(home);
-    let rts = me.get("rts").truthy();
+    let mut budget = ControlBudget::new(me);
     for u in queue {
-        if rts && cycles_left() < 2200.0 {
-            break;
-        }
+        if !budget.has_room(me) { break; }
+        let began = cycles_left();
+        if !budget.admits(u, world, me) { continue; }
         if let Some(o) = war_order(u, world, me) {
-            order(o);
+            if !ControlBudget::submit(o) { break; }
         }
+        budget.finish(began);
     }
 }
 
@@ -764,7 +834,7 @@ fn sentry(units: View, world: View, me: View) {
         rest.push(u);
     }
     if !rest.is_empty() {
-        march_all(&rest, world, me);
+        march_all(&rest, world, me, true);
     }
 }
 

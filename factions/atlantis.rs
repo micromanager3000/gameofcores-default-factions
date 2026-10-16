@@ -815,6 +815,69 @@ fn miner(units: View, world: View, me: View) {
     }
 }
 
+// Route searches must leave room for plan carry, submission and the callback return.
+// Admission measures that whole operation, including cold plan reads and RAM writes.
+struct ControlBudget {
+    next: f64,
+    seen: Vec<f64>,
+}
+
+impl ControlBudget {
+    fn new(me: View) -> Self {
+        if me.get("rts").truthy() {
+            orders::set_reserve(1100.0);
+            orders::set_first(1400.0);
+        }
+        Self { next: 1800.0, seen: Vec::new() }
+    }
+
+    fn admits(&mut self, u: View, world: View, me: View) -> bool {
+        if !me.get("rts").truthy() { return true; }
+        let page = me.get("ramProvince").key(u.get("at").num()).key(0.0);
+        let stamp = page.get("t").num_or(-1.0);
+        let cold = page.truthy() && !self.seen.contains(&stamp);
+        let bytes = page.get("bytes");
+        let read = if cold && bytes.is_bytes() && bytes.len() >= 2 {
+            let b = bytes.bytes();
+            4.0 * f64::from(u16::from_le_bytes([b[0], b[1]]))
+        } else { 0.0 };
+        let index_cost = if realm::indexed(world) { 0.0 } else { 4.0 * world.get("provinces").len() as f64 };
+        if cycles_left() < self.next + read + index_cost + 600.0 { return false; }
+        let p = plan::of(me, u);
+        if cold { self.seen.push(stamp); }
+        let defend = common::defends(&p, u);
+        let attack = p.get("attack").num_or(-1.0);
+        let target = if defend >= 0.0 { defend } else if attack >= 0.0 { attack } else { me.get("capital").num() };
+        let from = if u.get("to").num_or(-1.0) >= 0.0 { u.get("to").num() } else { u.get("at").num() };
+        let index = realm::index(world);
+        let here = index.get(from);
+        // Home-route walking and serializing its steps also consume execution fuel.
+        let steps = if from == target || realm::reach(here, me).contains(&target) { 0.0 } else {
+            let q = index.get(target);
+            let goal = if q.get("owner").num_or(-1.0) == me.get("id").num() { q.get("hops").num_or(0.0) } else {
+                q.get("adj").iter().map(|id| index.at(id)).filter(|a| a.get("owner").num_or(-1.0) == me.get("id").num())
+                    .map(|a| a.get("hops").num_or(0.0)).fold(f64::INFINITY, f64::min)
+            };
+            here.get("hops").num_or(0.0).max(0.0) + if goal.is_finite() { goal.max(0.0) + 1.0 } else { 0.0 }
+        };
+        cycles_left() >= self.next + 60.0 * steps + 600.0
+    }
+
+    fn has_room(&self, me: View) -> bool {
+        !me.get("rts").truthy() || cycles_left() >= self.next + 600.0
+    }
+
+    fn finish(&mut self, began: f64) {
+        self.next = self.next.max((began - cycles_left()) * 1.5 + 400.0);
+    }
+
+    fn submit(o: Value) -> bool {
+        if cycles_left() < 600.0 { return false; }
+        order(o);
+        true
+    }
+}
+
 // Transitional infantry only route when their job actually changes.  They stay
 // useful as a small capture/defence reserve while the licensed bodies take over.
 fn line(units: View, world: View, me: View) {
@@ -822,13 +885,22 @@ fn line(units: View, world: View, me: View) {
     if rts(me) && cycles_left() < 2200.0 {
         return;
     }
-    let p = plan::for_units(me, units, world);
+    let mut budget = ControlBudget::new(me);
+    let mut first = None;
+    for u in units.iter() {
+        if !budget.has_room(me) { break; }
+        if budget.admits(u, world, me) { first = Some(u); break; }
+    }
+    let Some(first) = first else { return; };
+    let began = cycles_left();
+    let p = plan::check(plan::of(me, first), world);
+    budget.finish(began);
     let attack = num(p.get("attack"));
     for turn in 0..units.len() {
-        if rts(me) && cycles_left() < 2200.0 {
-            break;
-        }
         let u = nth(units, turn, world);
+        if !budget.has_room(me) { break; }
+        let began = cycles_left();
+        if !budget.admits(u, world, me) { continue; }
         // those the plan sends to defend (common::defends), the rest on the attack
         let defend = common::defends(&p, u);
         let (verb, target) = if defend >= 0.0 { ("fight", defend) } else { ("capture", attack) };
@@ -836,8 +908,9 @@ fn line(units: View, world: View, me: View) {
             continue;
         }
         if let Some(o) = orders::to(u, verb, target, world, me, ()) {
-            order(o);
+            if !ControlBudget::submit(o) { break; }
         }
+        budget.finish(began);
     }
 }
 
@@ -890,13 +963,16 @@ fn tactical_order(u: View, world: View, me: View, role: Role) -> Option<Value> {
 }
 
 fn tactical(units: View, world: View, me: View, role: Role) {
+    let mut budget = ControlBudget::new(me);
     for turn in 0..units.len() {
-        if rts(me) && cycles_left() < 2200.0 {
-            break;
+        let u = nth(units, turn, world);
+        if !budget.has_room(me) { break; }
+        let began = cycles_left();
+        if !budget.admits(u, world, me) { continue; }
+        if let Some(o) = tactical_order(u, world, me, role) {
+            if !ControlBudget::submit(o) { break; }
         }
-        if let Some(o) = tactical_order(nth(units, turn, world), world, me, role) {
-            order(o);
-        }
+        budget.finish(began);
     }
 }
 

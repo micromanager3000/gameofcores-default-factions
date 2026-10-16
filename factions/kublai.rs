@@ -1372,12 +1372,56 @@ fn war_order(u: View, world: View, me: View) -> Option<Value> {
     o
 }
 
+// Route orders admit a cold plan read, preparation, submission and the callback return together. Remember a plan page
+// already read in this call so a tight budget can still make the first useful order without running out on the next.
+struct ControlBudget {
+    next: f64,
+    seen: Vec<(f64, f64)>,
+}
+
+impl ControlBudget {
+    fn new(me: View) -> Self {
+        if me.get("rts").truthy() {
+            orders::set_reserve(1100.0);
+            orders::set_first(1400.0);
+        }
+        Self { next: 800.0, seen: Vec::new() }
+    }
+
+    fn admits(&mut self, u: View, me: View) -> bool {
+        if !me.get("rts").truthy() { return true; }
+        let province = u.get("at").num();
+        let page = me.get("ramProvince").key(province).key(0.0);
+        let stamp = page.get("t").num_or(-1.0);
+        let key = (province, stamp);
+        let cold = page.truthy() && !self.seen.contains(&key);
+        let bytes = page.get("bytes");
+        let read = if cold && bytes.is_bytes() && bytes.len() >= 2 {
+            let b = bytes.bytes();
+            2.0 * f64::from(u16::from_le_bytes([b[0], b[1]]))
+        } else { 0.0 };
+        if cycles_left() < self.next + read + 600.0 { return false; }
+        if cold { self.seen.push(key); }
+        true
+    }
+
+    fn finish(&mut self, began: f64) {
+        self.next = self.next.max((began - cycles_left()) * 1.5 + 400.0);
+    }
+
+    fn submit(o: Value) -> bool {
+        if cycles_left() < 600.0 { return false; }
+        order(o);
+        true
+    }
+}
+
 // The war units' turn, from a rotating start so each gets its turn when cycles run short. A call with room for a route
 // search and the orders after it takes the units abroad first: one of them may need the search (path::to), which
 // serves every unit sent the same way. A call handed less than one order's worth (the control lane ran short after
 // think) keeps its standing orders.
 fn march(units: View, world: View, me: View) {
-    const CONTROL_RESERVE: f64 = 2000.0;
+    const CONTROL_RESERVE: f64 = 600.0;
     if me.get("rts").truthy() && cycles_left() < CONTROL_RESERVE {
         return;
     }
@@ -1394,22 +1438,14 @@ fn march(units: View, world: View, me: View) {
     // the units abroad go to the front, the last one met first
     queue.reverse();
     queue.extend(home);
-    let rts = me.get("rts").truthy();
-    // Reserve two times the observed ~94-cycle per-unit call cost so a type given a small control slice can still
-    // make bounded progress. The rotating start in `turn` carries the remaining units into later seconds.
-    let mut turn_cost = 200.0_f64;
-    let turn_limit = if rts { ((cycles_left() - CONTROL_RESERVE).max(0.0) / turn_cost).floor() as usize } else { queue.len() };
-    for (i, u) in queue.into_iter().enumerate() {
-        if i >= turn_limit || (rts && cycles_left() < CONTROL_RESERVE + turn_cost) {
-            break;
-        }
+    let mut budget = ControlBudget::new(me);
+    for u in queue {
+        if !budget.admits(u, me) { break; }
         let began = cycles_left();
         if let Some(o) = war_order(u, world, me) {
-            order(o);
+            if !ControlBudget::submit(o) { break; }
         }
-        if rts {
-            turn_cost = turn_cost.max(2.0 * (began - cycles_left()));
-        }
+        budget.finish(began);
     }
 }
 

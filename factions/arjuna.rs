@@ -49,6 +49,7 @@ fn build(b: Build) -> Value {
 // seconds after the last, give or take 60%. The next second of each lives in capital RAM pages 224-225, written only
 // when one fires.
 const CLOCK: u32 = 224;
+const RECOVERY_PAGE: u32 = 244;
 
 struct Clock {
     at: Value,
@@ -299,7 +300,54 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
 }
 
 fn think(world: View, me: View) -> Value {
+    if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
+        return emergency_recovery_policy();
+    }
+    if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
+        return recovery_policy(me);
+    }
     common::govern(world, me, 0.4, || strategy(world, me))
+}
+
+// At the bottom of a short think slice, update only the CPU budget needed for the next one. Leave type schedules and
+// standing orders alone; the larger recovery policy needs more cycles to build.
+fn emergency_recovery_policy() -> Value {
+    obj! { "compute" => obj! { "cpu" => obj! {
+        "limits" => obj! {
+            "think" => 24000, "control" => 0.5, "upkeep" => 0.65,
+            "research" => 0, "influence" => 0, "fabrication" => 0, "visuals" => 0,
+            "reflex" => 0.15, "duel" => 0.08, "challenge" => 0.02,
+            "drive" => 0.08, "armor" => 0.05, "weapon" => 0.08, "abilities" => 0, "cloak" => 0, "gate" => 0
+        },
+        "reserve" => obj! {}, "upkeepOrder" => vec!["miner"]
+    } } }
+}
+
+// When the full strategy will not fit, skip its world scan and make a bounded production-first plan directly.
+fn recovery_policy(me: View) -> Value {
+    let income = me.path("rts.cpu.income").num_or(20000.0).max(1.0);
+    let mut types = obj! {};
+    for t in me.get("types").keys() {
+        types.set(t, obj! { "share" => 0, "every" => 8 });
+    }
+    types.set("miner", obj! { "cycles" => jmax(4000.0, income * 0.4), "every" => 1 });
+    let mut cpu = obj! {
+        "limits" => obj! {
+            "think" => (me.path("compute.thinkPeak").num_or(0.0) * 1.5 + 2000.0).max(24000.0),
+            "control" => 0.5, "upkeep" => 0.65, "research" => 0, "influence" => 0,
+            "fabrication" => 0, "visuals" => 0, "reflex" => 0.15, "duel" => 0.08,
+            "challenge" => 0.02, "drive" => 0.08, "armor" => 0.05, "weapon" => 0.08,
+            "abilities" => 0, "cloak" => 0, "gate" => 0
+        },
+        "reserve" => obj! {}, "upkeepOrder" => vec!["miner"]
+    };
+    common::fit_cpu(&mut cpu, me);
+    let mut recovery = mem::get(me.get("ramCapital"), RECOVERY_PAGE);
+    if !matches!(recovery, Value::Obj(_)) { recovery = obj! {}; }
+    recovery.set("r", true);
+    obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
+        "ram" => mem::put(RECOVERY_PAGE, &recovery, "local", None, 1).unwrap_or_default(),
+        "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0 }
 }
 
 fn strategy(world: View, me: View) -> Value {
