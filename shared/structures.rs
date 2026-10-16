@@ -47,6 +47,39 @@ fn open_slot(p: View, me: View) -> Option<usize> {
     }).map(|(i, _)| i)
 }
 
+/// Clear visible hostile buildings once nearby soldiers have room to fire.
+/// Short orders leave normal combat in control when an enemy army arrives.
+fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: View, now: f64) {
+    let hostile: Vec<View> = sites.iter().filter(|s| s.get("state").str() != "ruin"
+        && realm::is_rival(world, me, s.get("owner").num_or(-1.0))).collect();
+    if hostile.is_empty() { return; }
+    let mut attacks = Value::arr();
+    for &u in units {
+        if attacks.len() >= 8 || cycles_left() < 4500.0 { break; }
+        if u.get("air").truthy() || u.get("stalled").truthy()
+            || matches!(u.get("type").str(), "miner" | "hauler" | "freighter" | "scout")
+            || matches!(u.get("doing").str(), "gather" | "study") { continue; }
+        let reach = if u.path("build.range").num_or(0.0) > 0.0 { 3.0 + u.path("build.range").num() } else { 1.5 };
+        let conduct = u.get("conduct");
+        let target = hostile.iter().copied().filter(|s| {
+            let protected = conduct.get("seconds").num_or(0.0) > 0.0 && same(conduct.get("from"), s.get("owner"));
+            !protected && near(u, *s, reach + s.get("radius").num_or(0.0))
+        }).min_by(|a, b| {
+            // An armed shell stops the advance; finish damaged shells within the same priority.
+            let priority = |s: View| s.get("hp").num_or(100.0) - if port(s, "weapon") { 300.0 } else { 0.0 };
+            priority(*a).total_cmp(&priority(*b))
+        });
+        let Some(target) = target else { continue; };
+        let enemy_near = world.get("units").iter().any(|foe| foe.get("owner").num_or(-1.0) != me.get("id").num()
+            && realm::is_rival(world, me, foe.get("owner").num_or(-1.0))
+            && same(foe.path("pos.p"), u.path("pos.p"))
+            && (foe.path("pos.x").num() - u.path("pos.x").num()).hypot(foe.path("pos.y").num() - u.path("pos.y").num()) < reach + 1.0);
+        if enemy_near { continue; }
+        attacks.push(obj! { "unit" => u.get("id"), "target" => target.get("id"), "until" => now + 5.0 });
+    }
+    if !attacks.is_empty() { orders.set("structureAttacks", attacks); }
+}
+
 pub fn apply(orders: &mut Value, world: View, me: View) {
     if !me.path("rts.structureCosts").truthy() { return; }
     // Planning must leave room for the returned RAM writes and building orders.
@@ -76,6 +109,7 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     let bank = me.path("rts.cpu.bank").num_or(0.0);
     let safe = orders.get("memo").str() != "Recovering production" && me.path("units.stalled").num_or(0.0) == 0.0
         && bank > income.max(1000.0 * price(me)) && me.path("rts.cpu.last.upkeep").num_or(0.0) < income * 0.7;
+    if safe && cycles_left() > 8000.0 { besiege(orders, world, me, &units, sites, now); }
     let mut jobs = Value::arr();
     let mut services = Value::arr();
     for s in &own {

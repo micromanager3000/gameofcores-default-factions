@@ -521,8 +521,8 @@ use super::{air, theme};
     /// (`RULES.siegeOdds`).
     pub const SIEGE_ODDS: f64 = 3.0;
 
-    /// How many units to gather before attacking `q`: 2 for free land, [`SIEGE_ODDS`] for each of its garrison + 2 (at
-    /// least 3) for a rival's, and 3 more for a capital.
+    /// Gather two capturers for free land. For a rival, use visible town defenders plus two reinforcements.
+    /// Capitals need at least four capturers. Older observations fall back to the whole province's garrison.
     pub fn muster_for(q: View) -> f64 {
         if !q.truthy() {
             return 0.0;
@@ -530,7 +530,8 @@ use super::{air, theme};
         if n(q.get("owner")) < 0.0 {
             return 2.0;
         }
-        (q.get("garrison").or(0.0) * SIEGE_ODDS + 2.0).max(3.0) + if q.get("capital").truthy() { 3.0 } else { 0.0 }
+        (q.get("townGarrison").num_or(q.get("garrison").or(0.0)) * SIEGE_ODDS + 2.0)
+            .max(if q.get("capital").truthy() { 4.0 } else { 3.0 })
     }
 
     /// How many miners your mines can use now: those at work or on their way (`me.units.doing.gather`) and one for each
@@ -550,7 +551,7 @@ use super::{air, theme};
     /// ([`fighters`]), so your units there would die without taking it. A siege that came to this, its defenders
     /// reinforced or your army worn down, is given up: the army goes elsewhere until it's big enough.
     pub fn hopeless(me: View, q: View) -> bool {
-        q.get("garrison").or(0.0) * SIEGE_ODDS > fighters(me)
+        q.get("townGarrison").num_or(q.get("garrison").or(0.0)) * SIEGE_ODDS > fighters(me)
     }
 
     /// The next target from a ranked list, sticky: the last plan's (`last`, its id) while it's still on the list, so
@@ -573,6 +574,8 @@ use super::{air, theme};
         let (mut work, mut by): (Vec<&str>, Vec<(&str, f64)>) = (Vec::new(), Vec::new());
         for u in world.get("units").iter().filter(|u| u.get("owner").num() == me_id) {
             let (kind, doing) = (u.get("type").str(), u.get("doing").str());
+            if matches!(kind,"miner"|"hauler"|"freighter"|"scout") || u.path("build.wings").truthy()
+                || u.path("rts.sea.ship").truthy() { continue; }
             if doing == "gather" || doing == "study" {
                 if !work.contains(&kind) {
                     work.push(kind);
