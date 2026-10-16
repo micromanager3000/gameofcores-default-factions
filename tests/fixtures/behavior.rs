@@ -196,7 +196,7 @@ fn recovery_intervals_stop_optional_spending_and_leave_workers_funded() {
         let compute = orders.get("compute");
         let limits = compute.get("cpu").get("limits");
         for lane in ["research","influence","fabrication"] {assert_eq!(limits.get(lane).num(),0.0);}
-        assert_eq!(compute.get("types").get("miner").get("cycles").num(),4500.0);
+        assert_eq!(compute.get("types").get("miner").get("cycles").num(),7000.0);
         assert_eq!(compute.get("types").get("hauler").get("cycles").num(),10000.0);
         assert!(orders.get("ram").is_empty() && orders.get("spawn").is_empty() && orders.get("disband").is_empty());
     }

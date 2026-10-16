@@ -197,7 +197,16 @@ use super::{air, theme};
             let slot=p.get("mines").iter().enumerate().find(|(k,v)|v.num_or(0.0)>0.0 && realm::worker(p,*k as f64)==me.get("id").num() && p.get("staff").at(*k).num_or(0.0)<2.0);
             if let Some((k,_))=slot {
                 if let Some(mut o)=orders::to(u,"gather",cap,world,me,()){o.set("slot",k);order(o);}
-            }else if let Some(o)=orders::gather(u,world,me){order(o);}
+            } else {
+                // A cold province plan can fill all 16 RAM pages. Price its read before asking for a route.
+                let first = me.get("ramProvince").key(at).key(0.0).get("bytes");
+                let cold = if plan::known(me,u).is_none() && first.is_bytes() && first.len() >= 2 {
+                    let b = first.bytes();
+                    2.5 * f64::from(u16::from_le_bytes([b[0],b[1]]))
+                } else { 0.0 };
+                if cycles_left() < 2200.0 + cold { continue; }
+                if let Some(o)=orders::gather(u,world,me){order(o);}
+            }
         }
     }
     fn receiving_dock(world:View,me:View)->Option<f64>{
@@ -397,7 +406,7 @@ use super::{air, theme};
     /// Install affordable worker callbacks without scanning routes, stocks or bodies.
     fn logistics_controls(me: View, out: &mut Value) {
         let income=me.path("rts.cpu.income").num_or(20000.0);
-        for (ty,cycles) in [("miner",4500),("hauler",10000),("freighter",12000)]{out.entry("compute").entry("types").set(ty,obj!{"cycles"=>cycles,"every"=>2});}
+        for (ty,cycles) in [("miner",7000),("hauler",10000),("freighter",12000)]{out.entry("compute").entry("types").set(ty,obj!{"cycles"=>cycles,"every"=>2});}
         // Route planning and RAM reads need a fixed minimum even between irregular deliveries.
         let cpu=out.entry("compute").entry("cpu");
         for (lane,floor) in [("think",14000.0),("control",22000.0),("drive",8000.0)]{
