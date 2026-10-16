@@ -120,3 +120,36 @@ fn flight_research_waits_for_recovery_and_preserves_emu_doctrine() {
         assert!(orders.get("research").is_undef(),"{state}");
     }
 }
+
+#[test]
+fn recruitment_requires_a_reachable_load_and_observes_retirement_cooldown() {
+    let (mut world,mut me,_)=fixture();
+    world.set("units",arr![]);
+    me.entry("units").entry("byType").set("freighter",0);
+    me.entry("rts").set("sea",obj!{"ports"=>arr![0]});
+    let recruit=|world:&Value,me:&Value| {
+        let args=views(&[world.clone(),me.clone()]);
+        common::govern(args[0],args[1],0.4,||obj!{}).get("spawn").clone()
+    };
+    assert!(recruit(&world,&me).is_empty(),"unreachable stock must not recruit a hull");
+    item(me.entry("rts").entry("logistics").entry("depots"),1).set("cycles",1000000);
+    let spawn=recruit(&world,&me);
+    assert_eq!(spawn.at(0).get("type").str(),"freighter");
+    assert_eq!(spawn.at(0).get("port").num(),0.0);
+    let saved=obj!{"ram"=>mem::put(245,&obj!{"t"=>1,"until"=>300,"ships"=>arr![]},"local",None,4).unwrap()};
+    me.set("ramCapital",ram_pages(&saved));
+    assert!(recruit(&world,&me).is_empty(),"idle retirement must not cause immediate replacement");
+}
+#[test]
+fn ground_carriers_collect_cargo_from_an_alternate_receiving_dock() {
+    let (mut world,me,mut units)=fixture();
+    item(world.entry("provinces"),1).set("map","o0".repeat(217));
+    item(world.entry("provinces"),0).set("adj",arr![1]);
+    item(world.entry("provinces"),1).set("adj",arr![0]);
+    item(&mut units,0).set("type","hauler");
+    item(&mut units,0).entry("rts").entry("sea").set("ship",false);
+    let args=views(&[units,world,me]);
+    common::haul_cargo(args[0],args[1],args[2]);
+    let orders:Vec<Value>=abi::TEST_ORDERS.with(|o|o.take()).iter().map(|s|Value::parse(s)).collect();
+    assert!(orders.iter().any(|o|o.get("cargo").get("load").get("p").num()==1.0),"{orders:?}");
+}
