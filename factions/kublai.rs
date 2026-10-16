@@ -49,6 +49,7 @@ fn build(b: Build) -> Value {
 // Bribes and passage run on timers with a random gap, so no two worlds repeat: each fires `base` seconds after the
 // last, give or take 60%. The next second of each lives in capital RAM page 224, written only when one fires.
 const CLOCK: u32 = 224;
+const RECOVERY_PAGE: u32 = 244;
 
 struct Clock {
     at: Value,
@@ -293,7 +294,39 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
 }
 
 fn think(world: View, me: View) -> Value {
+    if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
+        return recovery_policy(me);
+    }
     common::govern(world, me, 0.55, || strategy(world, me))
+}
+
+// Below the cost of a full strategy, leave enough cycles for the next think, keep miners working, and record only a
+// one-page recovery marker. This runs before common::govern so its economy scan cannot consume the budget needed to
+// return a safe policy. Once a full think fits again, think() clears the marker and normal planning resumes.
+fn recovery_policy(me: View) -> Value {
+    let income = me.path("rts.cpu.income").num_or(20000.0).max(1.0);
+    let mut types = obj! {};
+    for t in me.get("types").keys() {
+        types.set(t, obj! { "share" => 0, "every" => 8 });
+    }
+    types.set("miner", obj! { "cycles" => jmax(4000.0, income * 0.4), "every" => 1 });
+    let mut cpu = obj! {
+        "limits" => obj! {
+            "think" => (me.path("compute.thinkPeak").num_or(0.0) * 1.5 + 2000.0).max(24000.0),
+            "control" => 0.5, "upkeep" => 0.65, "research" => 0, "influence" => 0,
+            "fabrication" => 0, "visuals" => 0, "reflex" => 0.15, "duel" => 0.08,
+            "challenge" => 0.02, "drive" => 0.08, "armor" => 0.05, "weapon" => 0.08,
+            "abilities" => 0, "cloak" => 0, "gate" => 0
+        },
+        "reserve" => obj! {}, "upkeepOrder" => vec!["miner"]
+    };
+    common::fit_cpu(&mut cpu, me);
+    let mut recovery = mem::get(me.get("ramCapital"), RECOVERY_PAGE);
+    if !matches!(recovery, Value::Obj(_)) { recovery = obj! {}; }
+    recovery.set("r", true);
+    obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
+        "ram" => mem::put(RECOVERY_PAGE, &recovery, "local", None, 1).unwrap_or_default(),
+        "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0 }
 }
 
 fn strategy(world: View, me: View) -> Value {
@@ -1327,7 +1360,8 @@ fn war_order(u: View, world: View, me: View) -> Option<Value> {
 // serves every unit sent the same way. A call handed less than one order's worth (the control lane ran short after
 // think) keeps its standing orders.
 fn march(units: View, world: View, me: View) {
-    if me.get("rts").truthy() && cycles_left() < 2200.0 {
+    const CONTROL_RESERVE: f64 = 2000.0;
+    if me.get("rts").truthy() && cycles_left() < CONTROL_RESERVE {
         return;
     }
     let first = cycles_left() >= 300.0 * world.get("provinces").len() as f64 + 3000.0;
@@ -1344,12 +1378,20 @@ fn march(units: View, world: View, me: View) {
     queue.reverse();
     queue.extend(home);
     let rts = me.get("rts").truthy();
-    for u in queue {
-        if rts && cycles_left() < 2200.0 {
+    // Reserve two times the observed ~94-cycle per-unit call cost so a type given a small control slice can still
+    // make bounded progress. The rotating start in `turn` carries the remaining units into later seconds.
+    let mut turn_cost = 200.0_f64;
+    let turn_limit = if rts { ((cycles_left() - CONTROL_RESERVE).max(0.0) / turn_cost).floor() as usize } else { queue.len() };
+    for (i, u) in queue.into_iter().enumerate() {
+        if i >= turn_limit || (rts && cycles_left() < CONTROL_RESERVE + turn_cost) {
             break;
         }
+        let began = cycles_left();
         if let Some(o) = war_order(u, world, me) {
             order(o);
+        }
+        if rts {
+            turn_cost = turn_cost.max(2.0 * (began - cycles_left()));
         }
     }
 }

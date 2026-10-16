@@ -478,6 +478,32 @@ fn think_need(world: View, me: View) -> f64 {
 }
 
 fn think(world: View, me: View) -> Value {
+    // Recovery's map and unit scans also need fuel when income falls sharply.
+    // A policy-only turn lets the next call recover without repeating those scans.
+    if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
+        let income = me.path("rts.cpu.income").num_or(20000.0).max(1.0);
+        let mut types = obj! {};
+        for ty in me.get("types").keys() { types.set(ty, obj! { "share" => 0, "every" => 8 }); }
+        types.set("miner", obj! { "cycles" => (income * 0.4).max(4000.0), "every" => 1 });
+        let mut cpu = obj! {
+            "limits" => obj! {
+                "think" => (me.path("compute.thinkPeak").num_or(0.0) * 1.5 + 2000.0).max(24000.0),
+                "control" => 0.5, "upkeep" => 0.65, "research" => 0, "influence" => 0,
+                "fabrication" => 0, "visuals" => 0, "reflex" => 0.15, "duel" => 0.08,
+                "challenge" => 0.02, "drive" => 0.08, "armor" => 0.05, "weapon" => 0.08,
+                "abilities" => 0, "cloak" => 0, "gate" => 0
+            },
+            "reserve" => obj! {}, "upkeepOrder" => vec!["miner"]
+        };
+        common::fit_cpu(&mut cpu, me);
+        // Shared miner recovery reads this capital page before using local mining rights.
+        let mut recovery = mem::get(me.get("ramCapital"), 244);
+        if !matches!(recovery, Value::Obj(_)) { recovery = obj! {}; }
+        recovery.set("r", true);
+        return obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
+            "ram" => mem::put(244, &recovery, "local", None, 1).unwrap_or_default(),
+            "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0 };
+    }
     common::govern(world, me, 0.4, || strategy(world, me))
 }
 
