@@ -13,8 +13,9 @@ use std::rc::Rc;
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
+use shared::common::{hauler, freighter};
 
-program!(think, miner, screen, skirm, runner, lancer, repairer, sentry, gun, wing, ghost, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, miner, screen, skirm, runner, lancer, repairer, sentry, gun, wing, ghost, reflex, research, duel, challenge, look, build3d, live3d);
 
 // Builds: (stat, points), in the order the game shows them.
 type Build = &'static [(&'static str, f64)];
@@ -400,9 +401,9 @@ fn strategy(world: View, me: View) -> Value {
     if rts.truthy() && cycles_left() < 3000.0 {
         return common::recovery(world, me);
     }
-    // Short of a full think (12,000 cycles, or three quarters of its recent peak), set only the CPU policy: a think that
+    // Short of a full think (16,000 cycles, or 125% of its recent peak), set only the CPU policy: a think that
     // runs out sets none, and its limit, a share of income, stays too small when income falls, every second after.
-    if rts.truthy() && cycles_left() < jmax(12000.0, 0.75 * me.get("compute").get("thinkPeak").or(0.0)) {
+    if rts.truthy() && cycles_left() < jmax(16000.0, 1.25 * me.get("compute").get("thinkPeak").or(0.0)) {
         return common::recovery(world, me);
     }
     let t = me.get("techs");
@@ -565,12 +566,14 @@ fn strategy(world: View, me: View) -> Value {
     // A short second keeps what's decided so far (the plan, spawns and the CPU policy): trade and diplomacy wait a
     // second rather than run think out of cycles and lose it all.
     let diplomacy = 3000.0 + 500.0 * world.get("factions").len() as f64;
-    if rts.truthy() && !think_room(&orders, diplomacy) { return orders; }
+    if (rts.truthy() && !think_room(&orders, diplomacy)) || cycles_left() < 5000.0 {
+        return orders;
+    }
     let pact_leader = realm::leader(world);
     let at = mem::get(me.get("ramCapital"), CLOCK);
     let mut clock = Clock { at: if at.truthy() { at } else { Value::obj() }, changed: false };
     warlord(&mut orders, world, me, &plan, &mut clock, held);
-    if !rts.truthy() || think_room(&orders, 2500.0) {
+    if cycles_left() > 2000.0 && (!rts.truthy() || think_room(&orders, 2500.0)) {
         let pact = |m: View| me.get("pacts").is_empty() && pact_leader.is_none_or(|l| !same(m.get("from"), l.get("id")));
         common::answer(&mut orders, me, world, pact, &techs);
         nullptr_ext::keep_fund(&mut orders, me, held);

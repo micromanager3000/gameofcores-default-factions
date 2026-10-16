@@ -27,6 +27,10 @@ The game provides 3,072 free RAM pages to every faction, covering the newly incl
 Compiled instructions are metered normally.
 Both the Rust package and the Node exporter produce the same source; `npm test` checks every program.
 
+Every house supports physical CPU cargo when `world.logistics` is present.
+Miners unload locally, ground carriers connect depots, and freighters carry cargo between docks.
+Quiet Fleet also recovers visible wreck cargo. The same programs retain their earlier mining policy in saved worlds without logistics.
+
 Export a structure example with `node tools/source.mjs foundry /tmp/foundry.rs`.
 The names `lantern` and `raiders` select the other two programs.
 These examples retain their measured strategy helpers and use this repository's shared presentation helpers.

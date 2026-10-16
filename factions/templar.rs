@@ -1,5 +1,6 @@
 use gameofcores::*;
 use shared::{air, capital, common, theme};
+use shared::common::{hauler, freighter};
 // Knights Templated — paid armor, mobile lancers, ballistas and Hospitallers.
 // A faction program owns its strategy, CPU allocation and Crusader art.
 // The plan stays small and tactical CPU is deliberately left in the combat bank.
@@ -9,7 +10,7 @@ use shared::{air, capital, common, theme};
 
 use std::rc::Rc;
 
-program!(think, miner, line, bulwark, artillery, medic, interceptor, piercer, scout, reflex, research, duel, challenge, guard, longbow, spy, look, build3d, live3d);
+program!(think, hauler, freighter, miner, line, bulwark, artillery, medic, interceptor, piercer, scout, reflex, research, duel, challenge, guard, longbow, spy, look, build3d, live3d);
 
 fn build(hp: f64, speed: f64, strength: f64, carry: f64, vision: f64, range: Option<f64>) -> Value {
     let mut b = obj! { "hp" => hp, "speed" => speed, "strength" => strength, "carry" => carry, "vision" => vision };

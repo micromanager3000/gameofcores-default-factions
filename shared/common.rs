@@ -166,6 +166,130 @@ use super::{air, theme};
         }
     }
 
+    /// Miners unload locally. Haulers connect remote town depots to the capital or a dock.
+    fn logistics_miners(units: View, world: View, me: View) {
+        use logistics::{Endpoint as E,cargo,transfer};
+        let cap=me.get("capital").num();
+        for u in units.iter() {
+            if cycles_left()<1800.0 { break; }
+            let n=cargo(u);let at=u.get("at").num();
+            if u.path("rts.cargo.job").truthy() {continue;}
+            if n>0.0 && u.get("doing").str()!="gather" {
+                let dest=if logistics::land_route(world,me,at,cap).is_some(){E::town(cap)}else{E::town(at)};
+                if let Some(o)=transfer(u,world,me,dest,false,None){order(o);}continue;
+            }
+            if u.get("doing").str()=="gather" {continue;}
+            // Prefer the capital's slots while there is room, so no faction needs a ship for its first delivery.
+            let p=realm::index(world).get(cap);
+            let slot=p.get("mines").iter().enumerate().find(|(k,v)|v.num_or(0.0)>0.0 && realm::worker(p,*k as f64)==me.get("id").num() && p.get("staff").at(*k).num_or(0.0)<2.0);
+            if let Some((k,_))=slot {
+                if let Some(mut o)=orders::to(u,"gather",cap,world,me,()){o.set("slot",k);order(o);}
+            }else if let Some(o)=orders::gather(u,world,me){order(o);}
+        }
+    }
+    fn receiving_dock(world:View,me:View)->Option<f64>{
+        let cap=me.get("capital").num();let mut best=None;let mut hops=usize::MAX;
+        if world.path("logistics.docks").iter().any(|d|d.get("p").num()==cap){return Some(cap);}
+        for d in world.path("logistics.docks").iter(){
+            if cycles_left()<1600.0{break;}
+            let p=d.get("p").num();if realm::index(world).get(p).get("owner").num()!=me.get("id").num(){continue;}
+            if let Some(route)=logistics::land_route(world,me,p,cap){if route.len()<hops{hops=route.len();best=Some(p);}}
+        }best
+    }
+    /// Shore handling and overland collection use finite loads and carry their chosen destination in unit RAM.
+    pub fn haul_cargo(units:View,world:View,me:View){
+        use logistics::{Endpoint as E,cargo,transfer};
+        let cap=me.get("capital").num();let home=receiving_dock(world,me);
+        for u in units.iter(){
+            if cycles_left()<2200.0{break;}
+            if u.path("rts.cargo.job").truthy(){continue;}
+            let at=u.get("at").num();
+            if cargo(u)>0.0 {
+                let saved=mem::get(u.get("ramUnit"),92);let mut dest=E{p:saved.get("p").num_or(cap),dock:saved.get("dock").truthy()};
+                if realm::index(world).get(dest.p).get("owner").num()!=me.get("id").num() || logistics::land_route(world,me,at,dest.p).is_none(){
+                    dest=E::town(cap);
+                    if logistics::land_route(world,me,at,cap).is_none(){if let Some(d)=me.path("rts.logistics.depots").iter().find(|d|!d.get("dock").truthy()&&logistics::land_route(world,me,at,d.get("p").num()).is_some()){dest=E::town(d.get("p").num());}}
+                }
+                if let Some(o)=transfer(u,world,me,dest,false,None){order(o);}continue;
+            }
+            let mut best=None;let mut value=0.0;
+            for d in me.path("rts.logistics.depots").iter(){
+                if cycles_left()<3000.0{break;}
+                let e=E{p:d.get("p").num(),dock:d.get("dock").truthy()};let n=d.get("cycles").num_or(0.0);
+                if (e.p==cap&&!e.dock)||n<1000.0 {continue;}
+                let land=logistics::land_route(world,me,e.p,cap);
+                let dest=if e.dock {
+                    if Some(e.p)!=home||land.is_none(){continue;}E::town(cap)
+                }else if me.path("techs.seaTraversal").truthy() && home.is_some() && Some(e.p)!=home && land.as_ref().is_none_or(|r|r.len()>=2) && world.path("logistics.docks").iter().any(|d|d.get("p").num()==e.p){E::dock(e.p)}
+                else if land.is_some(){E::town(cap)}else{continue;};
+                if let Some(route)=logistics::land_route(world,me,at,e.p){
+                    let score=n/(1.0+route.len() as f64) * if e.dock {2.0}else{1.0};
+                    if score>value{best=Some((e,dest,n));value=score;}
+                }
+            }
+            if let Some((e,dest,n))=best {if let Some(mut o)=transfer(u,world,me,e,true,Some(n.min(logistics::capacity(u)))){
+                if let Some(ops)=mem::put(92,&dest.value(),"local",Some("unit"),1){o.set("ram",ops);}order(o);
+            }}
+        }
+    }
+    /// Every house can run a bulk circuit. A ship remembers its receiving dock in unit RAM across a relay loss.
+    pub fn freight(units:View,world:View,me:View){
+        use logistics::{Endpoint as E,cargo,transfer};
+        let home=receiving_dock(world,me);
+        for u in units.iter(){
+            if cycles_left()<2200.0{break;}
+            if u.path("rts.cargo.job").truthy(){continue;}
+            let saved=mem::get(u.get("ramUnit"),91);let destination=home.unwrap_or(saved.get("home").num_or(-1.0));
+            if destination<0.0{continue;}
+            let mut out=None;
+            if cargo(u)>0.0{out=transfer(u,world,me,E::dock(destination),false,None);}
+            else {
+                let best=me.path("rts.logistics.depots").iter().filter(|d|d.get("dock").truthy()&&d.get("p").num()!=destination&&d.get("cycles").num_or(0.0)>10000.0).max_by(|a,b|a.get("cycles").num().total_cmp(&b.get("cycles").num()));
+                if let Some(d)=best {out=transfer(u,world,me,E::dock(d.get("p").num()),true,Some(d.get("cycles").num().min(logistics::capacity(u))));}
+            }
+            if let Some(mut o)=out{if let Some(op)=mem::put(91,&obj!{"home"=>destination},"local",Some("unit"),1){o.set("ram",op);}order(o);}
+        }
+    }
+    /// Return recovered cargo to the home dock, or approach a wreck visible to this faction.
+    pub fn recover_ship(u:View,world:View,me:View)->bool{
+        if !world.get("logistics").truthy(){return false;}
+        if u.path("rts.cargo.job").truthy(){return true;}
+        if logistics::cargo(u)>0.0 {
+            if let Some(home)=receiving_dock(world,me){if let Some(o)=logistics::transfer(u,world,me,logistics::Endpoint::dock(home),false,None){order(o);}}
+            return true;
+        }
+        if logistics::capacity(u)>0.0 {if let Some(w)=me.path("rts.logistics.wrecks").iter().find(|w|w.get("sea").truthy() && w.get("cycles").num_or(0.0)>0.0){order(logistics::salvage(u,w));return true;}}
+        false
+    }
+    fn logistics_budget(world:View,me:View,mut out:Value)->Value{
+        if !world.get("logistics").truthy(){return out;}
+        // Recovery must be able to return its policy even when the planner used nearly all its call.
+        if cycles_left()<1400.0{return out;}
+        let income=me.path("rts.cpu.income").num_or(20000.0);
+        for (ty,cycles) in [("miner",4500),("hauler",10000),("freighter",5500)]{out.entry("compute").entry("types").set(ty,obj!{"cycles"=>cycles,"every"=>2});}
+        // Route planning and RAM reads need a fixed minimum even between irregular deliveries.
+        let cpu=out.entry("compute").entry("cpu");
+        for (lane,floor) in [("think",14000.0),("control",22000.0),("drive",8000.0)]{
+            let old=cpu.get("limits").get(lane).num_or(0.0);let old=if old<=1.0{old*income}else{old};
+            cpu.entry("limits").set(lane,old.max(floor));
+        }
+        cpu.set("upkeepOrder",vec!["miner","hauler","freighter"]);
+        // Fixed reserves from a rich second must not lock out code when delivery income falls.
+        cpu.set("reserve",obj!{"think"=>0.25,"control"=>0.1,"upkeep"=>0.1,"duel"=>0.05});
+        let depots=me.path("rts.logistics.depots");let stock=depots.iter().filter(|d|d.get("p").num()!=me.get("capital").num()||d.get("dock").truthy()).map(|d|d.get("cycles").num_or(0.0)).sum::<f64>();
+        let have=me.path("units.byType");
+        if stock>16000.0 && depots.iter().filter(|d|d.get("dock").truthy()).count()>=2 && !me.path("techs.seaTraversal").truthy(){out.set("research","seaTraversal");}
+        if stock>16000.0 && me.path("units.queued").num_or(0.0)==0.0 && me.get("bank").num_or(0.0)>me.path("costs.unit").num_or(1e9)+8.0 && me.path("rts.cpu.bank").num_or(0.0)>fabrication(me,1.0)+income*2.0 {
+            let docks=depots.iter().filter(|d|d.get("dock").truthy()).count();
+            let ty=if have.get("hauler").num_or(0.0)<(me.get("provinces").num_or(1.0)/2.0).clamp(2.0,6.0) {"hauler"}else if docks>=2 && me.path("techs.seaTraversal").truthy() && !me.path("rts.sea.ports").is_empty() && have.get("freighter").num_or(0.0)<2.0 {"freighter"}else{return out;};
+            let mods=if ty=="freighter"{vec!["hull"]}else{vec![]};
+            let body=obj!{"hp"=>2,"speed"=>2,"strength"=>0,"carry"=>5,"vision"=>1};
+            out.set("spawn",vec![obj!{"type"=>ty,"build"=>body,"modules"=>mods}]);
+            out.entry("compute").entry("cpu").entry("limits").set("fabrication",fabrication(me,1.0)+500.0);
+        }
+        out
+    }
+
     // ---- targets ----
 
     /// What land you've never seen scores in [`score`]: its owner and cores are unknown, and an army sent there walks
@@ -961,6 +1085,35 @@ use super::{air, theme};
     /// keep the house's strategy. No engine allocation, exemption or rule is involved.
     pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
         if !me.path("rts.cpu").truthy() { return strategy(); }
+        if world.get("logistics").truthy() {
+            let income=me.path("rts.cpu.income").num_or(20000.0);
+            if income<30000.0 || me.path("rts.cpu.bank").num_or(0.0)<income*4.0 || cycles_left()<12000.0 {
+                let mut out=recovery_policy(me);
+                let have=me.path("units.byType");
+                if me.path("rts.cpu.last.upkeep").num_or(0.0)>income*0.65 && me.path("rts.cpu.bank").num_or(0.0)<income*4.0 {
+                    let mut retire=Vec::new();
+                    for u in world.get("units").iter().filter(|u|u.get("owner").num()==me.get("id").num()) {
+                        if cycles_left()<2500.0 || retire.len()>=2 {break;}
+                        let ty=u.get("type").str();
+                        if u.get("hired").truthy() || ty=="hauler" || ty=="freighter" {continue;}
+                        if ty!="miner" || (have.get("miner").num_or(0.0)>4.0 && u.get("at").num()!=me.get("capital").num()) {retire.push(u.get("id").value());}
+                    }
+                    out.set("disband",retire);
+                }
+                if have.get("miner").num_or(0.0)<4.0 && me.path("units.queued").num_or(0.0)==0.0
+                    && me.get("bank").num_or(0.0)>=me.path("costs.unit").num_or(1e9)
+                    && me.path("rts.cpu.bank").num_or(0.0)>=fabrication(me,0.0)+income {
+                    out.entry("compute").entry("cpu").entry("limits").set("fabrication",fabrication(me,0.0)+100.0);
+                    out.set("spawn",vec![obj!{"type"=>"miner"}]);
+                }
+                return logistics_budget(world,me,out);
+            }
+        }
+        let orders = govern_base(world, me, share, strategy);
+        logistics_budget(world, me, orders)
+    }
+    fn govern_base(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
+        if !me.path("rts.cpu").truthy() { return strategy(); }
         if cycles_left() < 6000.0 { return recovery(world, me); }
         if me.path("units.stalled").num_or(0.0) > 0.0 { return recovery(world, me); }
         let income = me.path("rts.cpu.income").num_or(20000.0).max(1.0);
@@ -1074,14 +1227,16 @@ use super::{air, theme};
         // same town, and the emergency call must still fit the floor after the capital's RAM read.
         let mut sites = Vec::<(f64, usize)>::new();
         let mut mines = Vec::new();
+        // Cache working locations before scanning provinces; repeated unit-field reads can exhaust recovery.
+        let working_mines: Vec<f64> = e.units.iter().filter_map(|c| {
+            let u = c.unit;
+            (u.get("type").str() == "miner" && u.get("doing").str() == "gather").then(|| u.get("at").num())
+        }).collect();
         for p in world.get("provinces").iter() {
             let id = p.get("id").num();
             let connected = p.get("owner").num_or(-1.0) == ours && p.get("hops").num_or(-1.0) >= 0.0;
             // A miner already working a leased mine is productive even outside the capital's RAM network.
-            let working_lease = !connected && p.get("staff").truthy() && e.units.iter().any(|c| {
-                let u = c.unit;
-                u.get("type").str() == "miner" && u.get("at").num() == id && u.get("doing").str() == "gather"
-            });
+            let working_lease = !connected && p.get("staff").truthy() && working_mines.contains(&id);
             if !connected && !working_lease { continue; }
             let mut slots = 0;
             for (k, value) in p.get("mines").iter().enumerate() {
@@ -1150,6 +1305,7 @@ use super::{air, theme};
     /// The emergency miner call uses current, local mining rights, even when its carried plan is old or its previous
     /// control allowance was zero. Local orders need no route search or carried-plan write.
     pub fn recover_miners(units: View, world: View, me: View) -> bool {
+        if world.get("logistics").truthy() { logistics_miners(units,world,me); return true; }
         if !me.path("rts.cpu").truthy() || !mem::get(me.get("ramCapital"), RECOVERY_PAGE).get("r").truthy() { return false; }
         let index = realm::index(world); let ours = me.get("id").num();
         let mut assigned = Vec::<(f64, usize, usize)>::new();
@@ -1950,3 +2106,6 @@ use super::{air, theme};
             }
         }
     }
+
+pub fn hauler(units: View, world: View, me: View) { haul_cargo(units, world, me); }
+pub fn freighter(units: View, world: View, me: View) { freight(units, world, me); }

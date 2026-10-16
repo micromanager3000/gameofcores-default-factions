@@ -14,8 +14,9 @@
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
+use shared::common::{hauler, freighter};
 
-program!(think, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, warjunk, picket, corsair, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, warjunk, picket, corsair, reflex, research, duel, challenge, look, build3d, live3d);
 
 // The bodies: points in hp, speed, strength, carry and vision, and for some in range and wings.
 fn miner_body() -> Value {
@@ -60,7 +61,8 @@ fn picket_body(guns: bool) -> Value {
         obj! { "hp" => 5, "speed" => 2, "strength" => 1, "carry" => 0, "vision" => 2 }
     }
 }
-fn corsair_body() -> Value {
+fn corsair_body(cargo: bool) -> Value {
+    if cargo { return obj! { "hp"=>2,"speed"=>2,"strength"=>2,"carry"=>2,"vision"=>0,"range"=>1 }; }
     obj! { "hp" => 2, "speed" => 4, "strength" => 2, "carry" => 0, "vision" => 0, "range" => 1 }
 }
 
@@ -623,10 +625,10 @@ fn strategy(world: View, me: View) -> Value {
         plan.set("warn", intel.warn);
     }
     // the census of rivals' units runs only when think can pay for it and still finish (the rest costs about 14,000)
-    let census = !rts(me) || cycles_left() > 55.0 * world.get("units").len() as f64 + 20000.0;
+    let census = cycles_left() > 55.0 * world.get("units").len() as f64 + 20000.0;
     let enemy = if census { seen_threats(world, me, logbook.get("tk").num_or(0.0)) } else { Threats::default() };
     // a short second (a small faction's think, or a busy one) keeps the fleet's last orders rather than run out
-    let naval = if !rts(me) || cycles_left() > 26000.0 {
+    let naval = if cycles_left() > 26000.0 {
         naval_plan(world, me, &mut plan, target_id, defend, &enemy.rowing)
     } else {
         let last = mem::get(me.get("ramCapital"), 0).get("nv").clone();
@@ -825,16 +827,16 @@ fn strategy(world: View, me: View) -> Value {
     }
     // the spies look over the whole border and every unit in sight once a bribe falls due
     let seen = 10.0 * world.get("units").len() as f64;
-    if !rts(me) || cycles_left() > 6000.0 + seen {
+    if cycles_left() > 6000.0 + seen {
         intrigue(&mut orders, world, me, &mut clock, now);
     }
-    if !rts(me) || cycles_left() > 5000.0 + seen {
+    if cycles_left() > 5000.0 + seen {
         mercenaries(&mut orders, world, me, &mut clock, now, threatened || enemy.total >= 4.0);
     }
-    if !rts(me) || cycles_left() > 3000.0 {
+    if cycles_left() > 3000.0 {
         faith(&mut orders, world, me, now);
     }
-    if !rts(me) || cycles_left() > 2000.0 {
+    if cycles_left() > 2000.0 {
         let pact = move |m: View| no_pacts && pact_leader.is_none_or(|l| m.get("from").num() != l);
         common::answer(&mut orders, me, world, pact, &TECHS);
     }
@@ -1502,7 +1504,7 @@ fn naval_spawn(orders: &mut Value, me: View, naval: &Naval, rival_ships: f64, th
     } else if war < want_war.min(2.0) {
         Some(("warjunk", warjunk_body(), armor("armor")))
     } else if corsairs < want_cors {
-        Some(("corsair", corsair_body(), armor("dash")))
+        Some(("corsair", corsair_body(me.path("rts.logistics").truthy()), armor("dash")))
     } else if war < want_war {
         Some(("warjunk", warjunk_body(), armor("armor")))
     } else {
@@ -1623,6 +1625,7 @@ fn junks(units: View, world: View, me: View, role: u8) -> Value {
             }
             continue;
         }
+        if role == 2 && common::recover_ship(u,world,me) { continue; }
         let id = u.get("id").num();
         let k = ids.iter().position(|&x| x == id).unwrap_or(0);
         let carried = mem::get(u.get("ramUnit"), 1);
@@ -2045,14 +2048,13 @@ fn look(budget: View, info: View) -> Value {
                 l.entry("names").set(ship, name);
             }
         }
-        // Another house can have sixteen land aliases already. Only prune unused aliases when they would push the
-        // three ship entries beyond the look's sixteen-type limit; keep each house's ordinary appearance otherwise.
+        // Keep cargo crews and the three ship entries within the look's twenty-type limit.
         for part in ["units", "names"] {
             if let Value::Obj(o) = l.entry(part) {
                 o.remove("envoy");
                 o.remove("sailor");
-                while o.0.len() > 16 {
-                    let unused = o.0.iter().position(|(k, _)| !matches!(k.as_str(), "miner" | "guard" | "scout" | "longbow" | "spy" | "runner" | "lancer" | "shade" | "sentry" | "spire" | "needle" | "kite" | "warjunk" | "picket" | "corsair"));
+                while o.0.len() > 20 {
+                    let unused = o.0.iter().position(|(k, _)| !matches!(k.as_str(), "miner" | "hauler" | "freighter" | "guard" | "scout" | "longbow" | "spy" | "runner" | "lancer" | "shade" | "sentry" | "spire" | "needle" | "kite" | "warjunk" | "picket" | "corsair"));
                     let Some(i) = unused else { break };
                     o.0.remove(i);
                 }
