@@ -294,10 +294,27 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
 }
 
 fn think(world: View, me: View) -> Value {
+    if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
+        return emergency_recovery_policy(me);
+    }
     if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
         return recovery_policy(me);
     }
     common::govern(world, me, 0.55, || strategy(world, me))
+}
+
+// At the bottom of a short think slice, update only the CPU budget needed for the next one. Leave type schedules and
+// standing orders alone; the larger recovery policy needs more cycles to build.
+fn emergency_recovery_policy(me: View) -> Value {
+    obj! { "compute" => obj! { "cpu" => obj! {
+        "limits" => obj! {
+            "think" => 24000, "control" => 0.5, "upkeep" => 0.65,
+            "research" => 0, "influence" => 0, "fabrication" => 0, "visuals" => 0,
+            "reflex" => 0.15, "duel" => 0.08, "challenge" => 0.02,
+            "drive" => 0.08, "armor" => 0.05, "weapon" => 0.08, "abilities" => 0, "cloak" => 0, "gate" => 0
+        },
+        "reserve" => obj! {}, "upkeepOrder" => vec!["miner"]
+    } } }
 }
 
 // Below the cost of a full strategy, leave enough cycles for the next think, keep miners working, and record only a

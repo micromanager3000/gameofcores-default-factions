@@ -478,6 +478,17 @@ fn think_need(world: View, me: View) -> f64 {
 }
 
 fn think(world: View, me: View) -> Value {
+    // A nearly empty callback only opens the next allowance. Existing type schedules and orders stand.
+    if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
+        return obj! { "compute" => obj! { "cpu" => obj! {
+            "limits" => obj! { "think" => 24000, "control" => 0.5, "upkeep" => 0.65,
+                "research" => 0, "influence" => 0, "fabrication" => 0, "visuals" => 0,
+                "reflex" => 0.15, "duel" => 0.08, "challenge" => 0.02,
+                "drive" => 0.08, "armor" => 0, "weapon" => 0.08,
+                "abilities" => 0, "cloak" => 0, "gate" => 0 },
+            "reserve" => obj! {}, "upkeepOrder" => vec!["miner"]
+        } } };
+    }
     // Recovery's map and unit scans also need fuel when income falls sharply.
     // A policy-only turn lets the next call recover without repeating those scans.
     if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
