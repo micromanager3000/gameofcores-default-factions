@@ -9,6 +9,7 @@ The programs use the public `gameofcores` SDK. Aircraft builds, house themes, na
 | `shared/` | Strategy, aircraft builds, themes, capital layouts and art selection reused by those programs. |
 | `art/` | Ground, naval and aircraft sculptures, labels and weapon artwork for the viewer. |
 | `src/catalog.rs` | Founding seats, colours, newcomer names and house program assignments. |
+| `examples/structures/` | Foundry, Lantern and Raiders programs for worlds with programmable structures enabled. |
 
 Emu High Command uses Arjuna's strategy. Tabula Rasa uses Atlantis through the `steward` assignment.
 Their own house presentation is selected by seat. Those assignments match the existing game.
@@ -25,6 +26,11 @@ The program compiles against the public game SDK. All faction helpers count towa
 The game provides 3,072 free RAM pages to every faction, covering the newly included preset source.
 Compiled instructions are metered normally.
 Both the Rust package and the Node exporter produce the same source; `npm test` checks every program.
+
+Export a structure example with `node tools/source.mjs foundry /tmp/foundry.rs`.
+The names `lantern` and `raiders` select the other two programs.
+These examples retain their measured strategy helpers and use this repository's shared presentation helpers.
+See [the structure examples](examples/structures/README.md) for engine requirements and recorded results.
 
 ## Update the game
 

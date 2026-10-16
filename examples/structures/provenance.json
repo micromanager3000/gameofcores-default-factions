@@ -1,0 +1,21 @@
+{
+  "repository": "https://github.com/micromanager3000/gameofcores",
+  "revision": "c31a88c28ec5d0abf77daef74a3093f4a8990bc9",
+  "sources": [
+    {
+      "name": "foundry",
+      "path": "experiments/structures/v3/round-6/factions/industrial.rs",
+      "sha256": "128241a2deb2215acf140bab5822eed4cb5d3fb4f04d1b7213c5dbf61fb7aca8"
+    },
+    {
+      "name": "lantern",
+      "path": "experiments/structures/v3/round-6/factions/sanctuary.rs",
+      "sha256": "57d577b693170d423ab0c165a3a81910c2cccc4c27b20713f0044f7597ea3391"
+    },
+    {
+      "name": "raiders",
+      "path": "experiments/structures/v2/factions/raider.rs",
+      "sha256": "a53531d451037ded3e984120303074a8950bd29d0359bcb42c0fd9d0895947f5"
+    }
+  ]
+}
