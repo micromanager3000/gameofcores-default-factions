@@ -22,6 +22,8 @@ fn think(world: View, me: View) -> Value {
 }
 
 fn strategy(world: View, me: View) -> Value {
+    let research_techs: Vec<&str> = TECHS.iter().copied()
+        .filter(|t| *t != "repair" || me.path("rts.structureCosts").truthy()).collect();
     let mut orders = obj! { "policy" => obj! { "extraction" => 0.45, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true } };
     // targets: the best neighbouring land, marked down where the army couldn't hold on to it (common::can_hold); while
     // someone else claims the Crown, the claimant's land first (common::rally)
@@ -84,7 +86,7 @@ fn strategy(world: View, me: View) -> Value {
                 !same(m.get("from"), t.get("id")) && members.iter().all(|x| !same(x, t.get("id")))
             })
     };
-    common::answer(&mut orders, me, world, pact, &TECHS);
+    common::answer(&mut orders, me, world, pact, &research_techs);
     // unit code: guards and longbows get most of it and think every 2 s; miners, the scout and the spy only when one goes
     // idle, is attacked or is caught
     let types = obj! {
@@ -94,7 +96,7 @@ fn strategy(world: View, me: View) -> Value {
         "scout" => obj! { "share" => 0.05, "every" => 0 },
         "spy" => obj! { "share" => 0.15, "every" => 0 },
     };
-    common::budget(&mut orders, world, me, &common::Budget { research: 0.1, techs: &TECHS, types: Some(&types), ..common::Budget::default() });
+    common::budget(&mut orders, world, me, &common::Budget { research: 0.1, techs: &research_techs, types: Some(&types), ..common::Budget::default() });
     orders
 }
 
