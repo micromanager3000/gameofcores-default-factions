@@ -356,7 +356,7 @@ use super::{air, theme};
                 cooldown = now + FREIGHT_IDLE_SECONDS;
             } else {
                 // Keep the original comparison point until enough movement resets the timer.
-                let (x, y) = if since < now { (last.unwrap().at(3).num(), last.unwrap().at(4).num()) } else { (x, y) };
+                let (x, y) = last.filter(|_| since < now).map_or((x, y), |r| (r.at(3).num(), r.at(4).num()));
                 records.push(arr![id, since, p, (x*100.0).round()/100.0, (y*100.0).round()/100.0]);
             }
         }
