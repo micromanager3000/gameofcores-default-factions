@@ -238,7 +238,7 @@ use super::{air, theme};
                 if (e.p==cap&&!e.dock)||n<1000.0 {continue;}
                 let land=logistics::land_route(world,me,e.p,cap);
                 let dest=if e.dock {
-                    if Some(e.p)!=home||land.is_none(){continue;}E::town(cap)
+                    if land.is_none(){continue;}E::town(cap)
                 }else if me.path("techs.seaTraversal").truthy() && home.is_some() && Some(e.p)!=home && land.as_ref().is_none_or(|r|r.len()>=2) && world.path("logistics.docks").iter().any(|d|d.get("p").num()==e.p){E::dock(e.p)}
                 else if land.is_some(){E::town(cap)}else{continue;};
                 if let Some(route)=logistics::land_route(world,me,at,e.p){
@@ -255,23 +255,117 @@ use super::{air, theme};
             }}
         }
     }
-    /// Every house can run a bulk circuit. A ship remembers its receiving dock in unit RAM across a relay loss.
-    pub fn freight(units:View,world:View,me:View){
-        if cycles_left()<2500.0 {return;}
-        use logistics::{Endpoint as E,cargo,transfer};
-        let home=receiving_dock(world,me);
-        for u in units.iter(){
-            if cycles_left()<2200.0{break;}
-            if cargo_working(u){continue;}
-            let saved=mem::get(u.get("ramUnit"),91);let destination=home.unwrap_or(saved.get("home").num_or(-1.0));
-            if destination<0.0{continue;}
-            let mut out=None;
-            if cargo(u)>0.0{out=transfer(u,world,me,E::dock(destination),false,None);}
-            else {
-                let best=me.path("rts.logistics.depots").iter().filter(|d|d.get("dock").truthy()&&d.get("p").num()!=destination&&d.get("cycles").num_or(0.0)>10000.0).max_by(|a,b|a.get("cycles").num().total_cmp(&b.get("cycles").num()));
-                if let Some(d)=best {out=transfer(u,world,me,E::dock(d.get("p").num()),true,Some(d.get("cycles").num().min(logistics::capacity(u))));}
+    /// A dock reached by sea and connected to the capital by owned land.
+    fn freight_home(world: View, me: View, water: f64) -> Option<f64> {
+        let cap = me.get("capital").num();
+        let mut best = None;
+        let mut hops = usize::MAX;
+        for d in world.path("logistics.docks").iter() {
+            if cycles_left() < 3000.0 { break; }
+            let p = d.get("p").num();
+            if realm::index(world).get(p).get("owner").num() != me.get("id").num() { continue; }
+            let Some(land) = logistics::land_route(world, me, p, cap) else { continue };
+            if land.len() >= hops || sea::route(world, water, d.get("water").num()).is_none() { continue; }
+            best = Some(p);
+            hops = land.len();
+        }
+        best
+    }
+
+    /// Prefer an available load that can reach the receiving dock. Reserve other ships' finite loads.
+    fn freight_pickup(world: View, me: View, home: f64, claimed: &[(f64, f64)]) -> Option<(f64, f64)> {
+        let dock = |p: f64| world.path("logistics.docks").iter().find(|d| d.get("p").num() == p);
+        let water = dock(home)?.get("water").num();
+        let mut best = None;
+        let mut value = 0.0;
+        for d in me.path("rts.logistics.depots").iter() {
+            if cycles_left() < 3000.0 { break; }
+            let p = d.get("p").num();
+            let stock = d.get("cycles").num_or(0.0) - claimed.iter().filter(|(at, _)| *at == p).map(|(_, n)| n).sum::<f64>();
+            if !d.get("dock").truthy() || p == home || stock <= 10000.0
+                || realm::index(world).get(p).get("owner").num() != me.get("id").num() { continue; }
+            let Some(target) = dock(p) else { continue };
+            let Some(route) = sea::route(world, water, target.get("water").num()) else { continue };
+            let score = stock.min(200000.0 * price_level(me)) / (1.0 + route.len() as f64);
+            if score > value { best = Some((p, stock)); value = score; }
+        }
+        best
+    }
+
+    /// Every house can run a bulk circuit. A ship checks its current sea basin and reserves a finite load.
+    pub fn freight(units: View, world: View, me: View) {
+        if cycles_left() < 5000.0 { return; }
+        use logistics::{Endpoint as E, cargo, transfer};
+        let mut claimed: Vec<(f64, f64)> = units.iter().filter_map(|u| {
+            let job = u.path("rts.cargo.job");
+            let source = job.path("operation.load");
+            (source.truthy() && job.get("status").str() != "depot empty")
+                .then(|| (source.get("p").num(), job.get("remaining").num_or(0.0)))
+        }).collect();
+        for u in units.iter() {
+            if cycles_left() < 4000.0 { break; }
+            let job = u.path("rts.cargo.job.operation");
+            let endpoint = if job.get("load").truthy() { job.get("load") } else { job.get("unload") };
+            let water = u.path("rts.sea.water").num_or(-1.0);
+            let reachable = !endpoint.truthy() || world.path("logistics.docks").iter()
+                .find(|d| d.get("p").num() == endpoint.get("p").num())
+                .is_some_and(|d| sea::route(world, water, d.get("water").num()).is_some());
+            if !reachable { order(logistics::cancel(u)); }
+            else if cargo_working(u) { continue; }
+            let Some(home) = freight_home(world, me, water) else { continue };
+            if cargo(u) > 0.0 {
+                if let Some(o) = transfer(u, world, me, E::dock(home), false, None) { order(o); }
+            } else if let Some((p, stock)) = freight_pickup(world, me, home, &claimed) {
+                let amount = stock.min(logistics::capacity(u));
+                if let Some(o) = transfer(u, world, me, E::dock(p), true, Some(amount)) {
+                    claimed.push((p, amount));
+                    order(o);
+                }
             }
-            if let Some(mut o)=out{if let Some(op)=mem::put(91,&obj!{"home"=>destination},"local",Some("unit"),1){o.set("ram",op);}order(o);}
+        }
+    }
+
+    const FREIGHT_PAGE: u32 = 245;
+    const FREIGHT_IDLE_SECONDS: f64 = 120.0;
+
+    /// Retire empty ships that make no progress for two minutes. Loaded ships and passenger decks stay intact.
+    /// The capital records positions because an unfunded unit callback cannot retire its own hull.
+    fn maintain_freighters(orders: &mut Value, world: View, me: View) {
+        if !world.get("logistics").truthy() || cycles_left() < 5500.0 { return; }
+        let old = mem::get(me.get("ramCapital"), FREIGHT_PAGE);
+        let now = world.get("seconds").num_or(0.0);
+        if now - old.get("t").num_or(-10.0) < 10.0 { return; }
+        let mut records = Value::arr();
+        let mut cooldown = old.get("until").num_or(0.0);
+        let mut retired = 0;
+        for u in world.get("units").iter() {
+            if cycles_left() < 2500.0 || records.len() >= 4 { break; }
+            if u.get("owner").num() != me.get("id").num() || u.get("type").str() != "freighter" { continue; }
+            let id = u.get("id").num();
+            if u.get("hired").truthy() || logistics::cargo(u) > 0.0 || !u.path("rts.sea.deck.riders").is_empty() { continue; }
+            let pos = u.get("pos");
+            if !pos.get("x").is_num() || !pos.get("y").is_num() { continue; }
+            let p = pos.get("p").num_or(u.get("at").num());
+            let (x, y) = (pos.get("x").num(), pos.get("y").num());
+            let last = old.get("ships").items().iter().find(|r| r.at(0).num() == id);
+            let since = last.filter(|r| r.at(2).num() == p && (r.at(3).num()-x).hypot(r.at(4).num()-y) < 0.25)
+                .map_or(now, |r| r.at(1).num_or(now).min(now));
+            if now - since >= FREIGHT_IDLE_SECONDS && retired < 2 {
+                if !orders.get("disband").items().iter().any(|v| v.num() == id) { orders.entry("disband").push(id); }
+                retired += 1;
+                cooldown = now + FREIGHT_IDLE_SECONDS;
+            } else {
+                // Keep the original comparison point until enough movement resets the timer.
+                let (x, y) = last.filter(|_| since < now).map_or((x, y), |r| (r.at(3).num(), r.at(4).num()));
+                records.push(arr![id, since, p, (x*100.0).round()/100.0, (y*100.0).round()/100.0]);
+            }
+        }
+        if !records.is_empty() || old.truthy() || retired > 0 {
+            ram(orders, mem::put(FREIGHT_PAGE, &obj! {"t"=>now,"until"=>cooldown,"ships"=>records}, "local", None, 4).unwrap_or_default());
+        }
+        if retired > 0 {
+            let kept = orders.get("spawn").items().iter().filter(|s| s.get("type").str() != "freighter").cloned().collect::<Vec<_>>();
+            orders.set("spawn", kept);
         }
     }
     /// Return recovered cargo to the home dock, or approach a wreck visible to this faction.
@@ -305,7 +399,7 @@ use super::{air, theme};
         // Recovery must be able to return its policy even when the planner used nearly all its call.
         if cycles_left()<3500.0{return out;}
         let income=me.path("rts.cpu.income").num_or(20000.0);
-        for (ty,cycles) in [("miner",4500),("hauler",10000),("freighter",5500)]{out.entry("compute").entry("types").set(ty,obj!{"cycles"=>cycles,"every"=>2});}
+        for (ty,cycles) in [("miner",4500),("hauler",10000),("freighter",12000)]{out.entry("compute").entry("types").set(ty,obj!{"cycles"=>cycles,"every"=>2});}
         // Route planning and RAM reads need a fixed minimum even between irregular deliveries.
         let cpu=out.entry("compute").entry("cpu");
         for (lane,floor) in [("think",14000.0),("control",22000.0),("drive",8000.0)]{
@@ -321,12 +415,25 @@ use super::{air, theme};
         let have=me.path("units.byType");
         if stock>16000.0 && depots.iter().filter(|d|d.get("dock").truthy()).count()>=2 && !me.path("techs.seaTraversal").truthy(){out.set("research","seaTraversal");}
         if stock>16000.0 && me.path("units.queued").num_or(0.0)==0.0 && me.get("bank").num_or(0.0)>me.path("costs.unit").num_or(1e9)+8.0 && me.path("rts.cpu.bank").num_or(0.0)>fabrication(me,1.0)+income*2.0 {
-            let docks=depots.iter().filter(|d|d.get("dock").truthy()).count();
-            let outbound=depots.iter().filter(|d|d.get("dock").truthy()&&d.get("p").num()!=me.get("capital").num()).map(|d|d.get("cycles").num_or(0.0)).sum::<f64>();
-            let ty=if have.get("hauler").num_or(0.0)<(me.get("provinces").num_or(1.0)/2.0).clamp(2.0,6.0) {"hauler"}else if docks>=2 && outbound>120000.0*price_level(me) && me.path("techs.seaTraversal").truthy() && !me.path("rts.sea.ports").is_empty() && have.get("freighter").num_or(0.0)<2.0 {"freighter"}else{return out;};
+            let mut port = None;
+            let ty = if have.get("hauler").num_or(0.0) < (me.get("provinces").num_or(1.0)/2.0).clamp(2.0,6.0) { "hauler" }
+            else if me.path("techs.seaTraversal").truthy() && have.get("freighter").num_or(0.0) < 2.0
+                && world.get("seconds").num_or(0.0) >= mem::get(me.get("ramCapital"), FREIGHT_PAGE).get("until").num_or(0.0) {
+                for p in me.path("rts.sea.ports").iter() {
+                    if cycles_left() < 5000.0 { break; }
+                    let at = p.num();
+                    let Some(d) = world.path("logistics.docks").iter().find(|d| d.get("p").num() == at) else { continue };
+                    let Some(home) = freight_home(world, me, d.get("water").num()) else { continue };
+                    if freight_pickup(world, me, home, &[]).is_some_and(|(_, n)| n > 120000.0 * price_level(me)) { port = Some(home); break; }
+                }
+                if port.is_none() { return out; }
+                "freighter"
+            } else { return out; };
             let mods=if ty=="freighter"{vec!["hull"]}else{vec![]};
             let body=obj!{"hp"=>2,"speed"=>2,"strength"=>0,"carry"=>5,"vision"=>1};
-            out.set("spawn",vec![obj!{"type"=>ty,"build"=>body,"modules"=>mods}]);
+            let mut recruit = obj! {"type"=>ty,"build"=>body,"modules"=>mods};
+            if let Some(p) = port { recruit.set("port", p); }
+            out.set("spawn",vec![recruit]);
             out.entry("compute").entry("cpu").entry("limits").set("fabrication",fabrication(me,1.0)+500.0);
         }
         out
@@ -1128,6 +1235,7 @@ use super::{air, theme};
     /// keep the house's strategy. No engine allocation, exemption or rule is involved.
     pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
         let mut orders = govern_units(world, me, share, strategy);
+        maintain_freighters(&mut orders, world, me);
         super::structures::apply(&mut orders, world, me);
         orders
     }
