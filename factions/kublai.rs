@@ -1663,8 +1663,10 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         let hurt = n(u.get("hp")) < n(u.get("hpMax")) * 0.62;
         let pressured = melee.is_some() || hurt;
         let weapon = if best.is_some() && lane("weapon", 620.0) { 500.0 } else { 0.0 };
+        let drive = if flier { 120.0 } else if pressured { 900.0 } else { 420.0 };
+        let drive_cost = if flier { 50.0 } else { common::drive_tick(u, drive) };
         let power = obj! {
-            "drive" => if lane("drive", common::drive_tick(u, if pressured { 900.0 } else { 420.0 })) { if pressured { 900.0 } else { 420.0 } } else { 0.0 },
+            "drive" => if lane("drive", drive_cost) { drive } else { 0.0 },
             "armor" => if pressured && lane("armor", 170.0) { 850.0 } else { 0.0 },
             "weapon" => weapon,
         };

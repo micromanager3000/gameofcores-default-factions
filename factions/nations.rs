@@ -24,10 +24,10 @@ fn miner_body() -> Value {
     obj! { "hp" => 2, "speed" => 2, "strength" => 0, "carry" => 5, "vision" => 1 }
 }
 fn runner_body() -> Value {
-    obj! { "hp" => 2, "speed" => 3, "strength" => 2, "carry" => 0, "vision" => 3 }
+    obj! { "hp" => 3, "speed" => 2, "strength" => 2, "carry" => 0, "vision" => 3 }
 }
 fn shade_body() -> Value {
-    obj! { "hp" => 1, "speed" => 3, "strength" => 2, "carry" => 0, "vision" => 2, "range" => 1 }
+    obj! { "hp" => 2, "speed" => 2, "strength" => 2, "carry" => 0, "vision" => 2, "range" => 1 }
 }
 fn sentry_body() -> Value {
     obj! { "hp" => 3, "speed" => 1, "strength" => 2, "carry" => 0, "vision" => 4 }
@@ -51,10 +51,10 @@ fn kite_shot_body() -> Value {
 }
 
 // What the faction wants, in order: researched when nobody sells it, bought when somebody does. Compute boost comes
-// early, since cycles are what the market runs on; faith is left to the priests.
+// after defensive capabilities; faith is left to the priests.
 const TECHS: [&str; 19] = [
-    "extraction", "dash", "ranged", "cloak", "scan", "influence", "computeBoost", "pierce", "artillery", "armor", "antiAir", "repair",
-    "capture", "seaTraversal", "mountainTraversal", "flight", "airWeapons", "stealth", "gate",
+    "extraction", "ranged", "capture", "dash", "cloak", "armor", "antiAir", "scan", "influence", "repair", "pierce", "artillery",
+    "computeBoost", "seaTraversal", "mountainTraversal", "flight", "airWeapons", "stealth", "gate",
 ];
 
 // ---- JavaScript's arithmetic, where this program follows it ----
@@ -263,10 +263,10 @@ fn seen_threats(world: View, me: View) -> Threats {
     t
 }
 
-// Room for more units: up to the allowance, then past it while their upkeep stays under 40% of income (common::room).
+// Keep a rebuilding force of twelve; larger armies must fit half of income.
 fn army_room(me: View) -> f64 {
     let u = me.get("units");
-    max(u.get("cap").num() - u.get("total").num() - u.get("queued").num() - u.get("hiredOut").or(0.0), common::room(me, 0.4))
+    max(12.0 - u.get("total").num() - u.get("queued").num() - u.get("hiredOut").or(0.0), common::room(me, 0.5))
 }
 
 thread_local! {
@@ -582,7 +582,11 @@ fn strategy(world: View, me: View) -> Value {
     let shade_ready = has("dash") && has("cloak") && has("ranged");
     let specialist_bank = tactical_bank > 2450.0 * common::price_level(me);
     let total = me.get("units").get("total").num();
-    if miners < room {
+    let guards = total - miners;
+    let guard_floor = if threatened { max(4.0, plan.get("threat").num_or(0.0) * 1.5) } else { 2.0 };
+    if miners >= 2.0 && guards < guard_floor {
+        add_spawn(&mut orders, me, "runner", runner_body(), &[]);
+    } else if miners < room {
         add_spawn(&mut orders, me, "miner", miner_body(), &[]);
     } else if !shade_ready {
         add_spawn(&mut orders, me, "runner", runner_body(), &[]);
@@ -1616,7 +1620,7 @@ fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
             if cloak {
                 o.set("cloak", true);
             }
-            o.set("power", obj! { "drive" => 420, "armor" => 0, "weapon" => 260 });
+            o.set("power", obj! { "drive" => 120, "armor" => 0, "weapon" => 260 });
             order(o);
         } else if cloak {
             order(obj! { "id" => u.get("id"), "cloak" => true, "power" => obj! { "drive" => 0, "armor" => 0, "weapon" => 240 }, "alert" => 6 });
@@ -1754,7 +1758,7 @@ fn sentry(units: View, world: View, me: View) -> Value {
         // with no place to hold, the province it stands in
         let p = if at.is_undef() { None } else { Some(num(at)) };
         if let Some(mut o) = orders::hold(u, Point::new(0.0, 0.0), world, me, p) {
-            o.set("power", obj! { "drive" => 0, "armor" => 520, "weapon" => 180 });
+            o.set("power", obj! { "drive" => 0, "armor" => 0, "weapon" => 180 });
             o.set("alert", 7);
             order(o);
         }
@@ -1790,7 +1794,7 @@ fn lancer(units: View, world: View, me: View) -> Value {
 
 fn dodge(u: View) -> Option<Value> {
     let hs = u.get("rts").get("hazards");
-    let pos = u.get("pos");
+    let pos = u.get("local");
     if !hs.truthy() || hs.is_empty() || !pos.truthy() {
         return None;
     }
@@ -1853,6 +1857,7 @@ fn guard_facing(ns: View) -> Value {
 
 /// What the units in contact may spend this call, lane by lane, and the world's price level.
 struct Pool {
+    bank: f64,
     drive: f64,
     armor: f64,
     cloak: f64,
@@ -1872,12 +1877,33 @@ impl Pool {
             "weapon" => &mut self.weapon,
             _ => &mut self.abilities,
         };
-        if *left < cost {
+        if *left < cost || self.bank < cost {
             return false;
         }
         *left -= cost;
+        self.bank -= cost;
         true
     }
+}
+
+// Pick a walkable local direction that keeps progress toward the requested step.
+fn terrain_step(u: View, x: f64, y: f64) -> Option<Value> {
+    let length = x.hypot(y);
+    if length < 0.01 { return None; }
+    let terrain = u.get("terrain");
+    if terrain.is_empty() { return Some(obj! { "x" => x / length, "y" => y / length }); }
+    let (mut best, mut score) = (None, -1e9);
+    for t in terrain.iter().take(8) {
+        let progress = (t.get("x").num() * x + t.get("y").num() * y) / length;
+        let walk = t.get("walk").or(0.0);
+        if walk <= 0.0 || progress < 0.1 { continue; }
+        let value = progress * walk + (1.0 - t.get("cover").or(1.0)) * 0.2;
+        if value > score {
+            score = value;
+            best = Some(obj! { "x" => t.get("x"), "y" => t.get("y") });
+        }
+    }
+    best
 }
 
 fn reflex(units: View, near: View) -> Value {
@@ -1889,6 +1915,7 @@ fn reflex(units: View, near: View) -> Value {
     let b = if n > 0 { units.at(0).get("rts").get("budget") } else { View::undefined() };
     let level = if n > 0 { common::price_level(units.at(0)) } else { 1.0 };
     let mut pool = Pool {
+        bank: max(0.0, units.at(0).get("rts").get("bank").or(0.0) - cycles_left() - 700.0),
         drive: max(0.0, b.get("drive").or(0.0) - 120.0 * level),
         armor: max(0.0, b.get("armor").or(0.0) - 80.0 * level),
         cloak: max(0.0, b.get("cloak").or(0.0) - 70.0 * level),
@@ -1898,17 +1925,19 @@ fn reflex(units: View, near: View) -> Value {
     };
     let count = min(n as f64, max(1.0, (b.get("reflex").or(0.0) / 850.0).floor())) as usize;
     let start = if n > 0 { ((units.at(0).get("rts").get("bank").or(0.0) / 175.0).floor() % n as f64) as usize } else { 0 };
+    let mut turn_cost = 1800.0_f64;
     for turn in 0..count {
-        if cycles_left() < 1800.0 {
+        if cycles_left() < turn_cost {
             break;
         }
+        let began = cycles_left();
         let u = units.at((start + turn) % n);
         let ns = near.key(u.get("id").num());
         let r = u.get("rts");
         let modules = r.get("modules");
         let (mut best, mut melee): (Option<View>, Option<View>) = (None, None);
         let (mut best_score, mut rivals) = (1e9, 0);
-        for t in ns.iter().take(4) {
+        for t in ns.iter().take(12) {
             if !t.get("rival").truthy() {
                 continue;
             }
@@ -1936,10 +1965,12 @@ fn reflex(units: View, near: View) -> Value {
             (m.get("d").num() > 0.0 && (u.get("range").num() > 0.0 || ty == "shade" || hurt))
                 .then(|| obj! { "x" => -m.get("dx").num(), "y" => -m.get("dy").num() })
         });
-        let driving = flee.is_some() && pool.take("drive", 150.0);
+        let flee = flee.and_then(|f| terrain_step(u, f.get("x").num(), f.get("y").num()));
+        let drive_scale = r.get("driveScale").or(1.0);
+        let driving = flee.is_some() && pool.take("drive", 164.0 * drive_scale);
         let armored = modules.has_str("armor") && (melee.is_some() || hurt) && pool.take("armor", 110.0);
         let penetration = pierce_mode(u, best);
-        let armed = best.is_some() && pool.take("weapon", (540.0 * (1.0 + 1.4 * penetration * penetration)).ceil());
+        let armed = best.is_some() && r.get("readyIn").or(0.0) <= 0.0 && (r.get("windupTarget").is_null() || r.get("windupTarget").is_undef()) && pool.take("weapon", (540.0 * (1.0 + 1.4 * penetration * penetration)).ceil());
         let cloaking = ty == "shade" && best.is_none() && flee.is_none() && pool.take("cloak", 90.0);
         let mut o = obj! {
             "id" => u.get("id"),
@@ -1950,10 +1981,14 @@ fn reflex(units: View, near: View) -> Value {
         if let (true, Some(t)) = (armed, best) {
             o.set("hit", t.get("id"));
             // Circle a guarded line instead of trading into its strongest face. Unit parity splits the flanks.
-            if flee.is_none() && t.get("rts").get("guard").truthy() && pool.take("drive", 100.0) {
+            if flee.is_none() && t.get("rts").get("guard").truthy() {
                 let side = if u.get("id").num() % 2.0 != 0.0 { 1.0 } else { -1.0 };
-                o.set("step", obj! { "x" => -t.get("dy").num() * side, "y" => t.get("dx").num() * side });
-                o.entry("power").set("drive", 440);
+                if let Some(direction) = terrain_step(u, -t.get("dy").num() * side, t.get("dx").num() * side) {
+                    if pool.take("drive", 100.0 * drive_scale) {
+                        o.set("step", direction);
+                        o.entry("power").set("drive", 440);
+                    }
+                }
             }
         }
         if driving {
@@ -1966,16 +2001,19 @@ fn reflex(units: View, near: View) -> Value {
         let ability_in = r.get("abilityIn");
         let ready = |a: &str| !ability_in.truthy() || !ability_in.get(a).truthy() || ability_in.get(a).num() <= 0.0;
         let artillery = modules.has_str("artillery");
-        if artillery && best.is_some() && !r.get("deployed").truthy() && !r.get("deploying").truthy() {
+        if driving && artillery { o.set("deploy", false); }
+        if artillery && !driving && best.is_some() && !r.get("deployed").truthy() && !r.get("deploying").truthy() {
             o.set("deploy", true);
         }
-        let shell = match best {
-            Some(t) if artillery && r.get("deployed").truthy() && armed && t.get("d").num() > 1.4 && ready("shell") => pool.take("abilities", 1000.0).then_some(t),
-            _ => None,
-        };
+        let shell = best.filter(|t| artillery && !driving && r.get("deployed").truthy()
+            && t.get("d").num() > 1.8 && t.get("d").num() <= 14.0 && ready("shell")
+            && !ns.iter().any(|f| !f.get("rival").truthy()
+                && (f.get("dx").num()-t.get("dx").num()).hypot(f.get("dy").num()-t.get("dy").num()) < 1.8))
+            .filter(|t| pool.take("abilities", (250.0 * (1.0 + max(0.0, t.get("d").num()-5.0)*0.12)).ceil()));
         if let Some(t) = shell {
-            let pos = u.get("pos");
+            let pos = u.get("local");
             o.set("ability", "shell");
+            o.set("radius", 1);
             o.set("aim", obj! { "x" => pos.get("x").num() + t.get("dx").num(), "y" => pos.get("y").num() + t.get("dy").num() });
         } else if driving && modules.has_str("dash") && ready("dash") && pool.take("abilities", 900.0) {
             o.set("ability", "dash");
@@ -1985,12 +2023,11 @@ fn reflex(units: View, near: View) -> Value {
         if !o.get("ability").truthy() && rivals >= 2 && modules.has_str("scan") && ready("scan") && pool.take("abilities", 700.0) {
             o.set("ability", "scan");
         }
-        if cloaking {
-            o.set("cloak", true);
-        }
+        if modules.has_str("cloak") { o.set("cloak", cloaking); }
         if armed || driving || armored || o.get("cloak").truthy() || o.get("ability").truthy() {
             order(o);
         }
+        turn_cost = turn_cost.max((began - cycles_left()) * 1.5);
     }
     Value::arr()
 }

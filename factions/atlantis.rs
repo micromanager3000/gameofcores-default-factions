@@ -20,7 +20,7 @@ program!(think, miner, line, bulwark, artillery, medic, interceptor, piercer, sc
 
 // The bodies: points in hp, speed, strength, carry and vision, and for some in range.
 fn miner_body() -> Value {
-    obj! { "hp" => 2, "speed" => 3, "strength" => 0, "carry" => 5, "vision" => 0 }
+    obj! { "hp" => 3, "speed" => 2, "strength" => 0, "carry" => 5, "vision" => 0 }
 }
 fn line_body() -> Value {
     obj! { "hp" => 4, "speed" => 2, "strength" => 3, "carry" => 0, "vision" => 1 }
@@ -29,13 +29,13 @@ fn gun_body() -> Value {
     obj! { "hp" => 2, "speed" => 1, "strength" => 2, "carry" => 0, "vision" => 1, "range" => 2 }
 }
 fn medic_body() -> Value {
-    obj! { "hp" => 3, "speed" => 3, "strength" => 0, "carry" => 0, "vision" => 2 }
+    obj! { "hp" => 5, "speed" => 2, "strength" => 0, "carry" => 0, "vision" => 3 }
 }
 fn interceptor_body() -> Value {
-    obj! { "hp" => 2, "speed" => 3, "strength" => 2, "carry" => 0, "vision" => 1, "range" => 1 }
+    obj! { "hp" => 3, "speed" => 2, "strength" => 2, "carry" => 0, "vision" => 1, "range" => 1 }
 }
 fn scout_body() -> Value {
-    obj! { "hp" => 2, "speed" => 4, "strength" => 0, "carry" => 0, "vision" => 4 }
+    obj! { "hp" => 2, "speed" => 3, "strength" => 0, "carry" => 0, "vision" => 5 }
 }
 
 // The research order (atlantis_ext::choose_research): the seven first-tier techs, 12 small puzzles each, Extraction
@@ -194,11 +194,12 @@ fn choose_spawn(me: View, mix: &[(&'static str, f64)], room: f64) -> Option<&'st
     let total = units.get("total").num() + units.get("queued").num();
     let mut best = None;
     let mut gap = -999.0;
+    let weight: f64 = mix.iter().map(|(_, share)| share).sum();
     for &(t, share) in mix {
         if t == "miner" && counts.get(t).or(0.0) >= room {
             continue;
         }
-        let g = share * (total + 1.0) - counts.get(t).or(0.0);
+        let g = share / weight * (total + 1.0) - counts.get(t).or(0.0);
         if g > gap {
             gap = g;
             best = Some(t);
@@ -842,7 +843,7 @@ fn tactical_order(u: View, world: View, me: View, role: Role) -> Option<Value> {
         || (!cpu.get("available").is_undef() && cpu.get("available").num() < income * 0.35);
     let pressed = or(p.get("threat"), 0.0) > 0.0;
     let power = match role {
-        Role::Wall => obj! { "drive" => if pressed { 360 } else { 180 }, "armor" => if tight { 480 } else if pressed { 850 } else { 620 }, "weapon" => 220 },
+        Role::Wall => obj! { "drive" => if pressed { 360 } else { 180 }, "armor" => if !pressed { 0 } else if tight { 480 } else { 850 }, "weapon" => 220 },
         Role::Gun => obj! { "drive" => if tight { 100 } else { 180 }, "armor" => 160, "weapon" => if tight { 340 } else { 650 } },
         Role::Medic => obj! { "drive" => if tight { 260 } else if pressed { 620 } else { 420 }, "armor" => 0, "weapon" => 0 },
         Role::Fast => obj! { "drive" => if tight { 400 } else { 720 }, "armor" => 0, "weapon" => if tight { 180 } else { 360 } },
@@ -1039,7 +1040,7 @@ fn reflex(units: View, near: View) -> Value {
         let ns = near.key(u.get("id").num());
         let r = u.get("rts");
         let modules = r.get("modules");
-        let (mut threat, mut best): (Option<View>, Option<View>) = (None, None);
+        let (mut threat, mut best, mut shell_target): (Option<View>, Option<View>, Option<View>) = (None, None, None);
         let (mut score, mut ground) = (99.0, 0.0);
         for t in ns.iter() {
             if !t.get("rival").truthy() {
@@ -1050,6 +1051,9 @@ fn reflex(units: View, near: View) -> Value {
                 ground += 1.0;
             }
             let d = t.get("d").num();
+            if !air && d <= 14.0 && shell_target.is_none_or(|old| d < old.get("d").num()) {
+                shell_target = Some(t);
+            }
             if threat.is_none() && t.get("range").is_num() && t.get("range").num() == 0.0 && d <= 2.2 {
                 threat = Some(t);
             }
@@ -1062,6 +1066,7 @@ fn reflex(units: View, near: View) -> Value {
                 best = Some(t);
             }
         }
+        best = common::windup_target(u, ns, best);
         let low = u.get("hp").num() < u.get("hpMax").num() * 0.40;
         // A unit sees a shared-bank snapshot. Spend a local estimate conservatively
         // and leave 700 CPU headroom for this code and other combat events.
@@ -1081,6 +1086,7 @@ fn reflex(units: View, near: View) -> Value {
             "medic" => (420.0, 0.0, 0.0),
             _ => (500.0, 0.0, 260.0),
         };
+        if !modules.has_str("armor") || ground == 0.0 { armor = 0.0; }
         let armor_cost = level * armor * 0.2;
         if armor_cost > left || armor_cost > armor_left {
             armor = 0.0;
@@ -1093,7 +1099,7 @@ fn reflex(units: View, near: View) -> Value {
         left -= heal_cost;
         ability_left -= heal_cost;
         // Dodge a shell before it lands. Hazards are own-observation data only.
-        let pos = u.get("pos");
+        let pos = if u.get("local").truthy() { u.get("local") } else { u.get("pos") };
         let mut hazard: Option<(f64, f64)> = None;
         for h in r.get("hazards").iter() {
             let x = if pos.truthy() { pos.get("x").num() - h.get("x").num() } else { 99.0 };
@@ -1109,7 +1115,7 @@ fn reflex(units: View, near: View) -> Value {
         if let Some((x, y)) = hazard {
             o.set("step", obj! { "x" => if x != 0.0 && !x.is_nan() { x } else { 1.0 }, "y" => if y != 0.0 && !y.is_nan() { y } else { 1.0 } });
             o.entry("power").set("drive", 900);
-        } else if let (true, Some(t)) = (ty == "artillery" && ground >= 2.0 && pos.truthy() && r.get("deployed").truthy() && (!ability_in.truthy() || ability_in.get("shell").or(0.0) <= 0.0), best) {
+        } else if let (true, Some(t)) = (ty == "artillery" && ground >= 2.0 && pos.truthy() && r.get("deployed").truthy() && (!ability_in.truthy() || ability_in.get("shell").or(0.0) <= 0.0), shell_target) {
             let (bx, by) = (t.get("dx").num(), t.get("dy").num());
             let d = bx.hypot(by);
             let mut radius = 2.0;
@@ -1129,7 +1135,7 @@ fn reflex(units: View, near: View) -> Value {
                 radius = if clustered >= 5 { 4.0 } else { 3.0 };
             }
             let shell_cost = level * 1000.0 * (radius / 2.0_f64).powi(2) * (1.0 + max(d - 5.0, 0.0) * 0.12);
-            if !friendly && d <= 14.0 && shell_cost <= left && shell_cost <= ability_left {
+            if !friendly && d > radius + 0.7 && d <= 14.0 && shell_cost <= left && shell_cost <= ability_left {
                 o.set("ability", "shell");
                 o.set("aim", obj! { "x" => pos.get("x").num() + bx, "y" => pos.get("y").num() + by });
                 o.set("radius", radius);
@@ -1149,7 +1155,8 @@ fn reflex(units: View, near: View) -> Value {
             && threat.is_some()
             && ability_left >= 900.0 * level
             && left >= 900.0 * level
-            && (!r.get("dashIn").truthy() || r.get("dashIn").num() <= 0.0)
+            && modules.has_str("dash")
+            && ability_in.get("dash").or(0.0) <= 0.0
         {
             if let Some(t) = threat {
                 o.set("step", away(t));
@@ -1170,10 +1177,31 @@ fn reflex(units: View, near: View) -> Value {
         } else if let (Some(t), "artillery") = (threat, ty) {
             o.set("step", away(t));
         }
-        if !o.get("step").is_undef() {
-            let drive_cost = level * (60.0 + num(o.get("power").get("drive"))) * 0.2;
+        let ability_before = o.get("ability").clone();
+        if !matches!(ty, "miner" | "medic" | "scout") {
+            common::close_melee(u, ns, &mut o);
+            common::space_ranged(u, ns, &mut o);
+        }
+        if o.get("ability").str() == "dash" && ability_before.str() != "dash" {
+            if ability_before.truthy() || 900.0 * level > min(left, ability_left) {
+                o.set("ability", ability_before);
+            } else {
+                left -= 900.0 * level;
+                ability_left -= 900.0 * level;
+            }
+        }
+        common::steer_ground(u, ns, &mut o);
+        if o.get("step").truthy() {
+            let drive_cost = level * common::drive_tick(u, num(o.get("power").get("drive")));
             if drive_cost > left || drive_cost > drive_left {
                 o.entry("power").set("drive", 0);
+                if level * common::drive_tick(u, 0.0) > min(left, drive_left) {
+                    o.set("step", Value::Null);
+                    o.set("hold", true);
+                } else {
+                    left -= level * common::drive_tick(u, 0.0);
+                    drive_left -= level * common::drive_tick(u, 0.0);
+                }
             } else {
                 left -= drive_cost;
                 drive_left -= drive_cost;
@@ -1188,11 +1216,11 @@ fn reflex(units: View, near: View) -> Value {
                 left -= shot_cost;
                 weapon_left -= shot_cost;
             }
-            if o.get("step").is_undef() {
+            if !o.get("step").truthy() {
                 o.set("hold", true);
             }
         }
-        if best.is_some() || !o.get("step").is_undef() || o.get("ability").truthy() || o.get("deploy").truthy() {
+        if best.is_some() || o.get("step").truthy() || o.get("ability").truthy() || o.get("deploy").truthy() {
             let before = cycles_left();
             order(o.clone());
             returning += before - cycles_left();

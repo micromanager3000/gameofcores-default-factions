@@ -1050,6 +1050,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
                 best = Some(e);
             }
         }
+        best = common::windup_target(u, ns, best);
         // Repair costs a meaningful 700 cycles (at price level 1) and restores only 0.7 HP, so spend it after a real
         // exchange, early enough that the line can disengage safely. Every price here is the rules' times the level.
         let budget = r.get("budget");
@@ -1061,11 +1062,13 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         let weapon = if best.is_some() && lane("weapon", 620.0) { 500.0 } else { 0.0 };
         // a vimana needs no armor (nothing on the ground hits it but anti-air), and little drive over its target:
         // its flight is already the dearest thing it does
+        let drive = if pressured { 900.0 } else { 420.0 };
+        let drive_cost = common::drive_tick(u, drive);
         let power = if flier {
             obj! { "drive" => if lane("drive", 50.0) { 120.0 } else { 0.0 }, "armor" => 0.0, "weapon" => if best.is_some() && lane("weapon", 320.0) { 200.0 } else { 0.0 } }
         } else {
             obj! {
-                "drive" => if lane("drive", if pressured { 180.0 } else { 84.0 }) { if pressured { 900.0 } else { 420.0 } } else { 0.0 },
+                "drive" => if lane("drive", drive_cost) { drive } else { 0.0 },
                 "armor" => if pressured && lane("armor", 170.0) { 850.0 } else { 0.0 },
                 "weapon" => weapon,
             }
@@ -1078,7 +1081,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         }
 
         // Dodge telegraphed artillery before deciding to trade shots.
-        let pos = u.get("pos");
+        let pos = if u.get("local").truthy() { u.get("local") } else { u.get("pos") };
         let (px, py) = (n(pos.get("x")), n(pos.get("y")));
         let hazard = r.get("hazards").iter().find(|h| n(h.get("impactIn")) < 1.3 && (px - n(h.get("x"))).hypot(py - n(h.get("y"))) < n(h.get("radius")) + 0.8);
         if let Some(h) = hazard {
@@ -1102,6 +1105,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         if let Some(b) = best {
             out.set("hit", b.get("id")); // movement and fire intentionally share one order
         }
+        common::space_ranged(u, ns, &mut out);
 
         let cd = r.get("abilityIn");
         let abilities = budget.get("abilities");
@@ -1124,6 +1128,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
                 out.set("aim", obj! { "x" => px + bx, "y" => py + by });
             }
         }
+        common::steer_ground(u, ns, &mut out);
         if best.is_some() || out.get("step").truthy() || out.get("ability").truthy() {
             order(out);
         }

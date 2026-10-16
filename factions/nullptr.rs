@@ -20,8 +20,8 @@ program!(think, miner, screen, skirm, runner, lancer, repairer, sentry, gun, win
 type Build = &'static [(&'static str, f64)];
 const MINER: Build = &[("hp", 2.0), ("speed", 2.0), ("strength", 1.0), ("carry", 4.0), ("vision", 1.0)];
 const SCREEN: Build = &[("hp", 4.0), ("speed", 2.0), ("strength", 3.0), ("carry", 0.0), ("vision", 1.0)];
-const RUNNER: Build = &[("hp", 2.0), ("speed", 4.0), ("strength", 2.0), ("carry", 0.0), ("vision", 2.0)];
-const SKIRM: Build = &[("hp", 2.0), ("speed", 3.0), ("strength", 2.0), ("carry", 0.0), ("vision", 1.0), ("range", 1.0)];
+const RUNNER: Build = &[("hp", 3.0), ("speed", 3.0), ("strength", 2.0), ("carry", 0.0), ("vision", 2.0)];
+const SKIRM: Build = &[("hp", 3.0), ("speed", 2.0), ("strength", 2.0), ("carry", 0.0), ("vision", 1.0), ("range", 1.0)];
 // The watchpoint: eyes first. It sees a stealth-1 spy 5 cells out (6 with Scan), where a standard body sees it at 2.
 const WATCH: Build = &[("hp", 2.0), ("speed", 1.0), ("strength", 0.0), ("carry", 0.0), ("vision", 5.0), ("range", 1.0)];
 const WATCH_SCAN: Build = &[("hp", 1.0), ("speed", 1.0), ("strength", 0.0), ("carry", 0.0), ("vision", 6.0), ("range", 1.0)];
@@ -336,16 +336,9 @@ fn strategy(world: View, me: View) -> Value {
     // ◆ the spies hold: 25 a second for each one at work this second
     let held = 25.0 * (spies.stealing.len() + spies.sabotaging) as f64;
     let cpu = rts_cpu(me);
-    // cpu && cpu.available && cpu.available.fabrication, less about what this think costs (the last one's): fabrication
-    // is charged right after think
-    let available = if cpu.truthy() { cpu.get("available") } else { cpu };
-    let fab = if available.truthy() { available.get("fabrication") } else { available };
-    let fabrication = if !rts.truthy() {
-        Value::Num(1_000_000_000.0)
-    } else if fab.is_undef() {
-        rts.get("bank").value()
-    } else {
-        Value::Num(n(fab) - me.path("compute.used.think").or(0.0))
+    // Think spends the shared bank. The fabrication lane keeps its own remaining allowance.
+    let fabrication = if !rts.truthy() { 1_000_000_000.0 } else {
+        common::fabrication_room(me).unwrap_or_else(|| rts.get("bank").num_or(0.0))
     };
     let mut orders = obj! {
         "policy" => obj! { "extraction" => if defend >= 0.0 { 0.38 } else { 0.5 }, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true },
@@ -980,7 +973,9 @@ fn reflex(units: View, near: View) -> Vec<Value> {
                 }
             }
             if let Some(m) = nearest.filter(|m| n(m.get("d")) <= 2.5 && !is_str(u.get("doing"), "steal") && !is_str(u.get("doing"), "sabotage")) {
-                order(obj! { "id" => u.get("id"), "step" => flee_step(m) });
+                let mut out = obj! { "id" => u.get("id"), "step" => flee_step(m) };
+                common::steer_ground(u, ns, &mut out);
+                order(out);
             }
             turn_cost = turn_cost.max(1.5 * (began - cycles_left()));
             continue;
@@ -1021,7 +1016,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         // Repair costs a meaningful 700 cycles (at price level 1) and restores only 0.7 HP, so spend it after a real
         // exchange, early enough that the line can disengage safely. Every price here is the rules' times the level.
         let budget = r.get("budget");
-        let bank = if r.get("bank").is_undef() { 1_000_000_000.0 } else { n(r.get("bank")) };
+        let bank = if r.get("bank").is_undef() { 1_000_000_000.0 } else { (n(r.get("bank")) - 700.0).max(0.0) };
         let level = common::price_level(u);
         let lane = |name: &str, cost: f64| bank >= cost * level && (budget.get(name).is_undef() || n(budget.get(name)) >= cost * level);
         let hurt = n(u.get("hp")) < n(u.get("hpMax")) * 0.62;
@@ -1029,7 +1024,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         let weapon = if best.is_some() && lane("weapon", 620.0) { 500.0 } else { 0.0 };
         let power = obj! {
             "drive" => if lane("drive", common::drive_tick(u, if pressured { 900.0 } else { 420.0 })) { if pressured { 900.0 } else { 420.0 } } else { 0.0 },
-            "armor" => if pressured && lane("armor", 170.0) { 850.0 } else { 0.0 },
+            "armor" => if pressured && modules.has_str("armor") && lane("armor", 170.0) { 850.0 } else { 0.0 },
             "weapon" => weapon,
         };
         let penetration = pierce_mode(u, best);
@@ -1059,15 +1054,22 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         }
         common::close_melee(u,ns,&mut out);
         common::space_ranged(u,ns,&mut out);
+        let closing_dash = out.get("ability").str() == "dash";
+        out.set("ability", Value::Undef);
 
+        let pending_shot = if best.is_some() { level * ((120.0 + weapon) * (1.0 + 1.4 * penetration * penetration)).ceil() } else { 0.0 };
+        let drive_cost = if out.get("step").truthy() { level * common::drive_tick(u, vn(out.get("power").get("drive"))) } else { 0.0 };
+        let armor_cost = level * vn(out.get("power").get("armor")) * 0.2;
+        let support_bank = (bank - pending_shot - drive_cost - armor_cost).max(0.0);
+        let can_support = |cost: f64| lane("abilities", cost) && support_bank >= cost * level;
         let cd = r.get("abilityIn");
         let abilities = budget.get("abilities");
-        let mended = repair_friend(u, ns, &mut out, jmin(bank, if abilities.is_nullish() { bank } else { n(abilities) }), level);
+        let mended = repair_friend(u, ns, &mut out, jmin(support_bank, if abilities.is_nullish() { support_bank } else { n(abilities) }), level);
         if mended != 0.0 && !mended.is_nan() {
             // paid support or self-repair
-        } else if melee.is_some() && modules.has_str("dash") && r.path("abilityIn.dash").num_or(0.0) <= 0.0 && lane("abilities", 900.0) {
+        } else if (melee.is_some() || closing_dash) && modules.has_str("dash") && r.path("abilityIn.dash").num_or(0.0) <= 0.0 && out.get("step").truthy() && can_support(900.0) {
             out.set("ability", "dash");
-        } else if (air.is_some() || (is_str(ty, "sentry") && best.is_some())) && modules.has_str("scan") && cd.get("scan").or(0.0) <= 0.0 && lane("abilities", 700.0) {
+        } else if (air.is_some() || (is_str(ty, "sentry") && best.is_some())) && modules.has_str("scan") && cd.get("scan").or(0.0) <= 0.0 && can_support(700.0) {
             out.set("ability", "scan");
         } else if let Some(b) = best.filter(|_| is_str(ty, "gun") && r.get("deployed").truthy() && cd.get("shell").or(0.0) <= 0.0 && pos.truthy()) {
             let (bx, by) = (n(b.get("dx")), n(b.get("dy")));
@@ -1075,7 +1077,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
             let radius = if cluster >= 3 { 3.0 } else if cluster >= 2 { 2.0 } else { 1.0 };
             let shell_cost = 1000.0 * ((radius / 2.0) * (radius / 2.0)) * (1.0 + jmax(n(b.get("d")) - 5.0, 0.0) * 0.12);
             let safe = ns.iter().all(|e| e.get("rival").truthy() || (n(e.get("dx")) - bx).hypot(n(e.get("dy")) - by) > radius + 0.5);
-            if safe && lane("abilities", shell_cost) {
+            if safe && n(b.get("d")) > radius + 0.7 && can_support(shell_cost) {
                 out.set("ability", "shell");
                 out.set("radius", radius);
                 out.set("aim", obj! { "x" => px + bx, "y" => py + by });

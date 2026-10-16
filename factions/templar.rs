@@ -19,7 +19,7 @@ fn build(hp: f64, speed: f64, strength: f64, carry: f64, vision: f64, range: Opt
     b
 }
 fn miner_body() -> Value {
-    build(2.0, 3.0, 0.0, 5.0, 0.0, None)
+    build(2.0, 2.0, 0.0, 5.0, 1.0, None)
 }
 fn line_body() -> Value {
     build(4.0, 2.0, 3.0, 0.0, 1.0, None)
@@ -37,12 +37,10 @@ fn scout_body() -> Value {
     build(2.0, 4.0, 0.0, 0.0, 4.0, None)
 }
 
-// Capability IDs are independent: armor is not bundled with dash, and scan is
-// not bundled with artillery. The order is a holy order: it takes the cheap income tech, then influence and the faith
-// itself before anything else, founds its faith in the first minutes and arms itself behind it (armor, dash, ranged
-// fire and capture for the brethren). Flight comes before the gate and air weapons that need it.
+// The order researches extraction, then equips its first defensive line.
+// Influence and faith follow armor, ranged fire, capture and dash.
 const TECHS: [&str; 20] = [
-    "extraction", "influence", "faith", "armor", "dash", "ranged", "capture", "repair", "scan", "antiAir", "artillery", "pierce",
+    "extraction", "armor", "ranged", "capture", "dash", "influence", "faith", "repair", "scan", "antiAir", "artillery", "pierce",
     "computeBoost", "seaTraversal", "mountainTraversal", "flight", "gate", "cloak", "stealth", "airWeapons",
 ];
 const FAITHS: [&str; 8] = [
@@ -298,10 +296,10 @@ fn choose_spawn(me: View, mix: &[(&'static str, f64)], room: f64) -> Option<&'st
     best
 }
 
-// Room for more units: up to the allowance, then past it while their upkeep stays under 40% of income (common::room).
+// Keep a rebuilding force of twelve; larger armies must fit half of income.
 fn army_room(me: View) -> f64 {
     let u = me.get("units");
-    max(num(u.get("cap")) - num(u.get("total")) - num(u.get("queued")) - u.get("hiredOut").or(0.0), common::room(me, 0.4))
+    max(12.0 - num(u.get("total")) - num(u.get("queued")) - u.get("hiredOut").or(0.0), common::room(me, 0.5))
 }
 
 fn spawn_one(orders: &mut Value, me: View, kind: Option<&str>, body: Value, modules: Vec<&str>) {
@@ -638,7 +636,7 @@ fn strategy(world: View, me: View) -> Value {
     let pressure = (if invaded != 0.0 && !invaded.is_nan() { invaded } else { 0.0 }) + min(2.0, ground);
     let cpu = rts.get("cpu");
     let income = max(1.0, or2(cpu.get("income"), me.get("compute").get("cycles"), 14000.0));
-    let capacity = or(cpu.get("capacity"), income * 3.0);
+    let capacity = income * 3.0;
     let available = cpu.get("available");
     let strained = or(cpu.get("bank"), 0.0) < capacity * 0.55 || (!available.is_undef() && num(available) < income * 0.35);
     let mut mix: Vec<(&'static str, f64)> =
@@ -1089,12 +1087,11 @@ fn tactical_order(u: View, world: View, me: View, role: &str) -> Option<Value> {
     let mut o = carry(Some(o), u, &p, me)?;
     let cpu = me.get("rts").get("cpu");
     let income = max(1.0, or2(cpu.get("income"), me.get("compute").get("cycles"), 14000.0));
-    let capacity = cpu.get("capacity");
     let available = cpu.get("available");
-    let tight = (capacity.truthy() && num(cpu.get("bank")) < num(capacity) * 0.55) || (!available.is_undef() && num(available) < income * 0.35);
+    let tight = num(cpu.get("bank")) < income * 1.65 || (!available.is_undef() && num(available) < income * 0.35);
     let under_pressure = vor(p.get("threat"), 0.0) > 0.0;
     let (drive, armor, weapon) = match role {
-        "wall" => (if under_pressure { 360.0 } else { 180.0 }, if tight { 480.0 } else if under_pressure { 850.0 } else { 620.0 }, 220.0),
+        "wall" => (if under_pressure { 360.0 } else { 180.0 }, if under_pressure { if tight { 480.0 } else { 850.0 } } else { 0.0 }, 220.0),
         "gun" => (if tight { 100.0 } else { 180.0 }, 160.0, if tight { 340.0 } else { 650.0 }),
         "medic" => (if tight { 260.0 } else if under_pressure { 620.0 } else { 420.0 }, 0.0, 0.0),
         _ => (if tight { 400.0 } else { 720.0 }, 0.0, if tight { 180.0 } else { 360.0 }),
@@ -1289,8 +1286,34 @@ fn repair_friend(u: View, ns: View, o: &mut Value, bank: f64, level: f64) -> f64
     cost
 }
 
+// Pick a walkable local direction that keeps progress toward the requested step.
+fn terrain_step(u: View, x: f64, y: f64) -> Option<Value> {
+    let length = x.hypot(y);
+    if length < 0.01 { return None; }
+    let terrain = u.get("terrain");
+    if terrain.is_empty() { return Some(obj! { "x" => x / length, "y" => y / length }); }
+    let (mut best, mut score) = (None, -1e9);
+    for t in terrain.iter().take(8) {
+        let progress = (t.get("x").num() * x + t.get("y").num() * y) / length;
+        let walk = t.get("walk").or(0.0);
+        if walk <= 0.0 || progress < 0.1 { continue; }
+        let value = progress * walk + (1.0 - t.get("cover").or(1.0)) * 0.2;
+        if value > score {
+            score = value;
+            best = Some(obj! { "x" => t.get("x"), "y" => t.get("y") });
+        }
+    }
+    best
+}
+
 fn reflex(units: View, near: View) -> Vec<Value> {
     let mut out = Vec::new();
+    let first = units.at(0).get("rts");
+    let budget = first.get("budget");
+    let mut bank_left = max(0.0, or(first.get("bank"), 0.0) - cycles_left() - 700.0);
+    let available = |k: &str| min(bank_left, or(budget.get(k), bank_left));
+    let (mut weapon_left, mut armor_left, mut drive_left, mut ability_left) =
+        (available("weapon"), available("armor"), available("drive"), available("abilities"));
     let n = units.len() as f64;
     let start = if n > 0.0 { (or(units.at(0).get("rts").get("bank"), 0.0) / 211.0).floor() % n } else { 0.0 };
     // Each unit's turn needs half again what the dearest turn so far took (2,000 before the first), and returning the
@@ -1332,13 +1355,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         let low = num(u.get("hp")) < num(u.get("hpMax")) * 0.40;
         // A unit sees a shared-bank snapshot. Spend a local estimate conservatively
         // and leave 700 CPU headroom for this code and other combat events.
-        let mut left = max(0.0, or(r.get("bank"), 0.0) - 700.0);
-        let b = r.get("budget");
-        let lane = |k: &str, left: f64| if b.get(k).is_undef() { left } else { num(b.get(k)) };
-        let mut weapon_left = lane("weapon", left);
-        let mut armor_left = lane("armor", left);
-        let mut drive_left = lane("drive", left);
-        let mut ability_left = lane("abilities", left);
+        let mut left = bank_left;
         // every price below is the rules' price times the world's price level
         let level = common::price_level(u);
         let kind = u.get("type").str();
@@ -1363,7 +1380,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         left -= heal_cost;
         ability_left -= heal_cost;
         // Dodge a shell before it lands. Hazards are own-observation data only.
-        let pos = u.get("pos");
+        let pos = u.get("local");
         let mut hazard = None;
         for h in r.get("hazards").iter() {
             let x = if pos.truthy() { num(pos.get("x")) - num(h.get("x")) } else { 99.0 };
@@ -1387,20 +1404,13 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         {
             let (bx, by) = (num(best.get("dx")), num(best.get("dy")));
             let d = hypot(bx, by);
-            let (mut radius, mut clustered, mut friendly) = (2.0, 0.0, false);
-            for t in ns.iter() {
-                let to_aim = hypot(num(t.get("dx")) - bx, num(t.get("dy")) - by);
-                if t.get("rival").truthy() && to_aim <= 3.2 {
-                    clustered += 1.0;
-                }
-                if !t.get("rival").truthy() && to_aim <= 3.4 {
-                    friendly = true;
-                }
-            }
-            // Radius two is cheap. Increase it only for a safe, dense cluster.
-            if !friendly && clustered >= 3.0 {
-                radius = if clustered >= 5.0 { 4.0 } else { 3.0 };
-            }
+            let clustered = ns.iter().filter(|t| t.get("rival").truthy()
+                && hypot(num(t.get("dx")) - bx, num(t.get("dy")) - by) <= 2.0).count();
+            let mut radius = if clustered >= 3 { 2.0 } else { 1.0 };
+            let clear = |radius: f64| d > radius + 0.7 && !ns.iter().any(|t| !t.get("rival").truthy()
+                && hypot(num(t.get("dx")) - bx, num(t.get("dy")) - by) < radius + 0.8);
+            if !clear(radius) { radius = 1.0; }
+            let friendly = !clear(radius);
             let half = radius / 2.0;
             let shell_cost = level * 1000.0 * (half * half) * (1.0 + max(d - 5.0, 0.0) * 0.12);
             if !friendly && d <= 14.0 && shell_cost <= left && shell_cost <= ability_left {
@@ -1424,7 +1434,8 @@ fn reflex(units: View, near: View) -> Vec<Value> {
             && threat.is_some()
             && ability_left >= 900.0 * level
             && left >= 900.0 * level
-            && (!r.get("dashIn").truthy() || num(r.get("dashIn")) <= 0.0)
+            && mods.has_str("dash")
+            && or(ability_in.get("dash"), 0.0) <= 0.0
         {
             o.set("step", threat.map(away));
             step = true;
@@ -1446,7 +1457,17 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         }
         let _ = ability_left;
         if step {
-            let drive_cost = level * (60.0 + drive) * 0.2;
+            let desired = o.get("step");
+            if let Some(direction) = terrain_step(u, desired.get("x").num(), desired.get("y").num()) {
+                o.set("step", direction);
+                if r.get("deployed").truthy() || r.get("deploying").truthy() { o.set("deploy", false); }
+            } else {
+                o.set("step", Value::Null);
+                step = false;
+            }
+        }
+        if step {
+            let drive_cost = level * (60.0 + drive) * or(r.get("driveScale"), 1.0) * 0.2;
             if drive_cost > left || drive_cost > drive_left {
                 drive = 0.0;
             } else {
@@ -1459,7 +1480,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
             let pierce = pierce_mode(u, best);
             o.set("pierce", pierce);
             let shot_cost = (level * (120.0 + weapon) * (1.0 + 1.4 * pierce * pierce)).ceil();
-            if shot_cost <= left && shot_cost <= weapon_left {
+            if or(r.get("readyIn"), 0.0) <= 0.0 && (r.get("windupTarget").is_null() || r.get("windupTarget").is_undef()) && shot_cost <= left && shot_cost <= weapon_left {
                 o.set("hit", best.get("id"));
                 left -= shot_cost;
                 weapon_left -= shot_cost;
@@ -1468,7 +1489,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
                 o.set("hold", true);
             }
         }
-        let _ = (left, weapon_left);
+        bank_left = left;
         o.set("power", obj! { "drive" => drive, "armor" => armor, "weapon" => weapon });
         if best.is_some() || step || o.get("ability").truthy() || o.get("deploy").truthy() {
             let before = cycles_left();
