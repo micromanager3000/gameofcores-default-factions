@@ -704,7 +704,7 @@ fn war_order(u: View, world: View, me: View) -> Option<Value> {
 // serves every unit sent the same way. A call handed less than one order's worth (the control lane ran short after
 // think) keeps its standing orders.
 fn march(units: View, world: View, me: View) {
-    if me.get("rts").truthy() && cycles_left() < 2200.0 {
+    if me.get("rts").truthy() && cycles_left() < 4500.0 {
         return;
     }
     let first = cycles_left() >= 300.0 * world.get("provinces").len() as f64 + 3000.0;
@@ -722,7 +722,7 @@ fn march(units: View, world: View, me: View) {
     queue.extend(home);
     let rts = me.get("rts").truthy();
     for u in queue {
-        if rts && cycles_left() < 2200.0 {
+        if rts && cycles_left() < 4500.0 {
             break;
         }
         if let Some(o) = war_order(u, world, me) {
