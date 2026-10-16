@@ -265,3 +265,27 @@ fn passage_stays_useful_until_only_one_crown_rival_remains() {
     let args=views(&[deal,me,world]);
     assert!(common::fair(args[0],args[1],args[2],&[]),"a pact too large to claim cannot assume its current partners will win together");
 }
+
+#[test]
+fn building_management_runs_between_full_logistics_plans() {
+    let (mut world, mut me, _) = fixture();
+    me.entry("rts").entry("cpu").set("bank", 1000000);
+    me.entry("rts").set("structureCosts", obj! {"shell"=>900});
+    me.entry("rts").set("structures", arr![obj! {
+        "id"=>10,"owner"=>1,"p"=>0,"x"=>0,"y"=>0,"state"=>"ready",
+        "hp"=>100,"maxHp"=>100,"ports"=>arr!["support"]
+    }]);
+    for second in [60, 61, 65, 66] {
+        world.set("seconds", second);
+        let args=views(&[world.clone(),me.clone()]);
+        let mut planned=false;
+        let orders=common::govern(args[0],args[1],0.4,||{planned=true;obj!{}});
+        assert_eq!(planned,second%5==0);
+        assert_eq!(orders.get("structureJobs").len(),usize::from(second%5==1));
+    }
+    world.set("logistics",Value::Null);
+    world.set("seconds",60);
+    let args=views(&[world,me]);
+    let orders=common::govern(args[0],args[1],0.4,||obj!{});
+    assert_eq!(orders.get("structureJobs").len(),1,"older worlds keep their building interval");
+}
