@@ -70,10 +70,10 @@ fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: Vie
             priority(*a).total_cmp(&priority(*b))
         });
         let Some(target) = target else { continue; };
-        let enemy_near = world.get("units").iter().any(|foe| foe.get("owner").num_or(-1.0) != me.get("id").num()
+        let enemy_near = world.get("units").iter().any(|foe| cycles_left() < 3500.0 || (foe.get("owner").num_or(-1.0) != me.get("id").num()
             && realm::is_rival(world, me, foe.get("owner").num_or(-1.0))
             && same(foe.path("pos.p"), u.path("pos.p"))
-            && (foe.path("pos.x").num() - u.path("pos.x").num()).hypot(foe.path("pos.y").num() - u.path("pos.y").num()) < reach + 1.0);
+            && (foe.path("pos.x").num() - u.path("pos.x").num()).hypot(foe.path("pos.y").num() - u.path("pos.y").num()) < reach + 1.0));
         if enemy_near { continue; }
         attacks.push(obj! { "unit" => u.get("id"), "target" => target.get("id"), "until" => now + 5.0 });
     }
