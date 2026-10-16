@@ -671,6 +671,32 @@ use super::{air, theme};
         town_defenders(q) * SIEGE_ODDS > fighters(me)
     }
 
+    /// In logistics worlds, a visible capital can be attacked before the army meets the siege headcount.
+    /// Six armed ground units may clear workers when they outnumber visible armed defenders.
+    /// Capturing still uses the engine's ordinary siege odds after the defenders fall.
+    pub fn capital_assault(world: View, me: View, q: View) -> Option<f64> {
+        if !world.get("logistics").truthy() || !q.get("capital").truthy() || !q.get("visible").truthy()
+            || q.get("owner").num_or(-1.0) < 0.0
+            || cycles_left() < 6000.0 + world.get("units").len() as f64 * 60.0 { return None; }
+        let ours = me.get("id").num();
+        let at = q.get("id").num();
+        let mut army = 0.0_f64;
+        let mut defenders = 0.0_f64;
+        for u in world.get("units").iter() {
+            if cycles_left() < 3000.0 { return None; }
+            let build = u.get("build");
+            if u.get("hp").num_or(1.0) <= 0.0 || build.get("wings").truthy() || u.path("rts.sea.ship").truthy()
+                || (build.get("strength").num_or(0.0) <= 0.0 && build.get("range").num_or(0.0) <= 0.0)
+                || matches!(u.get("type").str(), "miner" | "hauler" | "freighter" | "scout")
+                || matches!(u.get("doing").str(), "gather" | "study") { continue; }
+            let owner = u.get("owner").num_or(-1.0);
+            if owner == ours { army += 1.0; }
+            else if owner >= 0.0 && !realm::is_ally(me, owner) && u.get("at").num() == at { defenders += 1.0; }
+        }
+        let need = (defenders * 1.5 + 2.0).ceil().max(4.0);
+        (army >= 6.0 && army >= need).then_some(need)
+    }
+
     /// The next target from a ranked list, sticky: the last plan's (`last`, its id) while it's still on the list, so
     /// units don't march back and forth.
     pub fn pick(targets: &[View], last: f64) -> Option<View> {
@@ -719,12 +745,14 @@ use super::{air, theme};
     /// only a change) and your units can tell a plan that stands from land cut off from it (`plan::check`); partner:
     /// unseen land the game said a pact partner holds ([`partner_land`]), left off the targets. The last plan (in capital
     /// RAM) keeps the target sticky. Targets that need more than about 60% of your fighters wait while others are on
-    /// the list, and a hopeless siege ([`hopeless`]) is no target at all. `per_slot` is how deep to stack miners (2 is
-    /// the usual).
+    /// the list. A visible capital with weaker armed defenders may be assaulted first ([`capital_assault`]); other
+    /// hopeless sieges wait. `per_slot` is how deep to stack miners (2 is the usual).
     pub fn survey(world: View, me: View, targets: &[View], per_slot: f64) -> Value {
         let last = mem::get(me.get("ramCapital"), 0).get("attack").num_or(-1.0);
         let me_id = me.get("id").num();
         let partner = partner_land(world, me);
+        let assault = targets.iter().copied().filter(|q| !partner.contains(&q.get("id").num()))
+            .find_map(|q| capital_assault(world, me, q).map(|need| (q, need)));
         let kept: Vec<View> = targets.iter().copied().filter(|q| !partner.contains(&q.get("id").num()) && !hopeless(me, *q)).collect();
         let targets = &kept[..];
         let joint = targets.iter().copied().find(|q| {
@@ -733,8 +761,8 @@ use super::{air, theme};
         });
         let can = (fighters(me) * 0.6).floor().max(4.0);
         let fit: Vec<View> = targets.iter().copied().filter(|q| muster_for(*q) <= can).collect();
-        let t = joint.or_else(|| pick(if fit.is_empty() { targets } else { &fit }, last));
-        let need = if joint.is_some() { 1.0 } else { t.map_or(0.0, muster_for) };
+        let t = joint.or(assault.map(|(q, _)| q)).or_else(|| pick(if fit.is_empty() { targets } else { &fit }, last));
+        let need = if joint.is_some() { 1.0 } else if let Some((_, need)) = assault { need } else { t.map_or(0.0, muster_for) };
         let mines: Vec<Value> = realm::open_mines(world, me, per_slot, 24.0).into_iter().map(|[p, k]| arr![p, k]).collect();
         let mut plan = obj! {
             "mines" => mines,

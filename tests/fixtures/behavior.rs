@@ -201,3 +201,20 @@ fn recovery_intervals_stop_optional_spending_and_leave_workers_funded() {
         assert!(orders.get("ram").is_empty() && orders.get("spawn").is_empty() && orders.get("disband").is_empty());
     }
 }
+
+#[test]
+fn capital_assault_counts_armed_ground_units_before_siege_headcount() {
+    let capital = obj! {"id"=>1,"owner"=>2,"capital"=>true,"visible"=>true,"townGarrison"=>20};
+    let soldier = |owner,at| obj! {"owner"=>owner,"at"=>at,"type"=>"guard","hp"=>4,"doing"=>"idle","build"=>obj!{"strength"=>2}};
+    let mut units = (0..6).map(|_|soldier(1,0)).collect::<Vec<_>>();
+    units.push(soldier(2,1));
+    for _ in 0..19 {units.push(obj!{"owner"=>2,"at"=>1,"type"=>"miner","doing"=>"gather","build"=>obj!{"strength"=>0}});}
+    let args=views(&[obj!{"logistics"=>obj!{},"units"=>units.clone()},obj!{"id"=>1,"allies"=>arr![]},capital.clone()]);
+    assert_eq!(common::capital_assault(args[0],args[1],args[2]),Some(4.0));
+    for _ in 0..4 {units.push(soldier(2,1));}
+    let args=views(&[obj!{"logistics"=>obj!{},"units"=>units},obj!{"id"=>1,"allies"=>arr![]},capital.clone()]);
+    assert_eq!(common::capital_assault(args[0],args[1],args[2]),None,"a defended capital still needs a stronger army");
+    let wing=obj!{"owner"=>1,"at"=>0,"type"=>"wing","build"=>obj!{"strength"=>3,"wings"=>1}};
+    let args=views(&[obj!{"logistics"=>obj!{},"units"=>vec![wing;12]},obj!{"id"=>1,"allies"=>arr![]},capital]);
+    assert_eq!(common::capital_assault(args[0],args[1],args[2]),None,"aircraft cannot replace a ground assault");
+}
