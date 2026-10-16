@@ -995,9 +995,8 @@ fn reflex(units: View, near: View) -> Vec<Value> {
     } else {
         0.0
     };
-    // each unit's turn needs half again what the dearest turn so far took (2,000 before the first): a flat 3,200 kept a
-    // call made with less, as a small fight's often is, from striking at all
-    let mut turn_cost = 2000.0_f64;
+    // Keep 3,200 cycles for a first unit turn, then twice the cost of the heaviest turn so far.
+    let mut turn_cost = 3200.0_f64;
     for i in 0..len {
         if cycles_left() < turn_cost {
             break;
@@ -1132,7 +1131,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         if best.is_some() || out.get("step").truthy() || out.get("ability").truthy() {
             order(out);
         }
-        turn_cost = turn_cost.max(1.5 * (began - cycles_left()));
+        turn_cost = turn_cost.max(2.0 * (began - cycles_left()));
     }
     Vec::new()
 }

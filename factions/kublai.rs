@@ -31,11 +31,11 @@ const GHOST: Build = &[("hp", 1.0), ("speed", 3.0), ("strength", 1.0), ("carry",
 const WING: Build = &[("hp", 2.0), ("speed", 3.0), ("strength", 2.0), ("carry", 0.0), ("vision", 0.0), ("wings", 1.0)];
 const WING_SHOT: Build = &[("hp", 2.0), ("speed", 2.0), ("strength", 1.0), ("carry", 0.0), ("vision", 0.0), ("wings", 1.0), ("range", 1.0)];
 
-// What to research, in order. Flight comes early (its crossings come first): the air wing raids miners that ground
-// units can't shield.
+// What to research, in order. Capture follows the first combat licenses to press territory sooner; Flight follows for
+// crossings and a small air wing that can raid miners ground units cannot reach.
 const TECHS: [&str; 19] = [
-    "extraction", "dash", "armor", "ranged", "flight", "pierce", "scan", "antiAir", "artillery", "airWeapons", "repair", "cloak", "stealth",
-    "seaTraversal", "mountainTraversal", "capture", "influence", "computeBoost", "gate",
+    "extraction", "dash", "armor", "ranged", "capture", "flight", "pierce", "scan", "antiAir", "artillery", "airWeapons", "repair", "cloak",
+    "stealth", "seaTraversal", "mountainTraversal", "influence", "computeBoost", "gate",
 ];
 
 fn build(b: Build) -> Value {
@@ -1609,9 +1609,8 @@ fn reflex(units: View, near: View) -> Vec<Value> {
     } else {
         0.0
     };
-    // each unit's turn needs half again what the dearest turn so far took (2,000 before the first): a flat 3,200 kept a
-    // call made with less, as a small fight's often is, from striking at all
-    let mut turn_cost = 2000.0_f64;
+    // Keep 3,200 cycles for a first unit turn, then twice the cost of the heaviest turn so far.
+    let mut turn_cost = 3200.0_f64;
     for i in 0..len {
         if cycles_left() < turn_cost {
             break;
@@ -1718,7 +1717,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         if best.is_some() || out.get("step").truthy() || out.get("ability").truthy() {
             order(out);
         }
-        turn_cost = turn_cost.max(1.5 * (began - cycles_left()));
+        turn_cost = turn_cost.max(2.0 * (began - cycles_left()));
     }
     Vec::new()
 }

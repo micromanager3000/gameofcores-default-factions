@@ -305,6 +305,32 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
 }
 
 fn think(world: View, me: View) -> Value {
+    // Recovery's map and unit scans also need fuel when income falls sharply.
+    // A policy-only turn lets the next call recover without repeating those scans.
+    if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
+        let income = me.path("rts.cpu.income").num_or(20000.0).max(1.0);
+        let mut types = obj! {};
+        for ty in me.get("types").keys() { types.set(ty, obj! { "share" => 0, "every" => 8 }); }
+        types.set("miner", obj! { "cycles" => (income * 0.4).max(4000.0), "every" => 1 });
+        let mut cpu = obj! {
+            "limits" => obj! {
+                "think" => (me.path("compute.thinkPeak").num_or(0.0) * 1.5 + 2000.0).max(24000.0),
+                "control" => 0.5, "upkeep" => 0.65, "research" => 0, "influence" => 0,
+                "fabrication" => 0, "visuals" => 0, "reflex" => 0.15, "duel" => 0.08,
+                "challenge" => 0.02, "drive" => 0.08, "armor" => 0.05, "weapon" => 0.08,
+                "abilities" => 0, "cloak" => 0, "gate" => 0
+            },
+            "reserve" => obj! {}, "upkeepOrder" => vec!["miner"]
+        };
+        common::fit_cpu(&mut cpu, me);
+        // Shared miner recovery reads this capital page before using local mining rights.
+        let mut recovery = mem::get(me.get("ramCapital"), 244);
+        if !matches!(recovery, Value::Obj(_)) { recovery = obj! {}; }
+        recovery.set("r", true);
+        return obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
+            "ram" => mem::put(244, &recovery, "local", None, 1).unwrap_or_default(),
+            "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0 };
+    }
     common::govern(world, me, 0.4, || strategy(world, me))
 }
 
@@ -956,16 +982,34 @@ fn reflex(units: View, near: View) -> Vec<Value> {
     } else {
         0.0
     };
-    // each unit's turn needs half again what the dearest turn so far took (2,000 before the first): a flat 3,200 kept a
-    // call made with less, as a small fight's often is, from striking at all
-    let mut turn_cost = 2000.0_f64;
+    // A short callback can still submit paid shots without planning movement or support.
+    if cycles_left() < 4400.0 {
+        for i in 0..len {
+            if cycles_left() < 1250.0 { break; }
+            let u = units.at(((start + i as f64) % len as f64) as usize);
+            if is_str(u.get("type"), "ghost") { continue; }
+            let ns = near.key(n(u.get("id")));
+            let preferred = ns.iter().find(|t| reflex::can_hit(u, *t));
+            let target = common::windup_target(u, ns, preferred);
+            let r = u.get("rts");
+            let cost = (120.0 + r.path("power.weapon").num_or(0.0)) * common::price_level(u);
+            if let Some(t) = target.filter(|_| r.get("bank").num_or(0.0) >= cost
+                && r.path("budget.weapon").num_or(cost) >= cost) {
+                if cycles_left() < 600.0 { break; }
+                order(obj! { "id" => u.get("id"), "hit" => t.get("id"), "pierce" => 0 });
+            }
+        }
+        return Vec::new();
+    }
+    let mut turn_cost = 4000.0_f64;
     for i in 0..len {
-        if cycles_left() < turn_cost {
+        if cycles_left() < turn_cost + 400.0 {
             break;
         }
         let began = cycles_left();
         let u = units.at(((start + i as f64) % len as f64) as usize);
         let ns = near.key(n(u.get("id")));
+        if cycles_left() < 3400.0 + 160.0 * ns.len() as f64 { break; }
         if !ns.truthy() {
             continue;
         }
@@ -1092,6 +1136,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         }
         common::steer_ground(u,ns,&mut out);
         if best.is_some() || out.get("step").truthy() || out.get("ability").truthy() || out.get("cloak").truthy() {
+            if cycles_left() < 700.0 { break; }
             order(out);
         }
         turn_cost = turn_cost.max(1.5 * (began - cycles_left()));
@@ -1375,9 +1420,8 @@ mod nullptr_ext {
     /// The exploits' turn (see `ghost`).
     pub fn spies(units: View, world: View, me: View) {
         let rts = me.get("rts").truthy();
-        // under 2,600 cycles the call can't pay for the map index, a spy's reading and an order: the spies keep their
-        // standing orders a second longer
-        if rts && cycles_left() < 2600.0 {
+        // Leave room for a spy's terrain checks, RAM notes and final order.
+        if rts && cycles_left() < 3400.0 {
             return;
         }
         let by_id = realm::index(world);
@@ -1391,14 +1435,16 @@ mod nullptr_ext {
         // for it (short of them, a spy keeps the mark in its notes and its standing orders)
         let (mut marks, mut posts): (Option<Vec<(f64, f64, &'static str, f64)>>, Option<Vec<f64>>) = (None, None);
         let lead = common::dominant(world).map_or(-1.0, |l| n(l.get("id")));
-        for i in 0..units.len() {
-            if rts && cycles_left() < 1400.0 {
+        for turn in 0..units.len() {
+            let i = (turn + now as usize) % units.len();
+            if rts && cycles_left() < 3000.0 {
                 break;
             }
-            if marks.is_none() && (!rts || cycles_left() > 4000.0) {
+            if marks.is_none() && (!rts || cycles_left() > 6000.0) {
                 marks = Some(marks_of(world, me));
                 posts = Some(posts_of(world, me));
             }
+            if rts && cycles_left() < 3000.0 { break; }
             let marks: &[(f64, f64, &'static str, f64)] = marks.as_deref().unwrap_or(&[]);
             let posts: &[f64] = posts.as_deref().unwrap_or(&[]);
             // the spies are few: each keeps its place in the list, so the i-th spy keeps the i-th mark
@@ -1425,6 +1471,7 @@ mod nullptr_ext {
             if seen && abroad {
                 let (mut best, mut bs) = (-1.0, f64::INFINITY);
                 for id in realm::reach(here, me) {
+                    if rts && cycles_left() < 1200.0 { break; }
                     let q = by_id.get(id);
                     if !q.truthy() {
                         continue;
@@ -1479,14 +1526,14 @@ mod nullptr_ext {
                         o = Some(obj! { "id" => u.get("id"), "do" => "idle" });
                     }
                 } else if ours_in || marching {
-                    o = go(u, "sabotage", cap, world, me, spot, 1200.0);
+                    o = go(u, "sabotage", cap, world, me, spot, 2200.0);
                 } else if let Some((tech, _)) = loot {
-                    o = go(u, "steal", cap, world, me, spot, 1200.0);
+                    o = go(u, "steal", cap, world, me, spot, 2200.0);
                     if let Some(x) = &mut o {
                         x.set("tech", tech);
                     }
                 } else if owner == lead {
-                    o = go(u, "sabotage", cap, world, me, spot, 1200.0);
+                    o = go(u, "sabotage", cap, world, me, spot, 2200.0);
                 } else {
                     stay = false;
                 }
@@ -1500,7 +1547,7 @@ mod nullptr_ext {
                     let m = marks.iter().find(|m| m.0 == kept).or_else(|| marks.get(i % marks.len()));
                     if let Some(&(cap, _, tech, _)) = m {
                         mark = cap;
-                        o = go(u, "steal", cap, world, me, hide_spot(by_id.get(cap)), 1200.0);
+                        o = go(u, "steal", cap, world, me, hide_spot(by_id.get(cap)), 2200.0);
                         if let Some(x) = &mut o {
                             x.set("tech", tech);
                         }
@@ -1508,7 +1555,7 @@ mod nullptr_ext {
                 } else if !posts.is_empty() {
                     let cap = if posts.contains(&kept) { kept } else { posts[i % posts.len()] };
                     mark = cap;
-                    o = go(u, "move", cap, world, me, Point::new(6.0, 0.0), 1200.0);
+                    o = go(u, "move", cap, world, me, Point::new(6.0, 0.0), 2200.0);
                 }
                 if mark >= 0.0 && mark != kept {
                     let x = o.get_or_insert_with(|| obj! { "id" => u.get("id") });
@@ -1528,6 +1575,7 @@ mod nullptr_ext {
                 }
             }
             if let Some(o) = o {
+                if rts && cycles_left() < 700.0 { break; }
                 order(o);
             }
         }
