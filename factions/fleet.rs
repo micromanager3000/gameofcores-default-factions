@@ -578,7 +578,20 @@ fn conserve(world: View, me: View) -> Value {
 }
 
 fn think(world: View, me: View) -> Value {
-    common::govern(world, me, 0.4, || strategy(world, me))
+    let mut out=common::govern(world, me, 0.4, || strategy(world, me));
+    // A completed cargo voyage leaves a ship docked. Retire an empty corsair there when no paying target remains.
+    if world.get("logistics").truthy() && me.path("units.byType.corsair").num_or(0.0)>0.0 && cycles_left()>5000.0 {
+        for u in world.get("units").iter() {
+            if cycles_left()<3500.0 {break;}
+            if u.get("owner").num()!=me.get("id").num() || u.get("type").str()!="corsair" {continue;}
+            let cargo=u.path("rts.cargo");
+            if cargo.get("cycles").num_or(0.0)==0.0 && cargo.get("dock").is_num() && !cargo.get("job").truthy()
+                && quarry(u,me,world,2).is_none() && !out.get("disband").items().iter().any(|v|v.num()==u.get("id").num()) {
+                out.entry("disband").push(u.get("id").value());
+            }
+        }
+    }
+    out
 }
 
 fn strategy(world: View, me: View) -> Value {
@@ -1041,7 +1054,10 @@ fn march(u: View, pl: &Value, world: View, me: View, cloak: bool) {
         // those the plan sends to defend (common::defends), the rest on the target
         let defend = Value::Num(common::defends(pl, u));
         let goal = if num(&defend) >= 0.0 { &defend } else { pl.get("target") };
-        let verb = if num(&defend) >= 0.0 { "fight" } else { "capture" };
+        let owner=realm::index(world).get(num(goal)).get("owner").num_or(-1.0);
+        let conduct=u.get("conduct");
+        let safe=realm::is_ally(me,owner) || (conduct.get("seconds").num_or(0.0)>0.0 && conduct.get("from").num_or(-2.0)==owner);
+        let verb = if num(&defend) >= 0.0 || safe || u.get("air").truthy() || u.path("build.wings").truthy() { "fight" } else { "capture" };
         // A route is expensive code.  The engine already retains an accepted
         // order, so recalculate only when the strategic destination changes.
         let doing = u.get("doing").str();
@@ -1597,7 +1613,7 @@ fn quarry(u: View, me: View, world: View, role: u8) -> Option<View> {
         };
         let armed = c.get("build").get("range").num_or(0.0) > 0.0;
         let mut value=0.0;
-        if role==2 && world.get("logistics").truthy() {
+        if (role==2 || !armed) && world.get("logistics").truthy() {
             let load=c.path("cargo.load").num_or(0.0);
             if armed || load<2.0 || u.get("hp").num()<u.get("hpMax").num()*0.7 {continue;}
             let escorted=me.path("rts.sea.contacts").iter().any(|guard|guard.get("id").num()!=c.get("id").num()
@@ -1683,7 +1699,7 @@ fn junks(units: View, world: View, me: View, role: u8) -> Value {
                 o.set("sail", obj! { "chase" => tid, "keep" => if role == 2 { 3.5 } else { 4.5 } });
                 send = true;
             }
-        } else if role==2 && world.get("logistics").truthy() {
+        } else if (role==2 || !armed) && world.get("logistics").truthy() {
             let home=heard.get("hw").num_or(carried.get("h").num_or(-1.0));
             if home>=0.0 && water!=home && chasing<0.0 && sea::route(world,water,home).is_some(){o.set("sail",home);send=true;}
         } else if goal >= 0.0 {
@@ -1713,7 +1729,7 @@ fn junks(units: View, world: View, me: View, role: u8) -> Value {
         }
         // armour only while rivals are about: it charges every second it's on
         let armored = u.path("rts.modules").has_str("armor");
-        let want_armor = if armored && contacts > 0 && prey.is_some() { 450.0 } else { 0.0 };
+        let want_armor = if armored && prey.is_some_and(|t|t.path("build.range").num_or(0.0)>0.0) { 450.0 } else { 0.0 };
         let p = u.path("rts.power");
         if send || p.get("armor").num_or(0.0) != want_armor || u.get("alert").num_or(0.0) < 8.0 {
             o.set("power", obj! { "drive" => if role == 2 { 420 } else { 260 }, "armor" => want_armor, "weapon" => 300 });
