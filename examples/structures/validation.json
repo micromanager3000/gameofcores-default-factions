@@ -1,0 +1,67 @@
+{
+  "scope": "Compilation compatibility only. The 90-world balance comparison used the original frozen sources.",
+  "toolchain": "rustc 1.97.0 (2d8144b78 2026-07-07)",
+  "extractedSdkRevision": "3ad37d44c04bfc8ee05e5814c0debbf2d8ef4f30",
+  "frozenEngineRevision": "c31a88c28ec5d0abf77daef74a3093f4a8990bc9",
+  "tests": {
+    "exportAndProvenance": 4,
+    "defaultExportsUnchanged": 9,
+    "wasmCompilations": 6
+  },
+  "results": [
+    {
+      "name": "foundry",
+      "sdk": "frozen",
+      "sourceBytes": 318462,
+      "sourceSha256": "3c1711b05bb0dffb92b27668d3d7d1d3bcdb33a3459f755ee5e73add5ebd1c1a",
+      "sdkSha256": "bf4b3d3c251423628326ed2fb5a51572b12ee72b23f97adb34151329da39c917",
+      "wasmBytes": 846747,
+      "wasmSha256": "27764f379da258a8154cb26a916576ad5be6ac3e2cf67c7b4b56c2421953e331"
+    },
+    {
+      "name": "foundry",
+      "sdk": "extracted",
+      "sourceBytes": 318462,
+      "sourceSha256": "3c1711b05bb0dffb92b27668d3d7d1d3bcdb33a3459f755ee5e73add5ebd1c1a",
+      "sdkSha256": "50f5c85f12c9434be1e36c649bd9a1d2a6a6f06ce0e8b0c67004125ff9d94212",
+      "wasmBytes": 846747,
+      "wasmSha256": "46ab2d32218ebabeef4f53b64c853947451986995cb37d32344e7d01192e28b4"
+    },
+    {
+      "name": "lantern",
+      "sdk": "frozen",
+      "sourceBytes": 320797,
+      "sourceSha256": "5233ada129c6a4ae70eab7196c99d8e758714107f70856f843cd53dfef7b5842",
+      "sdkSha256": "bf4b3d3c251423628326ed2fb5a51572b12ee72b23f97adb34151329da39c917",
+      "wasmBytes": 902045,
+      "wasmSha256": "94f10fa92a1bbbb849bb1c42f867e08955dc86174a5c8c3c127b4e88ef45b20e"
+    },
+    {
+      "name": "lantern",
+      "sdk": "extracted",
+      "sourceBytes": 320797,
+      "sourceSha256": "5233ada129c6a4ae70eab7196c99d8e758714107f70856f843cd53dfef7b5842",
+      "sdkSha256": "50f5c85f12c9434be1e36c649bd9a1d2a6a6f06ce0e8b0c67004125ff9d94212",
+      "wasmBytes": 902037,
+      "wasmSha256": "56edbb9124c3ce061b69418b55eaa3274acc797a456284d88b1c97982d53c469"
+    },
+    {
+      "name": "raiders",
+      "sdk": "frozen",
+      "sourceBytes": 306701,
+      "sourceSha256": "6965c2f7808e33d9f5b7ce306b663e58e467292be7b462a53564f16623e49c8a",
+      "sdkSha256": "bf4b3d3c251423628326ed2fb5a51572b12ee72b23f97adb34151329da39c917",
+      "wasmBytes": 848294,
+      "wasmSha256": "baff3c535bf694f6d7707c9d7e93ee6596cc9f3dcd2fbab4c62239b53dc3517c"
+    },
+    {
+      "name": "raiders",
+      "sdk": "extracted",
+      "sourceBytes": 306701,
+      "sourceSha256": "6965c2f7808e33d9f5b7ce306b663e58e467292be7b462a53564f16623e49c8a",
+      "sdkSha256": "50f5c85f12c9434be1e36c649bd9a1d2a6a6f06ce0e8b0c67004125ff9d94212",
+      "wasmBytes": 848286,
+      "wasmSha256": "0fe1e5ea9de331aedd40da8634b421f41c90aa658819e442ca2678bc03e00fa0"
+    }
+  ]
+}

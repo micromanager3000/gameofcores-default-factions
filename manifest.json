@@ -17,5 +17,10 @@
     "compat",
     "theme",
     "unit_art"
+  ],
+  "examples": [
+    "foundry",
+    "lantern",
+    "raiders"
   ]
 }

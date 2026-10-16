@@ -2,3 +2,4 @@
 mod catalog;
 pub use catalog::*;
 include!(concat!(env!("OUT_DIR"), "/programs.rs"));
+include!(concat!(env!("OUT_DIR"), "/examples.rs"));
