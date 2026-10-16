@@ -376,6 +376,10 @@ fn think(world: View, me: View) -> Value {
         return common::govern(world, me, 0.4, || strategy(world, me));
     }
     if cycles_left() < 3000.0 { return think_emergency(); }
+    if world.get("logistics").truthy() && me.path("units.total").num_or(0.0) < 4.0
+        && me.path("rts.cpu.income").num_or(0.0) < 30000.0 {
+        return common::govern(world, me, 0.4, || strategy(world, me));
+    }
     // The recent peak includes execution and ABI serialization, but excludes RAM application.
     let peak = me.path("compute.thinkPeak").num_or(0.0);
     let writes = me.get("ramCapital").len() as f64 * 32.0 + 32.0;

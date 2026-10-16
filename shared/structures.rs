@@ -48,11 +48,27 @@ fn open_slot(p: View, me: View) -> Option<usize> {
 }
 
 pub fn apply(orders: &mut Value, world: View, me: View) {
-    if !me.path("rts.structureCosts").truthy() || cycles_left() < 1200.0 { return; }
+    if !me.path("rts.structureCosts").truthy() { return; }
+    // Planning must leave room for the returned RAM writes and building orders.
+    // A limit is permission to spend; unused cycles stay in the shared bank.
+    let income = me.path("rts.cpu.income").num_or(0.0);
+    if me.path("rts.cpu.bank").num_or(0.0) > (income * 1.5).max(32000.0) {
+        if !orders.get("compute").get("cpu").truthy() {
+            orders.entry("compute").set("cpu", obj! { "limits" => me.path("rts.cpu.limits"),
+                "reserve" => me.path("rts.cpu.reserve"), "upkeepOrder" => me.path("rts.cpu.upkeepOrder") });
+        }
+        let limits = orders.entry("compute").entry("cpu").entry("limits");
+        let old = limits.get("think").num_or(0.0);
+        let old = if old <= 1.0 { old * income } else { old };
+        limits.set("think", old.max(32000.0).max(me.path("compute.thinkPeak").num_or(0.0) * 1.3 + 4000.0));
+    }
+    if cycles_left() < 6000.0 { return; }
     let id = me.get("id");
     let style = seat(me);
     let d = design(style);
     let now = world.get("seconds").num_or(0.0);
+    // Refresh at most every five seconds; short standing jobs cover the interval.
+    if now.floor() % 5.0 != 0.0 && orders.get("memo").str() != "Recovering production" { return; }
     let sites = me.path("rts.structures");
     let own: Vec<View> = sites.iter().filter(|s| same(s.get("owner"), id) && s.get("state").str() != "ruin").collect();
     let units: Vec<View> = world.get("units").iter().filter(|u| same(u.get("owner"), id) && u.get("hp").num_or(0.0) > 0.0).collect();
@@ -63,6 +79,7 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     let mut jobs = Value::arr();
     let mut services = Value::arr();
     for s in &own {
+        if cycles_left() < 3500.0 { break; }
         if s.get("state").str() != "ready" { continue; }
         let mut j = obj! { "id" => s.get("id"), "extract" => 0, "extractSlot" => 0, "faith" => 0, "civic" => 0,
             "watch" => 0, "watchWater" => -1, "supply" => 0, "guard" => false, "target" => 0,
@@ -105,7 +122,7 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     if !jobs.is_empty() { orders.set("structureJobs", jobs); }
     if !services.is_empty() { orders.set("structureService", services); }
     if !safe || now < 35.0 || now % 30.0 >= 10.0 || own.len() >= d.limit
-        || own.iter().any(|s| s.get("state").str() != "ready") || sites.len() >= 250 || cycles_left() < 2500.0 { return; }
+        || own.iter().any(|s| s.get("state").str() != "ready") || sites.len() >= 250 || cycles_left() < 6000.0 { return; }
     let mut land: Vec<View> = world.get("provinces").iter().filter(|p| same(p.get("owner"), id)
         && (!p.get("active").is_bool() || p.get("active").truthy()) && !own.iter().any(|s| same(s.get("p"), p.get("id")))).collect();
     let score = |p: View| {
@@ -124,6 +141,7 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     };
     land.sort_by(|a, b| score(*b).total_cmp(&score(*a)));
     for p in land.into_iter().take(8) {
+        if cycles_left() < 3500.0 { break; }
         let province = p.get("id").num();
         let mut spot = None;
         // Compact town placements keep builders, supplies and the defended ring together.

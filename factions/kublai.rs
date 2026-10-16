@@ -298,6 +298,11 @@ fn think(world: View, me: View) -> Value {
     if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
         return emergency_recovery_policy(me);
     }
+    // Let cargo recovery recruit the first miners before the full planner fits.
+    if world.get("logistics").truthy() && me.path("units.total").num_or(0.0) < 4.0
+        && me.path("rts.cpu.income").num_or(0.0) < 30000.0 {
+        return common::govern(world, me, 0.55, || strategy(world, me));
+    }
     if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
         return recovery_policy(me);
     }

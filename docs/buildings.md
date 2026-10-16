@@ -26,7 +26,8 @@ Ready buildings supply nearby grounded units only when the upkeep discount excee
 Extractors use natural mines that accept the faction's workers and have spare crew capacity.
 They supplement workers without retiring them. Saturated mines receive no extractor allocation.
 Repair bays prioritize damaged buildings, then damaged units within six cells.
-Standing jobs expire after 45 seconds unless refreshed. Recovery clears their paid allocations.
+Standing jobs refresh every five seconds and expire after 45 seconds without renewal.
+Recovery clears their paid allocations. The planner reserves headroom for returning orders and writing RAM.
 
 These buildings do not change the world's rules or enable structures themselves.
 Start a supported world with `hypercycle-sim watch --cpu-rts --structures`.
