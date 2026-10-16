@@ -48,6 +48,17 @@ Quiet Fleet recovers visible wreck cargo and returns it through the capital's do
 It retires an empty corsair when no worthwhile target or nearby wreck remains.
 The same programs retain their earlier mining policy in saved worlds without logistics.
 
+After the first minute, logistics houses review their strategy every five seconds.
+Unit callbacks, standing orders, research and building jobs continue between those reviews.
+A low bank or stalled units pause optional spending while workers recover.
+Full province-plan reads wait for a funded miner callback.
+
+Military targets use defenders in the town ring when that observation is available.
+A stronger ground army can attack a worker-held capital before meeting the capture headcount.
+Capturing that capital still requires the engine's siege odds.
+Houses decline new passage from their last Crown rival when their bloc fits the Crown's membership limit.
+Existing passage contracts expire normally. These policies leave the Crown rules unchanged.
+
 Export a structure example with `node tools/source.mjs foundry /tmp/foundry.rs`.
 The names `lantern` and `raiders` select the other two programs.
 These examples retain their measured strategy helpers and use this repository's shared presentation helpers.
@@ -77,10 +88,10 @@ Their shared policy reads `me.rts.structureCosts` before issuing building orders
 Both the uniform default program and the separate house programs use each seat's design.
 See [default buildings](docs/buildings.md) for their priorities and spending limits.
 
-## Cargo and Flight checks
+## Strategy checks
 
 Run `npm run test:behavior -- ../gameofcores` against a game checkout with its public SDK.
-The tests exercise route selection, load reservations, idle retirement and Arjuna's research policy.
+The tests cover cargo routes, retirement, research, planning budgets, capital attacks and passage deals.
 They run the exported faction code. Full game simulations and metered callback checks still run in the game repository.
 
 Freighters reserve reachable loads and use a receiving dock connected to the capital.
