@@ -383,10 +383,11 @@ fn think(world: View, me: View) -> Value {
     // The recent peak includes execution and ABI serialization, but excludes RAM application.
     let peak = me.path("compute.thinkPeak").num_or(0.0);
     let writes = me.get("ramCapital").len() as f64 * 32.0 + 32.0;
-    if cycles_left() < 18000.0 || cycles_left() < peak * 1.1 + writes + 600.0 {
-        return think_recovery(me);
-    }
     let orders = common::govern(world, me, 0.4, || {
+        // Cargo support and recovery must survive a planner admission failure.
+        if cycles_left() < 18000.0 || cycles_left() < peak * 1.1 + writes + 600.0 {
+            return think_recovery(me);
+        }
         let mut orders = strategy(world, me);
         // Governance scans visible bodies after strategy when it checks proposed recruits.
         let review = 1500.0 + world.get("units").len() as f64 * 15.0
@@ -481,14 +482,13 @@ fn strategy(world: View, me: View) -> Value {
         spawn_build(&mut orders,"wing",||frame.build(),mods(me,"wing"),Some(format!("{} {serial:.0}",frame.name)));
     }
 
-    // The exploits, once Cloak allows stealth and there's a rival capital to visit: one at 10 units, a second at 24 and a
-    // third at 40 while the bank can feed them (a spy's errands cost ◆). One every 20 s at most, so the queue can't
-    // double them up.
+    // One exploit after eight units, a second after sixteen, while the treasury can pay for espionage.
+    // Eight seconds between recruits gives each spy time to leave fabrication.
     let marks = world.get("factions").iter().filter(|f| realm::is_rival(world, me, n(f.get("id"))) && n(f.get("capital")) >= 0.0).count();
     let now = world.get("seconds").or(0.0).floor();
     let bank = n(me.get("bank"));
-    let want_spies = if total >= 24.0 && bank >= 250.0 { 2.0 } else if total >= 10.0 { 1.0 } else { 0.0 };
-    if has("cloak") && marks > 0 && now % 20.0 == 0.0 && jmax(ghosts, spies.count as f64) < want_spies {
+    let want_spies = if total >= 16.0 && bank >= 350.0 { 2.0 } else if total >= 8.0 && bank>=150.0 { 1.0 } else { 0.0 };
+    if has("cloak") && marks > 0 && now % 8.0 == 0.0 && jmax(ghosts, spies.count as f64) < want_spies {
         spawn(&mut orders, "ghost", if has("stealth") { GHOST_DEEP } else { GHOST }, mods(me, "ghost"));
     }
     if screens < jmax(3.0, ((skirms + guns + 1.0) * 0.4).floor()) {

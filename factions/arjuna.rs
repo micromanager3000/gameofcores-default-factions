@@ -38,6 +38,11 @@ const TECHS: [&str; 19] = [
     "capture", "influence", "cloak", "stealth", "seaTraversal", "mountainTraversal", "gate",
 ];
 
+// Emu High Command shares the campaign controller but invests in fast ground raids.
+const EMU_TECHS: [&str;19] = ["extraction","dash","ranged","armor","capture","repair","artillery","antiAir","pierce","seaTraversal","mountainTraversal","scan","influence","computeBoost","cloak","stealth","flight","airWeapons","gate"];
+const EMU_SCREEN: Build = &[("hp",3.0),("speed",4.0),("strength",3.0),("carry",0.0),("vision",0.0)];
+const EMU_SKIRM: Build = &[("hp",2.0),("speed",3.0),("strength",2.0),("carry",0.0),("vision",1.0),("range",1.0)];
+
 fn build(b: Build) -> Value {
     let mut o = Obj::new();
     for (k, v) in b {
@@ -305,7 +310,7 @@ fn think(world: View, me: View) -> Value {
         return emergency_recovery_policy();
     }
     if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
-        return recovery_policy(me);
+        return common::govern(world, me, 0.4, || recovery_policy(me));
     }
     common::govern(world, me, 0.4, || strategy(world, me))
 }
@@ -352,6 +357,8 @@ fn recovery_policy(me: View) -> Value {
 }
 
 fn strategy(world: View, me: View) -> Value {
+    let emu=me.get("seat").num_or(-1.0)==8.0;
+    let doctrine=if emu {&EMU_TECHS}else{&TECHS};
     let rts = me.get("rts");
     if rts.truthy() && cycles_left() < 3000.0 {
         return common::recovery(world, me);
@@ -396,8 +403,7 @@ fn strategy(world: View, me: View) -> Value {
         plan.set("field", field);
     }
     let cpu = rts_cpu(me);
-    // cpu && cpu.available && cpu.available.fabrication, less about what this think costs (the last one's): fabrication
-    // is charged right after think
+    // Fabrication has its own lane. Think reduces the shared bank once.
     let available = if cpu.truthy() { cpu.get("available") } else { cpu };
     let fab = if available.truthy() { available.get("fabrication") } else { available };
     let fabrication = if !rts.truthy() {
@@ -405,7 +411,7 @@ fn strategy(world: View, me: View) -> Value {
     } else if fab.is_undef() {
         rts.get("bank").value()
     } else {
-        Value::Num(n(fab) - me.path("compute.used.think").or(0.0))
+        Value::Num(common::fabrication_room(me).unwrap_or_else(|| n(fab)))
     };
     let mut orders = obj! {
         "policy" => obj! { "extraction" => if defend >= 0.0 { 0.38 } else { 0.5 }, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true },
@@ -433,7 +439,7 @@ fn strategy(world: View, me: View) -> Value {
     }
     let wings = count("wing");
     if screens < jmax(3.0, ((skirms + guns + 1.0) * 0.42).floor()) {
-        spawn(&mut orders, "screen", SCREEN, mods(me, "screen"));
+        spawn(&mut orders, "screen", if emu {EMU_SCREEN}else{SCREEN}, mods(me, "screen"));
     }
     // Ranged is its own license. Before it arrives, fast melee runners scout and pull defenders out of position without
     // issuing invalid range spawns.
@@ -444,12 +450,12 @@ fn strategy(world: View, me: View) -> Value {
         spawn(&mut orders, "lancer", SKIRM, if has("dash") { vec!["pierce", "dash"] } else { vec!["pierce"] });
     }
     if has("ranged") && skirms < jmax(4.0, screens * 2.0) {
-        spawn(&mut orders, "skirm", SKIRM, mods(me, "skirm"));
+        spawn(&mut orders, "skirm", if emu {EMU_SKIRM}else{SKIRM}, mods(me, "skirm"));
     }
     // Vimanas once Flight allows them and the army on the ground stands: one for every 30,000 cycles of income (each
     // costs about 1,500 a second to keep and as much again up on a sortie), up to 8, and never more than a quarter of
     // the army. With Air weapons every third one carries a bow.
-    let want_wings = if has("flight") && total >= 12.0 { jmin(jmin(8.0, (income / 30000.0).floor()), (total * 0.25).floor()) } else { 0.0 };
+    let want_wings = if !emu && has("flight") && total >= 12.0 { jmin(jmin(8.0, (income / 30000.0).floor()), (total * 0.25).floor()) } else { 0.0 };
     if wings < want_wings {
         let archer = has("airWeapons") && (wings as i64) % 3 == 2;
         spawn(&mut orders, "wing", if archer { WING_SHOT } else { WING }, mods(me, "wing"));
@@ -474,14 +480,16 @@ fn strategy(world: View, me: View) -> Value {
     let type_calls = common::calls(world, &TYPES, income, control, bt);
     // common::budget keeps its useful research choice, rent choice and type schedules. In CPU RTS the old split is
     // ignored; cpu_policy below atomically installs caps and reserves for the one shared balance.
-    let budget = common::Budget { research: if has("repair") { 0.06 } else { 0.12 }, code: 0.72, techs: &TECHS, types: Some(&type_calls) };
+    let budget = common::Budget { research: if has("repair") { 0.06 } else { 0.12 }, code: 0.72, techs: doctrine, types: Some(&type_calls) };
     common::budget(&mut orders, world, me, &budget);
     let mut policy = cpu_policy(me, &plan, &type_calls);
     common::fit_cpu(&mut policy, me);
     orders.entry("compute").set("cpu", policy);
     // the sorties so far (sky::tally), and the memo spectators read: where the vimanas fly, or how near Flight is
     let air = if (wings > 0.0 || !last.get("sky").is_undef()) && cycles_left() > 9000.0 { sky::tally(world, me, &mut orders) } else { sky::Tally::default() };
-    let memo = if has("flight") {
+    let memo = if emu {
+        format!("Emu High Command: {} runners and {} skirmishers advancing on the frontier",js_num(screens),js_num(skirms))
+    } else if has("flight") {
         let at = |id: f64| realm::index(world).get(id).get("name").str().to_string();
         let doing = match &strike {
             Some(st) if st.verb == "raid" => format!("raiding {}", at(st.at)),
@@ -508,10 +516,10 @@ fn strategy(world: View, me: View) -> Value {
     let at = mem::get(me.get("ramCapital"), CLOCK);
     let mut clock = Clock { at: if at.truthy() { at } else { Value::obj() }, changed: false };
     warlord(&mut orders, world, me, &plan, &mut clock);
-    secrets(&mut orders, world, me, &mut clock);
+    if !emu { secrets(&mut orders, world, me, &mut clock); }
     if cycles_left() > 2000.0 {
         let pact = |m: View| me.get("pacts").is_empty() && pact_leader.is_none_or(|l| !same(m.get("from"), l.get("id")));
-        common::answer(&mut orders, me, world, pact, &TECHS);
+        common::answer(&mut orders, me, world, pact, doctrine);
     }
     if clock.changed {
         let ops = mem::put(CLOCK, &clock.at, "local", None, 2).unwrap_or_default();

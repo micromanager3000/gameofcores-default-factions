@@ -304,7 +304,7 @@ fn think(world: View, me: View) -> Value {
         return common::govern(world, me, 0.55, || strategy(world, me));
     }
     if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
-        return recovery_policy(me);
+        return common::govern(world, me, 0.55, || recovery_policy(me));
     }
     common::govern(world, me, 0.55, || strategy(world, me))
 }

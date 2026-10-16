@@ -1497,11 +1497,17 @@ fn naval_spawn(orders: &mut Value, me: View, naval: &Naval, rival_ships: f64, th
     };
     let want_pick = (naval.stations as f64 + if naval.landing >= 0.0 { 1.0 } else { 0.0 }).min(5.0);
     let provinces = me.get("provinces").or(1.0);
-    let want_war = if guns { (2.0 + (provinces / 3.0).floor()).min(8.0) } else { 0.0 };
-    let want_cors = if guns { if rival_ships > 0.0 { 3.0 } else { 1.0 } } else { 0.0 };
+    let want_war = if guns { (1.0 + (provinces / 4.0).floor()).min(4.0) } else { 0.0 };
+    // A raider needs a visible cargo opportunity. Empty water does not justify a replacement hull.
+    let prospects=me.path("rts.sea.contacts").iter().filter(|c| c.get("ship").truthy()
+        && c.path("cargo.load").num_or(0.0)>=2.0 && c.path("build.range").num_or(0.0)==0.0
+        && c.path("build.carry").num_or(0.0)>=2.0).count();
+    let salvage=me.path("rts.logistics.wrecks").iter().any(|w|w.get("sea").truthy()&&w.get("cycles").num_or(0.0)>160000.0*common::price_level(me));
+    let want_cors = if guns && (prospects>0 || salvage) { (prospects as f64).clamp(1.0,2.0) } else { 0.0 };
+    let _=rival_ships;
     let pick: Option<(&str, Value, Vec<&str>)> = if pickets < want_pick {
         Some(("picket", picket_body(guns), armor("armor")))
-    } else if war < want_war.min(2.0) {
+    } else if war < want_war.min(1.0) {
         Some(("warjunk", warjunk_body(), armor("armor")))
     } else if corsairs < want_cors {
         Some(("corsair", corsair_body(me.path("rts.logistics").truthy()), armor("dash")))
@@ -1590,7 +1596,21 @@ fn quarry(u: View, me: View, world: View, role: u8) -> Option<View> {
             continue;
         };
         let armed = c.get("build").get("range").num_or(0.0) > 0.0;
-        let s = c.get("hp").num_or(5.0) + hops * 1.5 + if role == 2 && armed { 3.0 } else { 0.0 };
+        let mut value=0.0;
+        if role==2 && world.get("logistics").truthy() {
+            let load=c.path("cargo.load").num_or(0.0);
+            if armed || load<2.0 || u.get("hp").num()<u.get("hpMax").num()*0.7 {continue;}
+            let escorted=me.path("rts.sea.contacts").iter().any(|guard|guard.get("id").num()!=c.get("id").num()
+                && guard.get("ship").truthy()&&guard.get("water").num_or(-1.0)==w&&guard.path("build.range").num_or(0.0)>0.0);
+            if escorted {continue;}
+            // The public load band supplies a lower bound; exact rival cargo stays private.
+            let prize=c.path("build.carry").num_or(0.0)*160000.0*common::price_level(me)*if load>=3.0 {1.0}else{0.5};
+            let recoverable=(prize*0.7).min(logistics::capacity(u));
+            let trip=(55.0+hops*30.0)*(600.0*common::price_level(me)+1500.0);
+            if recoverable<trip*1.5 {continue;}
+            value=recoverable/1e6;
+        }
+        let s = c.get("hp").num_or(5.0) + hops * 1.5 + if role == 2 && armed { 3.0 } else { 0.0 } - value;
         if s < score {
             score = s;
             best = Some(c);
@@ -1663,6 +1683,9 @@ fn junks(units: View, world: View, me: View, role: u8) -> Value {
                 o.set("sail", obj! { "chase" => tid, "keep" => if role == 2 { 3.5 } else { 4.5 } });
                 send = true;
             }
+        } else if role==2 && world.get("logistics").truthy() {
+            let home=heard.get("hw").num_or(carried.get("h").num_or(-1.0));
+            if home>=0.0 && water!=home && chasing<0.0 && sea::route(world,water,home).is_some(){o.set("sail",home);send=true;}
         } else if goal >= 0.0 {
             // back to its water: when it's stopped elsewhere, lost a chase, or the reflex left it on a heading
             let on_way = match course {
@@ -1724,6 +1747,8 @@ fn junk_reflex(u: View, ns: View, pool: &mut Pool) -> Option<Value> {
     let sea = r.get("sea");
     let modules = r.get("modules");
     let reach = u.get("reach").num_or(1.0);
+    let merchant=u.get("type").str()=="corsair" && r.get("cargo").truthy();
+    let carrying=merchant && logistics::cargo(u)>0.0;
     let (mut port, mut star) = (0, 0);
     let mut ship: Option<View> = None;
     let mut shot: Option<View> = None;
@@ -1734,6 +1759,8 @@ fn junk_reflex(u: View, ns: View, pool: &mut Pool) -> Option<Value> {
             continue;
         }
         let d = t.get("d").num();
+        if merchant && (carrying || t.path("rts.cargo.load").num_or(0.0)<2.0)
+            && t.get("range").num_or(0.0)==0.0 {continue;}
         if d <= 7.0 {
             near += 1;
         }
@@ -1777,7 +1804,7 @@ fn junk_reflex(u: View, ns: View, pool: &mut Pool) -> Option<Value> {
                 o.set("ability", "dash");
             }
             act = true;
-        } else if t.get("d").num() <= 7.0 && !sea::in_arc(u, t, 30.0) {
+        } else if !carrying && t.get("d").num() <= 7.0 && !sea::in_arc(u, t, 30.0) {
             let b = sea::beam(u, t);
             o.set(if stopped { "face" } else { "head" }, obj! { "x" => b.x, "y" => b.y });
             act = true;
