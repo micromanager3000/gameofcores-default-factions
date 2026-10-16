@@ -2,21 +2,22 @@
 // earned research and the same shared CPU ledger as units.
 use gameofcores::*;
 
-struct Design { name: &'static str, range: f64, integrity: f64, height: f64 }
+/// A house's shells: battery range (0: none), integrity and the height of its civic hall.
+struct Design { range: f64, integrity: f64, height: f64 }
 fn design(seat: usize) -> Design {
-    let (name, range, integrity, height) = match seat {
-        0 => ("Steppe bastion", 7.0, 2.0, 4.5),
-        1 => ("Bow relay", 6.0, 1.3, 5.5),
-        2 => ("Chapter cloister", 5.0, 1.8, 6.0),
-        3 => ("Research court", 0.0, 1.2, 4.0),
-        4 => ("Harbor lantern", 8.0, 1.4, 7.0),
-        5 => ("Assembly hall", 0.0, 1.5, 3.5),
-        6 => ("Pointer spire", 9.0, 1.0, 8.0),
-        7 => ("Exchange depot", 0.0, 1.3, 4.5),
-        8 => ("Emu roost", 5.0, 1.0, 5.0),
-        _ => ("Open courtyard", 4.0, 1.2, 3.0),
+    let (range, integrity, height) = match seat {
+        0 => (7.0, 2.0, 4.5),
+        1 => (6.0, 1.3, 5.5),
+        2 => (5.0, 1.8, 6.0),
+        3 => (0.0, 1.2, 4.0),
+        4 => (8.0, 1.4, 7.0),
+        5 => (0.0, 1.5, 3.5),
+        6 => (9.0, 1.0, 8.0),
+        7 => (0.0, 1.3, 4.5),
+        8 => (5.0, 1.0, 5.0),
+        _ => (4.0, 1.2, 3.0),
     };
-    Design { name, range, integrity, height }
+    Design { range, integrity, height }
 }
 fn same(a: View, b: View) -> bool { a.is_num() && b.is_num() && a.num() == b.num() }
 fn seat(me: View) -> usize { me.get("seat").num_or(9.0).max(0.0) as usize }
@@ -100,7 +101,6 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     if cycles_left() < 6000.0 { return; }
     let id = me.get("id");
     let style = seat(me);
-    let d = design(style);
     let now = world.get("seconds").num_or(0.0);
     // Refresh at most every five seconds; short standing jobs cover the interval.
     if now.floor() % 5.0 != 0.0 && orders.get("memo").str() != "Recovering production" { return; }
@@ -191,125 +191,321 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     if !jobs.is_empty() { orders.set("structureJobs", jobs); }
     if !services.is_empty() { orders.set("structureService", services); }
     if safe && cycles_left() > 8000.0 { besiege(orders, world, me, &units, sites, now); }
-    if !safe || now < 35.0 || now % 30.0 >= 10.0
+    if !safe || now < 35.0 || now % 20.0 >= 10.0
         || own.iter().any(|s| s.get("state").str() != "ready") || cycles_left() < 6000.0 { return; }
-    let mut land: Vec<View> = world.get("provinces").iter().filter(|p| same(p.get("owner"), id)
+    plan(orders, world, me, style, &own, &units, sites, now);
+}
+
+/// One building the planner could order next.
+struct Want { p: View, role: Role, r: f64, ports: Value, quote: f64, value: f64 }
+
+/// Grow the towns one building at a time. Every province gets a civic hall once the loyalty it buys repays it (the
+/// capital's is the house landmark); then districts: supply yards where troops gather, bastions on open borders, works
+/// at free mines and repair bays behind busy yards. Economic sites must repay their quote within five minutes.
+fn plan(orders: &mut Value, world: View, me: View, style: usize, own: &[View], units: &[View], sites: View, now: f64) {
+    let id = me.get("id");
+    let d = design(style);
+    let c = me.path("rts.structureCosts");
+    let pl = price(me);
+    let income = me.path("rts.cpu.income").num_or(0.0);
+    let bank = me.path("rts.cpu.bank").num_or(0.0);
+    let tech = me.get("techs");
+    let land: Vec<View> = world.get("provinces").iter().filter(|p| same(p.get("owner"), id)
         && (!p.get("active").is_bool() || p.get("active").truthy())).collect();
-    let score = |p: View| {
-        let capital = same(p.get("id"), me.get("capital"));
-        let coast = world.get("waters").iter().any(|w| w.get("coast").has_num(p.get("id").num()));
-        let border = p.get("adj").iter().any(|q| world.get("provinces").iter().any(|n| same(n.get("id"), q) && !same(n.get("owner"), id)));
-        let crowd = units.iter().filter(|u| same(u.get("at"), p.get("id"))).count() as f64;
-        (if capital { 12.0 } else { 0.0 }) + match style {
-            0 | 1 | 8 => if border { 14.0 + crowd } else { crowd },
-            2 => if same(p.path("faith.by"), id) { 20.0 } else { 0.0 },
-            3 | 7 => if open_slot(p, me).is_some() { 16.0 + crowd } else { crowd },
-            4 | 6 => if coast { 22.0 } else { crowd },
-            5 => p.get("risk").num_or(0.0) * 80.0 + if capital { 0.0 } else { 14.0 },
-            _ => crowd,
-        }
-    };
-    land.sort_by(|a, b| score(*b).total_cmp(&score(*a)));
-    for p in land.into_iter().take(8) {
-        if cycles_left() < 3500.0 { break; }
-        let province = p.get("id").num();
-        let mut spot = None;
-        // Compact town placements keep builders, supplies and the defended ring together.
-        let mut spots = vec![(2.8, 0.0), (-2.8, 0.0), (0.0, 2.8), (0.0, -2.8), (0.0, 0.0)];
-        for r in [6.2, 9.6, 13.0] { for (dx, dy) in [(1.,0.),(-1.,0.),(0.,1.),(0.,-1.),(0.7,0.7),(-0.7,0.7),(0.7,-0.7),(-0.7,-0.7)] { spots.push((dx*r,dy*r)); } }
-        for (x, y) in spots {
-            if cycles_left() < 3500.0 { break; }
-            if !realm::ground(p, x, y).is_some_and(|g| !matches!(g.kind, "water" | "cliff")) { continue; }
-            if !units.iter().any(|u| !u.get("air").truthy() && distance(*u, province, x, y) <= 7.0) { continue; }
-            if sites.iter().any(|s| s.get("state").str() != "ruin" && same(s.get("p"), p.get("id"))
-                && (s.get("x").num() - x).hypot(s.get("y").num() - y) < s.get("radius").num_or(2.0) + 2.0) { continue; }
-            spot = Some((x, y)); break;
-        }
-        let Some((x, y)) = spot else { continue; };
-        let tech = me.get("techs");
-        let mut ports = arr!["support", "logistics"];
-        let c = me.path("rts.structureCosts");
-        let mut quote = c.get("shell").num_or(900.0 * price(me)) * d.integrity + c.get("supportPort").num_or(1200.0 * price(me)) * 2.0;
-        if d.range > 0.0 && tech.get("ranged").truthy() { ports.push(obj! { "kind" => "weapon", "range" => d.range, "arc" => 360 }); quote += c.get("weaponPort").num() * (d.range / 5.0).powi(2); }
-        if tech.get("repair").truthy() && !matches!(style, 5 | 6) { ports.push("repair"); quote += c.get("repairPort").num(); }
-        if matches!(style, 3 | 7 | 9) && tech.get("extraction").truthy() && open_slot(p, me).is_some() { ports.push("extract"); quote += c.get("extractPort").num(); }
-        // Price the nearby recurring savings before expanding. Assume only 60% of
-        // the current supply demand stays here and require a five-minute payback.
-        // Defense, repair, civic stability and extraction are extra benefits.
-        let mut returns: Vec<f64> = units.iter().filter(|u| distance(**u, province, x, y) <= 8.0)
-            .map(|u| supply_return(me, *u)).collect();
+    if land.is_empty() { return; }
+    // A province's share of income, and what one more point of loyalty adds to it (income runs 35% to 100% with loyalty).
+    let share = income / land.len() as f64;
+    let support = c.get("supportPort").num_or(1200.0 * pl);
+    let shell = |r: f64, integrity: f64| c.get("shell").num_or(900.0 * pl) * integrity * (r / 2.0).sqrt();
+    let period = c.get("maintenancePeriod").num_or(600.0).max(1.0);
+    let repays = |quote: f64, gain: f64| { let net = gain - quote / period; net > 0.0 && quote / net <= 300.0 };
+    let repair = tech.get("repair").truthy() && !matches!(style, 5 | 6);
+    let mut wants: Vec<Want> = Vec::new();
+    for p in land.iter().copied().take(16) {
+        if cycles_left() < 5500.0 { break; }
+        let pid = p.get("id").num();
+        let here: Vec<View> = own.iter().copied().filter(|s| same(s.get("p"), p.get("id"))).collect();
+        let has = |kind: &str| here.iter().any(|s| port(*s, kind));
+        // Supply: the best six upkeep savings among nearby troops that this province's yards don't already cover.
+        let mut returns: Vec<f64> = units.iter().filter(|u| distance(**u, pid, 0.0, 0.0) <= 9.0).map(|u| supply_return(me, *u)).collect();
         returns.sort_by(|a, b| b.total_cmp(a));
-        let supplied = own.iter().filter(|s| same(s.get("p"), p.get("id")) && port(**s, "logistics")
-            && (s.get("x").num() - x).hypot(s.get("y").num() - y) < 16.0).count() * 6;
-        let supply = returns.iter().skip(supplied).take(6).sum::<f64>() * 0.6;
-        let faith = if same(p.path("faith.by"), id) && !own.iter().any(|s| same(s.get("p"), p.get("id")) && port(*s, "support")) {
-            if style == 2 { 0.8 } else { 0.35 }
-        } else { 0.0 };
-        // Subtract the support bill as well as counting only retained demand.
-        let retained = supply - quote / c.get("maintenancePeriod").num_or(600.0).max(1.0) + p.path("faith.zeal").num_or(0.0) * faith * price(me)
-            - (6.0 + if matches!(style, 4 | 6) { 13.0 } else { 0.0 }) * price(me);
-        if retained <= 0.0 || quote / retained > 300.0 { continue; }
+        let covered = here.iter().filter(|s| port(**s, "logistics")).count() * 6;
+        let supply = returns.iter().skip(covered).take(6).sum::<f64>() * 0.6;
+        let border = p.get("adj").iter().any(|q| !land.iter().any(|o| same(o.get("id"), q)));
+        if !has("support") {
+            let capital = same(p.get("id"), me.get("capital"));
+            let (role, r) = if capital { (Role::Landmark, 2.5) } else { (Role::Hall, 2.0) };
+            let l = p.get("loyalty").num_or(50.0);
+            let lift = (100.0 - p.get("target").num_or(l)).clamp(0.0, c.get("civicBonus").num_or(18.0));
+            let civic = share * 0.65 * lift / 100.0 / (0.35 + 0.65 * l / 100.0).max(0.35) - c.get("civicSecond").num_or(6.0 * pl);
+            let faith = if same(p.path("faith.by"), id) { p.path("faith.zeal").num_or(0.0) * if style == 2 { 0.8 } else { 0.35 } * pl } else { 0.0 };
+            let mut ports = arr!["support"];
+            let mut quote = shell(r, d.integrity) + support;
+            let mut gain = civic.max(0.0) + faith;
+            if supply > 0.0 { ports.push("logistics"); quote += support; gain += supply; }
+            if !repays(quote, gain) { continue; }
+            let value = gain - quote / period;
+            // A hall on an open border mounts the house battery as well: defence repays nothing measurable, so it rides
+            // on a hall that pays for itself.
+            if border && d.range > 0.0 && tech.get("ranged").truthy() {
+                ports.push(obj! { "kind" => "weapon", "range" => d.range, "arc" => 360 });
+                quote += c.get("weaponPort").num_or(1800.0 * pl) * (d.range / 5.0).powi(2);
+            }
+            wants.push(Want { p, role, r, ports, quote, value });
+            continue;
+        }
+        if supply > 0.0 {
+            // A second yard in a crowded province repairs as well.
+            let (role, r, mut ports, mut quote) = (Role::Yard, 1.6, arr!["logistics"], shell(1.6, d.integrity) + support);
+            let (role, r) = if repair && covered > 0 && !has("repair") {
+                ports.push("repair"); quote += c.get("repairPort").num_or(1500.0 * pl); (Role::Bay, 1.5)
+            } else { (role, r) };
+            if repays(quote, supply) { wants.push(Want { p, role, r, ports, quote, value: supply - quote / period }); continue; }
+        }
+        if border && d.range > 0.0 && tech.get("ranged").truthy() && !has("weapon") {
+            let mut ports = arr![obj! { "kind" => "weapon", "range" => d.range, "arc" => 360 }];
+            let mut quote = shell(1.6, d.integrity * 1.3) + c.get("weaponPort").num_or(1800.0 * pl) * (d.range / 5.0).powi(2);
+            if repair { ports.push("repair"); quote += c.get("repairPort").num_or(1500.0 * pl); }
+            // Defence repays nothing measurable: build it only from a comfortable bank, after the economy.
+            if bank > income * 4.0 + quote * 6.0 { wants.push(Want { p, role: Role::Bastion, r: 1.6, ports, quote, value: 0.0 }); }
+            continue;
+        }
+        if matches!(style, 3 | 7 | 9) && tech.get("extraction").truthy() && !has("extract") && open_slot(p, me).is_some() {
+            let quote = shell(1.5, d.integrity) + c.get("extractPort").num_or(1800.0 * pl);
+            if bank > income * 3.0 + quote * 4.0 { wants.push(Want { p, role: Role::Works, r: 1.5, ports: arr!["extract"], quote, value: -1.0 }); }
+        }
+    }
+    wants.sort_by(|a, b| b.value.total_cmp(&a.value));
+    for w in wants.into_iter().take(4) {
+        if cycles_left() < 4000.0 { break; }
         // Keep unit fabrication and several seconds of income ahead of each new site.
-        let reserve = income * 2.0 + quote * 3.0;
-        if bank < reserve { continue; }
+        if bank < income * 2.0 + w.quote * 3.0 { continue; }
+        let Some((x, y)) = spot(w.p, sites, w.r, units) else { continue; };
+        let province = w.p.get("id").num();
+        let height = match w.role { Role::Landmark => d.height + 2.0, Role::Hall => d.height, _ => (d.height - 1.0).max(2.5) };
+        let integrity = if w.role == Role::Bastion { d.integrity * 1.3 } else { d.integrity };
         let key = format!("home-{province:.0}-{now:.0}");
         orders.set("structures", arr![obj! { "key" => key, "p" => province, "x" => x, "y" => y,
-            "shell" => obj! { "radius" => 2, "height" => d.height, "integrity" => d.integrity },
-            "ports" => ports, "appearance" => architecture(style), "budget" => quote + price(me) }]);
+            "shell" => obj! { "radius" => w.r, "height" => height, "integrity" => integrity },
+            "ports" => w.ports, "appearance" => architecture(style, w.role), "budget" => w.quote + pl }]);
         break;
     }
 }
 
-// Geometry is authored per house. Colors come from the owning faction in the viewer.
-pub fn architecture(style: usize) -> Value {
-    let mut pieces = Value::arr();
-    let mut add = |kind: &str, x: f64, y: f64, z: f64, w: f64, h: f64, rot: f64| {
-        pieces.push(obj! { "kind" => kind, "x" => x, "y" => y, "z" => z, "w" => w, "h" => h, "rot" => rot });
+/// A spot for a shell of radius r round province p's town, nearest the square first: clear of the square itself, its
+/// mines, water, cliffs and every standing site, on the province's own side of each border, with a builder near.
+pub fn spot(p: View, sites: View, r: f64, units: &[View]) -> Option<(f64, f64)> {
+    let pid = p.get("id").num();
+    // Neighbouring towns stand about twelve cells away; the border runs halfway.
+    let towns: Vec<(f64, f64)> = p.get("adj").iter().map(|q| { let t = realm::toward(p, q.num(), 1.0); (t.x, t.y) })
+        .filter(|t| t.0 != 0.0 || t.1 != 0.0).collect();
+    let inside = |x: f64, y: f64, margin: f64| towns.iter().all(|(tx, ty)| x * tx + y * ty < 6.0 - margin);
+    let mut mines = Vec::new();
+    for q in -6i32..=6 { for rr in (-6i32).max(-q - 6)..=6i32.min(-q + 6) {
+        let (x, y) = (q as f64 + rr as f64 / 2.0, rr as f64 * 0.866_025_4);
+        if realm::ground(p, x, y).is_some_and(|g| g.kind == "mine") { mines.push((x, y)); }
+    } }
+    let others: Vec<(f64, f64, f64)> = sites.iter().filter(|s| s.get("state").str() != "ruin" && same(s.get("p"), p.get("id")))
+        .map(|s| (s.get("x").num(), s.get("y").num(), s.get("radius").num_or(2.0))).collect();
+    let open = |x: f64, y: f64| realm::ground(p, x, y).map(|g| g.kind);
+    let start = 1.0 + r;
+    for ring in 0..5 {
+        let rad = start + ring as f64 * 0.5;
+        let mut best: Option<(f64, f64, f64)> = None;
+        for k in 0..24 {
+            if cycles_left() < 3500.0 { return None; }
+            let a = (k as f64 * 15.0 + if ring % 2 == 1 { 7.5 } else { 0.0 }).to_radians();
+            let (x, y) = (rad * a.cos(), rad * a.sin());
+            if !inside(x, y, r * 0.55) || others.iter().any(|(ox, oy, or)| (ox - x).hypot(oy - y) < or + r + 0.15)
+                || mines.iter().any(|(mx, my)| (mx - x).hypot(my - y) < r + 0.8) { continue; }
+            // The footprint stands on dry ground; a road may cross its edge but not its middle.
+            let mut roads = 0.0;
+            let mut ok = matches!(open(x, y), Some("open" | "forest" | "rough"));
+            for j in 0..8 {
+                if !ok { break; }
+                let b = (j as f64 * 45.0).to_radians();
+                for f in [0.5, 0.9] {
+                    match open(x + f * r * b.cos(), y + f * r * b.sin()) {
+                        Some("water" | "cliff" | "mine" | "town" | "ford") | None => { ok = false; break; }
+                        Some("road") => roads += if f < 0.7 { 2.0 } else { 1.0 },
+                        _ => {}
+                    }
+                }
+            }
+            if !ok || roads > 3.0 || !units.iter().any(|u| !u.get("air").truthy() && distance(*u, pid, x, y) <= 7.0) { continue; }
+            if best.map_or(true, |b| roads < b.2) { best = Some((x, y, roads)); }
+        }
+        if let Some((x, y, _)) = best { return Some(((x * 10.0).round() / 10.0, (y * 10.0).round() / 10.0)); }
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Architecture. A building stands at the scale of the ground under it: pieces are in cells from the site's centre
+// (x east, y north, z up), so a radius-2 site covers about four cells across. The viewer looks from the south and a
+// little east: fronts face south and tall pieces stand at the back. `faction` pieces take the owner's colour, which is
+// how a city reads as yours from above; the other tones are materials.
+
+/// What a site is for. Its ports follow from it, and so does its look.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Role { Landmark, Hall, Yard, Works, Bastion, Bay }
+pub const ROLES: [Role; 6] = [Role::Landmark, Role::Hall, Role::Yard, Role::Works, Role::Bastion, Role::Bay];
+
+/// One piece of a building. Kind and tone are letters from KINDS and TONES; tone 0 is the kind's usual material.
+#[derive(Clone, Copy)]
+struct Pc { kind: u8, x: f64, y: f64, z: f64, w: f64, h: f64, d: f64, rot: f64, tone: u8 }
+const KINDS: &str = "pplatform hhall ttower rroof aarch ccolumn wwall xaccent Ddome sspire Ppyramid ddrum Ttiers kstack ggarden bbanner llight Sstatue";
+const TONES: &str = "Ffaction sstone mmarble bbrick wwood Mmetal ggold Gglass kdark jjade nsand";
+fn word(table: &str, c: u8) -> &str { table.split(' ').find(|w| w.as_bytes()[0] == c).map_or("", |w| &w[1..]) }
+struct Art(Vec<Pc>);
+impl Art {
+    fn add(&mut self, kind: u8, x: f64, y: f64, z: f64, w: f64, h: f64, d: f64, tone: u8) {
+        self.0.push(Pc { kind, x, y, z, w, h, d, rot: 0.0, tone });
+    }
+    /// The engine's `appearance`: at most 40 pieces, inside its bounds, to the hundredth of a cell.
+    fn value(&self, name: &str) -> Value {
+        let r = |v: f64, lo: f64, hi: f64| (v.clamp(lo, hi) * 100.0).round() / 100.0;
+        let mut pieces = Value::arr();
+        for q in self.0.iter().take(40) {
+            let mut o = obj! { "kind" => word(KINDS, q.kind), "x" => r(q.x, -8.0, 8.0), "y" => r(q.y, -8.0, 8.0),
+                "z" => r(q.z, 0.0, 12.0), "w" => r(q.w, 0.1, 12.0), "h" => r(q.h, 0.1, 16.0) };
+            if q.d > 0.0 { o.set("d", r(q.d, 0.1, 12.0)); }
+            if q.rot != 0.0 { o.set("rot", r(q.rot, -360.0, 360.0)); }
+            if q.tone != 0 { o.set("tone", word(TONES, q.tone)); }
+            pieces.push(o);
+        }
+        obj! { "name" => name, "pieces" => pieces }
+    }
+}
+
+/// A house's building kit (shared/buildings.txt).
+struct Kit { wall: u8, base: u8, roof: u8, spire: u8, garden: bool }
+fn kit(code: &str) -> Kit {
+    let b = code.as_bytes();
+    Kit { wall: b[0], base: b[1], roof: b[2], spire: b[3], garden: b[4] == b'y' }
+}
+/// The house roof over a block w × d centred at (x, y) whose walls end at z.
+fn roof(a: &mut Art, k: &Kit, x: f64, y: f64, z: f64, w: f64, d: f64) {
+    let m = w.min(d);
+    match k.roof {
+        b'G' => a.add(b'r', x, y, z, w, (m * 0.5).min(1.1), d, b'F'),
+        b'D' => {
+            a.add(b'x', x, y, z, w + 0.06, 0.1, d + 0.06, k.base);
+            a.add(b'd', x, y, z + 0.1, m * 0.6, 0.35, 0.0, k.wall);
+            a.add(b'D', x, y, z + 0.45, m * 0.64, m * 0.4, 0.0, b'F');
+        }
+        b'T' => a.add(b'T', x, y, z, w * 0.95, (m * 0.9).clamp(1.2, 2.4), d * 0.95, b'F'),
+        b'S' => a.add(b'P', x, y, z, w * 0.92, (m * 0.75).clamp(0.9, 2.2), d * 0.92, b'F'),
+        _ => a.add(b'x', x, y, z, w * 0.9, 0.16, d * 0.9, b'F'),
+    }
+}
+/// A house tower w across and h tall at (x, y), standing on z.
+fn spire(a: &mut Art, k: &Kit, x: f64, y: f64, z: f64, w: f64, h: f64) {
+    let t = k.wall;
+    match k.spire {
+        b'd' => { a.add(b'd', x, y, z, w, h, 0.0, t); a.add(b'D', x, y, z + h, w * 1.08, w * 0.62, 0.0, b'F'); }
+        b'm' => {
+            a.add(b'd', x, y, z, w * 0.72, h, 0.0, t);
+            a.add(b'd', x, y, z + h * 0.72, w * 0.95, 0.12, 0.0, b'g');
+            a.add(b'D', x, y, z + h, w * 0.8, w * 1.25, 0.0, b'F');
+        }
+        b'n' => { a.add(b't', x, y, z, w, h, 0.0, t); a.add(b's', x, y, z + h + 0.22, w * 0.95, h * 0.6, 0.0, b'F'); }
+        b'o' => { a.add(b't', x, y, z, w, h, 0.0, t); a.add(b'D', x, y, z + h + 0.22, w * 0.88, w * 0.55, 0.0, b'G'); }
+        b'p' => a.add(b'T', x, y, z, w * 1.3, h * 1.1, 0.0, b'F'),
+        b'M' => {
+            a.add(b'h', x, y, z, w * 0.85, h, w * 0.85, b'G');
+            a.add(b'x', x, y, z + h, w * 0.6, 0.25, w * 0.6, b'F');
+            a.add(b'l', x, y, z + h + 0.25, 0.2, h * 0.45, 0.0, b'M');
+        }
+        b'c' => {
+            a.add(b't', x, y, z, w, h, 0.0, t);
+            a.add(b'x', x, y - w / 2.0 - 0.03, z + h - w * 0.75, w * 0.55, w * 0.55, 0.06, b'g');
+            a.add(b's', x, y, z + h + 0.22, w * 0.9, h * 0.4, 0.0, b'F');
+        }
+        b't' => {
+            a.add(b'c', x, y, z, 0.16, h * 0.7, 0.0, b'M');
+            a.add(b'd', x, y, z + h * 0.7, w * 1.2, h * 0.3, 0.0, b'M');
+            a.add(b's', x, y, z + h, w * 1.25, w * 0.4, 0.0, b'F');
+        }
+        _ => a.add(b'S', x, y, z, w * 0.9, h * 1.1, 0.0, b'm'),
+    }
+}
+
+// Designs are written small, since a program pays for its length in memory: pieces `kind x,y,z,w,h,d,rot/tone` split by
+// `;`, a blank number is 0 and d and rot may be left off. `+x,y,z` repeats the last piece elsewhere (left off, z stays).
+// `<...>` draws its pieces mirrored east to west, then as written. `R` and `Q` are the kit's roof (x,y,z,w,d) and tower
+// (x,y,z,w,h). Pieces after `?` or `!` stand only with or without gardens, after `=` or `~` only with or without flat
+// roofs. Tones W and B are the kit's walls and terrace; V is the walls and X brick, both metal in a glass house.
+// Each design is drawn for its role's radius in `plan`.
+
+/// The hall, yard, works, bastion and bay. 
+const DESIGNS: [&str; 5] = [
+    // A civic hall: a terrace and steps, the hall under the house roof, a portico, wings, two towers, greens and banners.
+    "p,.1,,3.6,.35,3.1/B;p,-1.6,,1.4,.18,.45/B;h,.4,.35,2.2,1.5,1.5/W;R,.4,1.85,2.2,1.5;<c.9,-.62,.35,.2,1.25/m;+.3,-.62>;x,-.62,1.6,2.1,.2,.42/W;<h1.35,.65,.35,.75,1,1.2/W;x1.35,.65,1.35,.8,.14,1.25/F;Q1.4,1.25,.35,.55,2.3;?g1.2,-1,.35,.9,.1,.8;!S1.25,-1.05,.35,.42,1.5/k;b.85,-1.35,.35,.45,2;l.42,-1.42,.35,.16,.75/g>",
+    // A supply yard: warehouses under the house colour, stacked crates, a crane, a fence and a gate.
+    "p,,,2.8,.15,2.48/B;h-.24,.76,.15,2.08,1.15,.8/V;=x-.24,.76,1.3,1.91,.14,.74/F;~r-.24,.76,1.3,2.18,.36,.9/F;h-1,-.36,.15,.72,.9,1.2/V;=x-1,-.36,1.05,.66,.14,1.1/F;~r-1,-.36,1.05,.82,.32,1.3/F;x.12,-.36,.15,.32,.32/w;+.4,-.36;+.26,-.36,.47;+.12,-.72,.15;+.68,.08;+.68,-.24;c1.04,.24,.15,.14,2.4/M;x.68,.08,2.45,1.5,.1,.12,-25/M;w.72,-1.2,.15,1.04,.45,.12/w;a-.28,-1.2,.15,.72,1,.3/B;b1.24,-1.04,.15,.45,1.8;l1.2,.8,.15,.16,1.3/g",
+    // Extraction works: a shed, smoking stacks, tanks, a headframe and heaps of ore.
+    "p,,,2.63,.15,2.33/k;h-.34,.41,.15,1.65,1.3,1.05/X;r-.34,.41,1.45,1.73,.5,1.13/F;k.71,.83,.15,.42,2.3/b;k1.05,.45,.15,.36,1.8/b;d.86,-.41,.15,.8,.9/M;D.86,-.41,1.05,.8,.28/M;d.3,-.79,.15,.6,.7/M;D.3,-.79,.85,.6,.21/M;t-1.01,-.22,.15,.45,2.1/M;r-1.01,-.22,2.47,.6,.3,.6/F;P-.79,-.86,.15,.9,.5/k;P-.26,-.94,.15,.6,.35/n;l.26,-.15,.15,.16,1.2/g;b1.16,-.94,.15,.45,1.6",
+    // A bastion: curtain walls round a keep (the battery stands on top), towers at the corners and a gatehouse.
+    "p,,,2.72,.3,2.72/s;w,1.12,.3,2.24,1.1,.35/s;<w1.12,,.3,2.24,1.1,.35,90/s;w.76,-1.12,.3,.76,1.1,.35/s>;a,-1.12,.3,.76,1.5,.5/W;r,-1.12,1.8,.84,.35,.6/F;<Q1.12,1.12,.3,.7,1.8;Q1.12,-1.12,.3,.7,1.8>;h-.44,.44,.3,.8,.9,.64/W;t.2,.12,.3,.96,2.5/s;b.52,.44,3.02,.45,1.1;l-.44,-.6,.3,.16,.8/g",
+    // A repair bay: a workshop with a great door, a gantry crane, lamps and spares.
+    "p,,,2.55,.15,2.25/B;h,.45,.15,1.88,1.5,1.05/V;R,.45,1.65,1.875,1.05;a,-.09,.15,1.13,1.4,.2/B;<c.9,-.68,.15,.14,2/M;l.45,-.98,.15,.18,.9/g>;x,-.68,2.15,1.95,.14,.16/F;x-1.01,-.19,.15,.3,.3/w;+-.75,-.3;+1.01,-.22;b1.13,.94,.15,.45,2",
+];
+
+/// Draws `src` into `a`; sx is -1 for the mirrored half of a `<...>`.
+fn draw(a: &mut Art, k: &Kit, src: &str, sx: f64) {
+    let mut rest = src;
+    while !rest.is_empty() {
+        if let Some(b) = rest.strip_prefix('<') {
+            let end = b.find('>').unwrap_or(b.len());
+            draw(a, k, &b[..end], -sx);
+            draw(a, k, &b[..end], sx);
+            rest = b.get(end + 1..).unwrap_or("").trim_start_matches(';');
+            continue;
+        }
+        let end = rest.find([';', '<']).unwrap_or(rest.len());
+        piece(a, k, &rest[..end], sx);
+        rest = rest[end..].trim_start_matches(';');
+    }
+}
+fn piece(a: &mut Art, k: &Kit, s: &str, sx: f64) {
+    let (s, ok) = match s.bytes().next() {
+        Some(b'?') => (&s[1..], k.garden),
+        Some(b'!') => (&s[1..], !k.garden),
+        Some(b'=') => (&s[1..], k.roof == b'F'),
+        Some(b'~') => (&s[1..], k.roof != b'F'),
+        _ => (s, true),
     };
-    add("platform", 0., 0., 0., 4.2, 0.3, 0.);
-    match style {
-        0 => { // Fortified gate with four squat corner towers.
-            for x in [-1.5, 1.5] { for y in [-1.5, 1.5] { add("tower", x, y, 0.3, 0.9, 3.2, 0.); } }
-            add("wall", 0., 1.5, 0.3, 3., 1.7, 0.); add("arch", 0., -1.5, 0.3, 2.0, 2.3, 0.); add("roof", 0., 0., 2., 2.8, 1.1, 0.);
-        }
-        1 => { // Twin pylons and an arch like a drawn bow.
-            for x in [-1.3, 1.3] { add("column", x, 0., 0.3, 0.65, 4., 0.); add("accent", x, 0., 4.3, 0.8, 0.8, 45.); }
-            add("arch", 0., 0., 1., 3.6, 3.4, 0.); add("hall", 0., 1., 0.3, 2., 1.2, 0.);
-        }
-        2 => { // Cloister arcades surround a chapel and bell tower.
-            for x in [-1.5, 1.5] { add("arch", x, 0., 0.3, 2.8, 2.3, 90.); }
-            add("hall", 0., 0.7, 0.3, 2.3, 2.3, 0.); add("roof", 0., 0.7, 2.6, 2.6, 1.1, 0.); add("tower", 0., 1.4, 0.3, 0.7, 5., 0.); add("arch", 0., -1.5, 0.3, 2.5, 2.3, 0.);
-        }
-        3 => { // Stepped laboratory with three experiment columns.
-            add("hall", 0., 0., 0.3, 3.1, 1.4, 0.); add("platform", 0., 0., 1.7, 3.4, 0.25, 0.);
-            for (x,h) in [(-1.,1.2),(0.,2.0),(1.,1.5)] { add("column", x, 0., 1.95, 0.6, h, 0.); add("accent", x, 0., 1.95+h, 0.75, 0.3, 45.); }
-        }
-        4 => { // Terraced beacon over a long dock house.
-            add("hall", 0., 0., 0.3, 3.2, 1.2, 0.); add("tower", 0., 0.8, 1.5, 1., 4.2, 0.);
-            for z in [2., 3.5, 5.] { add("roof", 0., 0.8, z, 2., 0.5, 0.); }
-            add("accent", 0., 0.8, 5.7, 0.9, 1., 0.); add("arch", 0., -1.5, 0.3, 3.1, 1.7, 0.);
-        }
-        5 => { // Broad assembly steps, open colonnade and raised red-star plinth.
-            add("platform", 0., 0., 0.3, 3.7, 0.4, 0.); add("hall", 0., 0.6, 0.7, 3., 1.8, 0.);
-            for x in [-1.2, 0., 1.2] { add("column", x, -1., 0.7, 0.35, 1.8, 0.); }
-            add("roof", 0., 0., 2.5, 3.7, 0.3, 0.); add("accent", 0., 0., 2.8, 1., 0.6, 45.);
-        }
-        6 => { // Offset needle spires around an empty central address.
-            for (x,y,h) in [(-1.2,0.8,6.8),(1.2,0.8,4.6),(0.,-1.2,2.8)] { add("tower", x, y, 0.3, 0.5, h, 0.); add("accent", x, y, 0.3+h, 0.65, 0.5, 45.); }
-            add("arch", 0., 0., 0.3, 2., 1.5, 45.);
-        }
-        7 => { // Paired warehouse roofs frame a trading arcade.
-            for x in [-1.25, 1.25] { add("hall", x, 0., 0.3, 1.4, 2., 90.); add("roof", x, 0., 2.3, 1.7, 1., 90.); }
-            add("arch", 0., -1., 0.3, 1.8, 2., 0.); add("tower", 0., 1.3, 0.3, 0.8, 3.8, 0.);
-        }
-        8 => { // Tall legs hold a low roost with two swept roof wings.
-            for x in [-1., 1.] { add("column", x, 0., 0.3, 0.4, 2.8, 0.); }
-            add("hall", 0., 0., 3.1, 1.8, 1., 0.); add("roof", -1., 0., 4.1, 2., 0.45, -25.); add("roof", 1., 0., 4.1, 2., 0.45, 25.); add("accent", 0., -0.8, 4.1, 0.4, 0.8, 0.);
-        }
-        _ => { // Open courtyard with asymmetric garden walls.
-            add("wall", -1.5, 0., 0.3, 3., 1.4, 90.); add("wall", 0., 1.5, 0.3, 3., 1., 0.);
-            add("arch", 1.5, 0., 0.3, 2.6, 1.8, 90.); add("hall", -0.8, 0.8, 0.3, 1.3, 1.7, 0.); add("accent", 0., 0., 0.3, 0.9, 1.1, 45.);
+    if !ok || s.is_empty() { return; }
+    let (body, tone) = s[1..].split_once('/').unwrap_or((&s[1..], ""));
+    let v: Vec<f64> = body.split(',').map(|n| n.parse().unwrap_or(0.0)).collect();
+    let g = |i: usize| v.get(i).copied().unwrap_or(0.0);
+    let x = g(0) * sx;
+    match s.as_bytes()[0] {
+        b'R' => roof(a, k, x, g(1), g(2), g(3), g(4)),
+        b'Q' => spire(a, k, x, g(1), g(2), g(3), g(4)),
+        b'+' => if let Some(&last) = a.0.last() { a.0.push(Pc { x, y: g(1), z: v.get(2).copied().unwrap_or(last.z), ..last }); },
+        kind => {
+            let tone = match tone.bytes().next().unwrap_or(0) {
+                b'W' => k.wall,
+                b'B' => k.base,
+                b'V' => if k.wall == b'G' { b'M' } else { k.wall },
+                b'X' => if k.wall == b'G' { b'M' } else { b'b' },
+                t => t,
+            };
+            a.0.push(Pc { kind, x, y: g(1), z: g(2), w: g(3), h: g(4), d: g(5), rot: g(6), tone });
         }
     }
-    obj! { "name" => design(style).name, "pieces" => pieces }
+}
+
+/// Site `style`'s building for `role`, with its design name. A house program holds only its own house's art (`art`,
+/// from shared/buildings.txt), so it builds in its own style in any seat; the default program holds every house's.
+pub fn architecture(style: usize, role: Role) -> Value {
+    let line = super::art(style);
+    let f: Vec<&str> = line.split('|').collect();
+    let k = kit(f[0]);
+    let mut a = Art(Vec::new());
+    let i = ROLES.iter().position(|r| *r == role).unwrap_or(1);
+    draw(&mut a, &k, if i == 0 { f[7] } else { DESIGNS[i - 1] }, 1.0);
+    a.value(f[1 + i])
 }
