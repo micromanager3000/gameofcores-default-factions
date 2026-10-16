@@ -37,7 +37,8 @@ node tools/source.mjs kublai /tmp/kublai.rs
 The export contains the selected program and all shared modules in one Rust source file.
 Exports fit the game's 512 KiB source limit. Players can copy and change the exported source.
 The program compiles against the public game SDK. All faction helpers count toward source RAM.
-The game provides 3,072 free RAM pages to every faction, covering the newly included preset source.
+The game provides 3,072 free RAM pages to every faction.
+Source and other RAM above that allowance incur the ordinary memory upkeep charge.
 Compiled instructions are metered normally.
 Both the Rust package and the Node exporter produce the same source; `npm test` checks every program.
 
