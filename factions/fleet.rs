@@ -1699,7 +1699,7 @@ fn junks(units: View, world: View, me: View, role: u8) -> Value {
                 o.set("sail", obj! { "chase" => tid, "keep" => if role == 2 { 3.5 } else { 4.5 } });
                 send = true;
             }
-        } else if (role==2 || !armed) && world.get("logistics").truthy() {
+        } else if role==2 && world.get("logistics").truthy() {
             let home=heard.get("hw").num_or(carried.get("h").num_or(-1.0));
             if home>=0.0 && water!=home && chasing<0.0 && sea::route(world,water,home).is_some(){o.set("sail",home);send=true;}
         } else if goal >= 0.0 {
