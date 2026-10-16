@@ -394,10 +394,8 @@ use super::{air, theme};
                 && w.get("until").num_or(0.0)>(now+travel)*5.0
         }).max_by(|a,b|a.get("cycles").num().min(hold).total_cmp(&b.get("cycles").num().min(hold)))
     }
-    fn logistics_budget(world:View,me:View,mut out:Value)->Value{
-        if !world.get("logistics").truthy(){return out;}
-        // Recovery must be able to return its policy even when the planner used nearly all its call.
-        if cycles_left()<3500.0{return out;}
+    /// Install affordable worker callbacks without scanning routes, stocks or bodies.
+    fn logistics_controls(me: View, out: &mut Value) {
         let income=me.path("rts.cpu.income").num_or(20000.0);
         for (ty,cycles) in [("miner",4500),("hauler",10000),("freighter",12000)]{out.entry("compute").entry("types").set(ty,obj!{"cycles"=>cycles,"every"=>2});}
         // Route planning and RAM reads need a fixed minimum even between irregular deliveries.
@@ -411,6 +409,13 @@ use super::{air, theme};
         cpu.set("upkeepOrder",priority);
         // Fixed reserves from a rich second must not lock out code when delivery income falls.
         cpu.set("reserve",obj!{"think"=>0.25,"control"=>0.1,"upkeep"=>0.1,"duel"=>0.05});
+    }
+    fn logistics_budget(world:View,me:View,mut out:Value)->Value{
+        if !world.get("logistics").truthy(){return out;}
+        // Recovery must be able to return its policy even when the planner used nearly all its call.
+        if cycles_left()<3500.0{return out;}
+        let income=me.path("rts.cpu.income").num_or(20000.0);
+        logistics_controls(me, &mut out);
         let depots=me.path("rts.logistics.depots");let stock=depots.iter().filter(|d|d.get("p").num()!=me.get("capital").num()||d.get("dock").truthy()).map(|d|d.get("cycles").num_or(0.0)).sum::<f64>();
         let have=me.path("units.byType");
         if stock>16000.0 && depots.iter().filter(|d|d.get("dock").truthy()).count()>=2 && !me.path("techs.seaTraversal").truthy(){out.set("research","seaTraversal");}
@@ -1245,17 +1250,23 @@ use super::{air, theme};
         // Standing unit orders, research and building jobs keep running between plans.
         // A quiet second also repairs a fixed allowance before another full planner can overrun it.
         let now = world.get("seconds").num_or(0.0).floor();
-        let mut orders = if world.get("logistics").truthy() && now >= 60.0 && now % 5.0 != 0.0
-            && me.path("units.stalled").num_or(0.0) == 0.0
-            && me.path("rts.cpu.bank").num_or(0.0) > me.path("rts.cpu.income").num_or(0.0) * 2.0 {
-            let mut cpu = obj! { "limits" => me.path("rts.cpu.limits"),
-                "reserve" => me.path("rts.cpu.reserve"), "upkeepOrder" => me.path("rts.cpu.upkeepOrder") };
+        let mut orders = if world.get("logistics").truthy() && now >= 60.0 && now % 5.0 != 0.0 {
             let income = me.path("rts.cpu.income").num_or(20000.0);
-            let old = cpu.get("limits").get("think").num_or(0.0);
-            let old = if old <= 1.0 { old * income } else { old };
-            let peak = me.path("compute.thinkPeak").num_or(0.0);
-            cpu.entry("limits").set("think", old.max(32000.0).max(peak * 1.35 + 6000.0));
-            obj! { "compute" => obj! { "cpu" => cpu } }
+            if me.path("units.stalled").num_or(0.0) > 0.0 || me.path("rts.cpu.bank").num_or(0.0) <= income * 2.0 {
+                // Repeated recovery scans can consume the base income before miners receive upkeep.
+                // Pause optional spending now; review bodies and recruitment on the next planning second.
+                let mut out = recovery_policy(me);
+                logistics_controls(me, &mut out);
+                out
+            } else {
+                let mut cpu = obj! { "limits" => me.path("rts.cpu.limits"),
+                    "reserve" => me.path("rts.cpu.reserve"), "upkeepOrder" => me.path("rts.cpu.upkeepOrder") };
+                let old = cpu.get("limits").get("think").num_or(0.0);
+                let old = if old <= 1.0 { old * income } else { old };
+                let peak = me.path("compute.thinkPeak").num_or(0.0);
+                cpu.entry("limits").set("think", old.max(32000.0).max(peak * 1.35 + 6000.0));
+                obj! { "compute" => obj! { "cpu" => cpu } }
+            }
         } else { govern_units(world, me, share, strategy) };
         maintain_freighters(&mut orders, world, me);
         super::structures::apply(&mut orders, world, me);

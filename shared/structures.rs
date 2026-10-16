@@ -103,7 +103,7 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     let d = design(style);
     let now = world.get("seconds").num_or(0.0);
     // Refresh at most every five seconds; short standing jobs cover the interval.
-    if now.floor() % 5.0 != 0.0 && orders.get("memo").str() != "Recovering production" { return; }
+    if now.floor() % 5.0 != 0.0 { return; }
     let sites = me.path("rts.structures");
     let mut own: Vec<View> = sites.iter().filter(|s| same(s.get("owner"), id) && s.get("state").str() != "ruin").collect();
     if !own.is_empty() { let start = (now as usize / 5) % own.len(); own.rotate_left(start); }

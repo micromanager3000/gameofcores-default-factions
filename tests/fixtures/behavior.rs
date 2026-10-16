@@ -181,3 +181,23 @@ fn ground_carriers_collect_cargo_from_an_alternate_receiving_dock() {
     let orders:Vec<Value>=abi::TEST_ORDERS.with(|o|o.take()).iter().map(|s|Value::parse(s)).collect();
     assert!(orders.iter().any(|o|o.get("cargo").get("load").get("p").num()==1.0),"{orders:?}");
 }
+
+#[test]
+fn recovery_intervals_stop_optional_spending_and_leave_workers_funded() {
+    for stalled in [0, 12] {
+        let (mut world, mut me, _) = fixture();
+        world.set("seconds", 101);
+        me.entry("units").set("stalled", stalled);
+        me.entry("rts").entry("cpu").set("income", 12500);
+        me.entry("rts").entry("cpu").set("bank", 2000);
+        me.set("types", obj! {"miner"=>obj!{},"hauler"=>obj!{},"guard"=>obj!{}});
+        let args = views(&[world,me]);
+        let orders = common::govern(args[0],args[1],0.4,||panic!("recovery interval must remain cheap"));
+        let compute = orders.get("compute");
+        let limits = compute.get("cpu").get("limits");
+        for lane in ["research","influence","fabrication"] {assert_eq!(limits.get(lane).num(),0.0);}
+        assert_eq!(compute.get("types").get("miner").get("cycles").num(),4500.0);
+        assert_eq!(compute.get("types").get("hauler").get("cycles").num(),10000.0);
+        assert!(orders.get("ram").is_empty() && orders.get("spawn").is_empty() && orders.get("disband").is_empty());
+    }
+}
