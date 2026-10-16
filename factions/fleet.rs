@@ -1768,6 +1768,7 @@ fn junk_reflex(u: View, ns: View, pool: &mut Pool) -> Option<Value> {
     let reach = u.get("reach").num_or(1.0);
     let merchant=u.get("type").str()=="corsair" && r.get("cargo").truthy();
     let carrying=logistics::cargo(u)>0.0;
+    let transferring=r.path("cargo.job").truthy();
     let (mut port, mut star) = (0, 0);
     let mut ship: Option<View> = None;
     let mut shot: Option<View> = None;
@@ -1819,16 +1820,17 @@ fn junk_reflex(u: View, ns: View, pool: &mut Pool) -> Option<Value> {
         if u.get("type").str() == "corsair" && hurt && t.get("d").num() < 6.0 {
             // run: away from it, dashing if it can
             o.set("head", obj! { "x" => -t.get("dx").num(), "y" => -t.get("dy").num() });
+            if transferring {o.set("cargo",obj!{"cancel"=>true});}
             if modules.has_str("dash") && ready("dash") && pool.take("abilities", 900.0) {
                 o.set("ability", "dash");
             }
             act = true;
-        } else if !carrying && t.get("d").num() <= 7.0 && !sea::in_arc(u, t, 30.0) {
+        } else if !carrying && !transferring && t.get("d").num() <= 7.0 && !sea::in_arc(u, t, 30.0) {
             let b = sea::beam(u, t);
             o.set(if stopped { "face" } else { "head" }, obj! { "x" => b.x, "y" => b.y });
             act = true;
         }
-    } else if let Some(t) = foe.filter(|_| stopped) {
+    } else if let Some(t) = foe.filter(|_| stopped && !transferring && !carrying) {
         // a boat rowing past, or troops on the shore: closer when it's out of the guns' reach (a picket keeps its
         // station), else the beam to it
         if t.get("d").num() > 5.5 && u.get("type").str() != "picket" {
