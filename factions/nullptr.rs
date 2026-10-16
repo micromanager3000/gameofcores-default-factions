@@ -752,6 +752,14 @@ fn war_order(u: View, world: View, me: View) -> Option<Value> {
     if target.is_nan() || target < 0.0 {
         return orders::to(u, "fight", n(me.get("capital")), world, me, ());
     }
+    // A carried plan can outlive a pact or change of ownership. Return for new orders before attacking an ally.
+    if !defending {
+        let owner=realm::index(world).get(target).get("owner").num_or(-1.0);
+        let conduct=u.get("conduct");
+        if realm::is_ally(me,owner) || (conduct.get("seconds").num_or(0.0)>0.0 && conduct.get("from").num_or(-2.0)==owner) {
+            return orders::to(u,"fight",n(me.get("capital")),world,me,());
+        }
+    }
     let mut o = carry(orders::to(u, if defending { "fight" } else { "capture" }, target, world, me, ()), u, &p, me);
     if let Some(o) = &mut o {
         o.set("alert", if is_str(u.get("type"), "sentry") { 8 } else { 7 });

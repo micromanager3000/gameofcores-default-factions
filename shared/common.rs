@@ -184,7 +184,7 @@ use super::{air, theme};
         use logistics::{Endpoint as E,cargo,transfer};
         let cap=me.get("capital").num();
         for u in units.iter() {
-            if cycles_left()<1800.0 { break; }
+            if cycles_left()<3200.0 { break; }
             let n=cargo(u);let at=u.get("at").num();
             if cargo_working(u) {continue;}
             if n>0.0 && u.get("doing").str()!="gather" {
@@ -242,7 +242,10 @@ use super::{air, theme};
                 }else if me.path("techs.seaTraversal").truthy() && home.is_some() && Some(e.p)!=home && land.as_ref().is_none_or(|r|r.len()>=2) && world.path("logistics.docks").iter().any(|d|d.get("p").num()==e.p){E::dock(e.p)}
                 else if land.is_some(){E::town(cap)}else{continue;};
                 if let Some(route)=logistics::land_route(world,me,at,e.p){
-                    let score=n/(1.0+route.len() as f64) * if e.dock {2.0}else{1.0};
+                    // Value one trip, not the whole backlog. Otherwise a full remote mine can starve
+                    // the receiving dock forever, even while stolen or shipped cargo waits beside the capital.
+                    let onward=if dest.dock {0}else{land.as_ref().map_or(0,Vec::len)};
+                    let score=n.min(logistics::capacity(u))/(1.0+route.len() as f64+onward as f64) * if e.dock {3.0}else{1.0};
                     if score>value{best=Some((e,dest,n));value=score;}
                 }
             }
