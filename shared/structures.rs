@@ -498,10 +498,11 @@ fn piece(a: &mut Art, k: &Kit, s: &str, sx: f64) {
     }
 }
 
-/// Site `style`'s building for `role`, with its design name. A house program holds only its own house's art (`ARTS`,
+/// Site `style`'s building for `role`, with its design name. A house program holds only its own house's art (`art`,
 /// from shared/buildings.txt), so it builds in its own style in any seat; the default program holds every house's.
 pub fn architecture(style: usize, role: Role) -> Value {
-    let f: Vec<&str> = crate::ARTS[style.min(crate::ARTS.len() - 1)].split('|').collect();
+    let line = super::art(style);
+    let f: Vec<&str> = line.split('|').collect();
     let k = kit(f[0]);
     let mut a = Art(Vec::new());
     let i = ROLES.iter().position(|r| *r == role).unwrap_or(1);
