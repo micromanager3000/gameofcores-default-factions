@@ -3,12 +3,12 @@ fn main() {
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
     let mut shared = String::from("\n#[allow(dead_code, unused_imports)]\nmod shared {\n");
     let mut example_shared = shared.clone();
-    for name in ["air", "capital", "common", "compat", "structures", "theme", "unit_art"] {
+    for name in ["air", "capital", "common", "compat", "energy", "structures", "theme", "unit_art"] {
         let path = format!("shared/{name}.rs");
         println!("cargo:rerun-if-changed={path}");
         let module = format!("pub mod {name} {{\n{}\n}}\n", fs::read_to_string(path).expect("shared source"));
         shared.push_str(&module);
-        if name != "common" && name != "structures" {
+        if name != "common" && name != "structures" && name != "energy" {
             example_shared.push_str(&module);
         }
     }

@@ -32,7 +32,7 @@ fn scout_body() -> Value {
 
 // Extraction for the economy, influence for the papers (persuasion 60% stronger, morale +8), capture for the Red Army,
 // then the crossings when the land runs out and Compute boost when there are cycles to spare.
-const TECHS: [&str; 5] = ["extraction", "influence", "capture", "mountainTraversal", "seaTraversal"];
+const TECHS: [&str; 10] = ["extraction", "turbines", "influence", "cooling", "capture", "transmission", "mountainTraversal", "seaTraversal", "drilling", "storage"];
 
 // The Manifesto, ported to compute: a line at a time for the memo (at most 90 characters with what it is doing).
 const QUOTES: [&str; 12] = [

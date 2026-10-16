@@ -53,9 +53,10 @@ fn kite_shot_body() -> Value {
 
 // What the faction wants, in order: researched when nobody sells it, bought when somebody does. Compute boost comes
 // after defensive capabilities; faith is left to the priests.
-const TECHS: [&str; 19] = [
-    "extraction", "seaTraversal", "armor", "ranged", "repair", "influence", "capture", "dash", "cloak", "antiAir", "scan", "pierce", "artillery",
-    "computeBoost", "mountainTraversal", "flight", "airWeapons", "stealth", "gate",
+const TECHS: [&str; 24] = [
+    "extraction", "seaTraversal", "turbines", "armor", "ranged", "transmission", "repair", "storage", "influence",
+    "capture", "dash", "cloak", "antiAir", "scan", "pierce", "artillery", "drilling", "fission", "computeBoost",
+    "mountainTraversal", "flight", "airWeapons", "stealth", "gate",
 ];
 
 // ---- JavaScript's arithmetic, where this program follows it ----

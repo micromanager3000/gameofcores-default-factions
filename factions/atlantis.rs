@@ -44,10 +44,10 @@ fn scout_body() -> Value {
 // (25% more cycles a core); then Flight, Gate, Enhanced stealth and Air weapons. A ready tier-2 tech that no faction
 // holds yet (Mountain traversal, Influence, Capture, Cloak, Faith) jumps the queue once the army's techs are in: a
 // world first for 60 puzzles.
-const TECHS: [&str; 20] = [
-    "extraction", "armor", "dash", "ranged", "pierce", "antiAir", "seaTraversal",
-    "repair", "artillery", "scan", "mountainTraversal", "computeBoost", "influence", "capture", "cloak", "faith",
-    "flight", "gate", "stealth", "airWeapons",
+const TECHS: [&str; 25] = [
+    "extraction", "armor", "drilling", "dash", "ranged", "storage", "pierce", "antiAir", "seaTraversal", "repair",
+    "artillery", "fission", "scan", "mountainTraversal", "fusion", "computeBoost", "influence", "capture", "cloak",
+    "faith", "turbines", "flight", "gate", "stealth", "airWeapons",
 ];
 
 /// What the Merchants of Light trade: the techs of the economy, the map and the mind. The army's techs (Armor, Dash,
@@ -1488,7 +1488,7 @@ mod atlantis_ext {
         let now = me.path("research.tech").str();
         let offer = if now.is_empty() { 110_000.0 } else { all.get(now).get("offer").num_or(110_000.0) };
         let saved = me.path("research.bank").num_or(0.0);
-        let tier1 = TECHS[..7].iter().any(|t| !mine.get(t).truthy());
+        let tier1 = TECHS.iter().any(|t| all.get(t).get("tier").num_or(9.0) <= 1.0 && !mine.get(t).truthy());
         let fill = if pressure >= 2.0 || (!tier1 && bank < income * 2.0) {
             income * 0.2
         } else if bank > income * 10.0 && saved < offer * 1.4 {

@@ -473,7 +473,7 @@ use super::{air, theme};
         if faith.truthy() && faith.get("by").num() != me_id {
             s -= faith.get("zeal").num_or(0.0) / 15.0;
         }
-        s
+        s + super::energy::prize(world, me, q)
     }
 
     thread_local! {
@@ -1240,6 +1240,7 @@ use super::{air, theme};
         let mut orders = govern_units(world, me, share, strategy);
         maintain_freighters(&mut orders, world, me);
         super::structures::apply(&mut orders, world, me);
+        super::energy::apply(&mut orders, world, me);
         orders
     }
 
@@ -1778,7 +1779,9 @@ use super::{air, theme};
         v += p.get("units").num_or(0.0).min(24.0) * secs(p) / 60.0 + secs(b.get("sight")) / 30.0 + secs(b.get("relay")) / 12.0;
         let h = b.get("hire");
         let k = if h.get("units").truthy() { h.get("units").len() as f64 } else { or(h.get("count"), 0.0) };
-        v + k * secs(h) / 10.0
+        // power lights about a core a MW
+        let pw = b.get("power");
+        v + k * secs(h) / 10.0 + pw.get("mw").num_or(0.0) * secs(pw) / 8.0
     }
 
     /// What the default rule asks for your provinces `ids` from faction `buyer`, or infinity when it won't sell them:

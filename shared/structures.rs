@@ -69,7 +69,9 @@ fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: Vie
             !protected && near(u, *s, reach + s.get("radius").num_or(0.0))
         }).min_by(|a, b| {
             // An armed shell stops the advance; finish damaged shells within the same priority.
-            let priority = |s: View| s.get("hp").num_or(100.0) - if port(s, "weapon") { 300.0 } else { 0.0 };
+            // Then plants: a rival's dark towns are a weaker rival.
+            let priority = |s: View| s.get("hp").num_or(100.0) - if port(s, "weapon") { 300.0 } else { 0.0 }
+                - if s.get("power").truthy() { 150.0 } else { 0.0 };
             priority(*a).total_cmp(&priority(*b))
         });
         let Some(target) = target else { continue; };

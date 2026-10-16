@@ -5,7 +5,7 @@ export const manifest=JSON.parse(readFileSync(new URL('manifest.json',root),'utf
 export function source(name){
   const path=manifest.programs.includes(name)?`factions/${name}.rs`:manifest.examples.includes(name)?`examples/structures/${name}.rs`:null;
   if(!path)throw new Error(`Unknown faction: ${name}`);
-  const modules=manifest.programs.includes(name)?manifest.shared:manifest.shared.filter(m=>m!=='common'&&m!=='structures');
+  const modules=manifest.programs.includes(name)?manifest.shared:manifest.shared.filter(m=>m!=='common'&&m!=='structures'&&m!=='energy');
   // Each house's buildings: a house program carries its own line of shared/buildings.txt, the default program every line.
   const arts=readFileSync(new URL('shared/buildings.txt',root),'utf8').split('\n').filter(l=>l&&!l.startsWith('#')).map(l=>`"${l}"`);
   const seat=manifest.programs.indexOf(name), own=name==='default'?arts.join(', '):arts[seat];
