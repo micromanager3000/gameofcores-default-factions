@@ -1083,10 +1083,12 @@ fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
     Some(x)
 }
 
-fn tactical_order(u: View, world: View, me: View, role: &str) -> Option<Value> {
+fn tactical_order(u: View, world: View, me: View, role: &str, budget: &RouteBudget) -> Option<Value> {
     let p = plan::of(me, u);
     let defend = common::defends(&p, u);
     let attack = vnum(p.get("attack"));
+    let target = if defend >= 0.0 { defend } else if attack >= 0.0 { attack } else { num(me.get("capital")) };
+    if !budget.route(u, target, world, me) { return None; }
     let o = if defend >= 0.0 {
         orders::to(u, "fight", defend, world, me, ())
     } else if attack >= 0.0 {
@@ -1114,13 +1116,14 @@ fn tactical_order(u: View, world: View, me: View, role: &str) -> Option<Value> {
 }
 
 fn tactical(units: View, world: View, me: View, role: &str) {
+    let mut budget = RouteBudget::new(me);
     for turn in 0..units.len() {
-        if short(me) {
-            break;
-        }
-        if let Some(o) = tactical_order(rotate(units, world, turn), world, me, role) {
-            order(o);
-        }
+        if !budget.room(me) { break; }
+        let u = rotate(units, world, turn);
+        if !budget.admits(u, world, me, true) { continue; }
+        let began = cycles_left();
+        if let Some(o) = tactical_order(u, world, me, role, &budget) { order(o); }
+        budget.finish(began, true);
     }
 }
 
@@ -1181,7 +1184,7 @@ fn scout(units: View, world: View, me: View) -> Vec<Value> {
     let mut ids: Vec<f64> = units.iter().map(|u| num(u.get("id"))).collect();
     ids.sort_by(|a, b| a.total_cmp(b));
     let pilgrims = ids.len().div_ceil(2);
-    let mut budget = ScoutBudget::new(me);
+    let mut budget = RouteBudget::new(me);
     for turn in 0..units.len() {
         if !budget.room(me) {
             break;
@@ -1209,13 +1212,13 @@ fn scout(units: View, world: View, me: View) -> Vec<Value> {
 }
 
 // Admit the cold plan, route, carried RAM and submitted order together. The measured
-// cost includes all four, so later scouts leave room to finish this callback.
-struct ScoutBudget {
+// cost includes all four, so later units leave room to finish this callback.
+struct RouteBudget {
     next: f64,
     wander: f64,
 }
 
-impl ScoutBudget {
+impl RouteBudget {
     fn new(me: View) -> Self {
         if me.get("rts").truthy() {
             orders::set_reserve(1100.0);
@@ -1265,7 +1268,7 @@ impl ScoutBudget {
 
 // A pilgrim walks to the holy site the plan names for it and stays, preaching where it stands. True when it is one for
 // now (on its way, at its site, or ordered there); false when there is no site, so it scouts instead.
-fn pilgrim(u: View, world: View, me: View, rank: usize, budget: &ScoutBudget) -> bool {
+fn pilgrim(u: View, world: View, me: View, rank: usize, budget: &RouteBudget) -> bool {
     if !plan::here(me, u) {
         // abroad it keeps to its site: on the way, or standing in land that is neither ours nor a partner's
         if u.get("doing").str() == "move" {

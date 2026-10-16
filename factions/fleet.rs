@@ -760,9 +760,9 @@ fn strategy(world: View, me: View) -> Value {
             ("needle", 5500.0, 3.0),
             ("kite", 5000.0, 3.0),
             ("scout", 5000.0, 8.0),
-            ("warjunk", 5000.0, 2.0),
-            ("picket", 4000.0, 4.0),
-            ("corsair", 5000.0, 2.0),
+            ("warjunk", 8000.0, 3.0),
+            ("picket", 6000.0, 6.0),
+            ("corsair", 8000.0, 3.0),
         ],
         me.get("rts").get("cpu").get("income").or(0.0),
         available_control,
@@ -1494,7 +1494,7 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
     let have = me.get("units").get("byType");
     let (pickets, war, corsairs) = (have.get("picket").or(0.0), have.get("warjunk").or(0.0), have.get("corsair").or(0.0));
     let income = me.get("rts").get("cpu").get("income").or(0.0);
-    // the fleet's size follows income: about one junk per 16,000 cycles a second, at least three
+    // Income bounds affordable hulls; an actual crossing, escort or target must justify each one.
     let fleet_max = max(3.0, (income / 20000.0).floor()).min(12.0);
     // (the land army first: at least three soldiers ashore and one more for every two junks, since the land is what
     // feeds the yard)
@@ -1512,8 +1512,6 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
         }
     };
     let want_pick = (naval.stations as f64 + if naval.landing >= 0.0 { 1.0 } else { 0.0 }).min(5.0);
-    let provinces = me.get("provinces").or(1.0);
-    let want_war = if guns { (1.0 + (provinces / 4.0).floor()).min(4.0) } else { 0.0 };
     // A raider needs a visible cargo opportunity. Empty water does not justify a replacement hull.
     let home=shore_water(world,me.get("capital").num());
     let adj=sea::index(world).get(home).get("adj");
@@ -1523,7 +1521,11 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
         && c.path("build.carry").num_or(0.0)>=2.0).count();
     let salvage=me.path("rts.logistics.wrecks").iter().any(|w|w.get("sea").truthy()&&nearby(w.get("water").num_or(-1.0))&&w.get("cycles").num_or(0.0)>160000.0*common::price_level(me));
     let want_cors = if guns && (prospects>0 || salvage) { (prospects as f64).clamp(1.0,2.0) } else { 0.0 };
-    let _=rival_ships;
+    // Warships defend observed traffic and contested crossings. Land area alone
+    // does not justify several idle hulls charging upkeep throughout the epoch.
+    let escorts: f64 = if have.get("freighter").num_or(0.0) > 0.0 { 1.0 } else { 0.0 };
+    let contested = rival_ships.min(3.0) + naval.blockade.min(1) as f64;
+    let want_war = if guns { escorts.max(contested).max(if prospects > 0 { 1.0 } else { 0.0 }).min(4.0) } else { 0.0 };
     let pick: Option<(&str, Value, Vec<&str>)> = if pickets < want_pick {
         Some(("picket", picket_body(guns), armor("armor")))
     } else if war < want_war.min(1.0) {
@@ -1601,6 +1603,8 @@ fn quarry(u: View, me: View, world: View, role: u8) -> Option<View> {
     let mut best: Option<View> = None;
     let mut score = 1e9;
     for c in me.path("rts.sea.contacts").iter() {
+        // Contact and escort searches share this call's budget with routing and RAM writes.
+        if cycles_left() < 3000.0 { break; }
         if !c.get("ship").truthy() {
             continue;
         }
@@ -1619,8 +1623,9 @@ fn quarry(u: View, me: View, world: View, role: u8) -> Option<View> {
         if (role==2 || !armed) && world.get("logistics").truthy() {
             let load=c.path("cargo.load").num_or(0.0);
             if armed || load<2.0 || u.get("hp").num()<u.get("hpMax").num()*0.7 {continue;}
-            let escorted=me.path("rts.sea.contacts").iter().any(|guard|guard.get("id").num()!=c.get("id").num()
-                && guard.get("ship").truthy()&&guard.get("water").num_or(-1.0)==w&&guard.path("build.range").num_or(0.0)>0.0);
+            // An unfinished escort check is unsafe to raid. Keep the previous course until the next call.
+            let escorted=me.path("rts.sea.contacts").iter().any(|guard|cycles_left()<2500.0 || (guard.get("id").num()!=c.get("id").num()
+                && guard.get("ship").truthy()&&guard.get("water").num_or(-1.0)==w&&guard.path("build.range").num_or(0.0)>0.0));
             if escorted {continue;}
             // The public load band supplies a lower bound; exact rival cargo stays private.
             let prize=c.path("build.carry").num_or(0.0)*160000.0*common::price_level(me)*if load>=3.0 {1.0}else{0.5};
@@ -1652,7 +1657,7 @@ fn junks(units: View, world: View, me: View, role: u8) -> Value {
     ids.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let contacts = me.path("rts.sea.contacts").len();
     for turn in 0..units.len() {
-        if rts(me) && cycles_left() < 2200.0 {
+        if rts(me) && cycles_left() < 3500.0 {
             break;
         }
         let u = nth(units, turn, world);

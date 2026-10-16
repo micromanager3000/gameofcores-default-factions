@@ -2,21 +2,21 @@
 // earned research and the same shared CPU ledger as units.
 use gameofcores::*;
 
-struct Design { name: &'static str, limit: usize, range: f64, integrity: f64, height: f64 }
+struct Design { name: &'static str, range: f64, integrity: f64, height: f64 }
 fn design(seat: usize) -> Design {
-    let (name, limit, range, integrity, height) = match seat {
-        0 => ("Steppe bastion", 4, 7.0, 2.0, 4.5),
-        1 => ("Bow relay", 4, 6.0, 1.3, 5.5),
-        2 => ("Chapter cloister", 3, 5.0, 1.8, 6.0),
-        3 => ("Research court", 3, 0.0, 1.2, 4.0),
-        4 => ("Harbor lantern", 4, 8.0, 1.4, 7.0),
-        5 => ("Assembly hall", 5, 0.0, 1.5, 3.5),
-        6 => ("Pointer spire", 2, 9.0, 1.0, 8.0),
-        7 => ("Exchange depot", 5, 0.0, 1.3, 4.5),
-        8 => ("Emu roost", 4, 5.0, 1.0, 5.0),
-        _ => ("Open courtyard", 3, 4.0, 1.2, 3.0),
+    let (name, range, integrity, height) = match seat {
+        0 => ("Steppe bastion", 7.0, 2.0, 4.5),
+        1 => ("Bow relay", 6.0, 1.3, 5.5),
+        2 => ("Chapter cloister", 5.0, 1.8, 6.0),
+        3 => ("Research court", 0.0, 1.2, 4.0),
+        4 => ("Harbor lantern", 8.0, 1.4, 7.0),
+        5 => ("Assembly hall", 0.0, 1.5, 3.5),
+        6 => ("Pointer spire", 9.0, 1.0, 8.0),
+        7 => ("Exchange depot", 0.0, 1.3, 4.5),
+        8 => ("Emu roost", 5.0, 1.0, 5.0),
+        _ => ("Open courtyard", 4.0, 1.2, 3.0),
     };
-    Design { name, limit, range, integrity, height }
+    Design { name, range, integrity, height }
 }
 fn same(a: View, b: View) -> bool { a.is_num() && b.is_num() && a.num() == b.num() }
 fn seat(me: View) -> usize { me.get("seat").num_or(9.0).max(0.0) as usize }
@@ -30,7 +30,8 @@ fn near(u: View, s: View, radius: f64) -> bool {
     distance(u, s.get("p").num(), s.get("x").num(), s.get("y").num()) <= radius
 }
 fn price(me: View) -> f64 { me.path("rts.costs.priceLevel").num_or(1.0).max(0.01) }
-fn supply_worth(me: View, u: View) -> bool {
+fn supply_return(me: View, u: View) -> f64 {
+    if u.get("air").truthy() { return 0.0; }
     let c = me.path("rts.costs.upkeep");
     let b = u.get("build");
     let stats: f64 = ["hp", "speed", "strength", "carry", "vision"].iter().map(|s| (b.get(s).num_or(2.0) - 2.0).max(0.0)).sum();
@@ -38,13 +39,47 @@ fn supply_worth(me: View, u: View) -> bool {
         + u.path("rts.modules").len() as f64 * c.get("module").num_or(0.0)
         + b.get("range").num_or(0.0) * c.get("range").num_or(0.0)
         + b.get("stealth").num_or(0.0) * c.get("stealth").num_or(0.0);
-    !u.get("air").truthy() && (bill * 0.4).min(100.0 * price(me)) > 20.0 * price(me)
+    ((bill * 0.4).min(100.0 * price(me)) - 20.0 * price(me)).max(0.0)
 }
+fn supply_worth(me: View, u: View) -> bool { supply_return(me, u) > 0.0 }
 fn open_slot(p: View, me: View) -> Option<usize> {
     p.get("mines").iter().enumerate().find(|(i, yield_)| {
         yield_.num_or(0.0) == 1.0 && realm::worker(p, *i as f64) == me.get("id").num()
             && p.get("staff").at(*i).num_or(3.0) < 2.0
     }).map(|(i, _)| i)
+}
+
+/// Clear visible hostile buildings once nearby soldiers have room to fire.
+/// Short orders leave normal combat in control when an enemy army arrives.
+fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: View, now: f64) {
+    let hostile: Vec<View> = sites.iter().take_while(|_| cycles_left() > 6500.0).filter(|s| s.get("state").str() != "ruin"
+        && realm::is_rival(world, me, s.get("owner").num_or(-1.0))).collect();
+    if hostile.is_empty() { return; }
+    let mut attacks = Value::arr();
+    for &u in units {
+        if attacks.len() >= 8 || cycles_left() < 4500.0 { break; }
+        if u.get("air").truthy() || u.get("stalled").truthy()
+            || matches!(u.get("type").str(), "miner" | "hauler" | "freighter" | "scout")
+            || matches!(u.get("doing").str(), "gather" | "study") { continue; }
+        let reach = if u.path("build.range").num_or(0.0) > 0.0 { 3.0 + u.path("build.range").num() } else { 1.5 };
+        let conduct = u.get("conduct");
+        let target = hostile.iter().copied().take_while(|_| cycles_left() > 4500.0).filter(|s| {
+            let protected = conduct.get("seconds").num_or(0.0) > 0.0 && same(conduct.get("from"), s.get("owner"));
+            !protected && near(u, *s, reach + s.get("radius").num_or(0.0))
+        }).min_by(|a, b| {
+            // An armed shell stops the advance; finish damaged shells within the same priority.
+            let priority = |s: View| s.get("hp").num_or(100.0) - if port(s, "weapon") { 300.0 } else { 0.0 };
+            priority(*a).total_cmp(&priority(*b))
+        });
+        let Some(target) = target else { continue; };
+        let enemy_near = world.get("units").iter().any(|foe| cycles_left() < 3500.0 || (foe.get("owner").num_or(-1.0) != me.get("id").num()
+            && realm::is_rival(world, me, foe.get("owner").num_or(-1.0))
+            && same(foe.path("pos.p"), u.path("pos.p"))
+            && (foe.path("pos.x").num() - u.path("pos.x").num()).hypot(foe.path("pos.y").num() - u.path("pos.y").num()) < reach + 1.0));
+        if enemy_near { continue; }
+        attacks.push(obj! { "unit" => u.get("id"), "target" => target.get("id"), "until" => now + 5.0 });
+    }
+    if !attacks.is_empty() { orders.set("structureAttacks", attacks); }
 }
 
 pub fn apply(orders: &mut Value, world: View, me: View) {
@@ -70,7 +105,8 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     // Refresh at most every five seconds; short standing jobs cover the interval.
     if now.floor() % 5.0 != 0.0 && orders.get("memo").str() != "Recovering production" { return; }
     let sites = me.path("rts.structures");
-    let own: Vec<View> = sites.iter().filter(|s| same(s.get("owner"), id) && s.get("state").str() != "ruin").collect();
+    let mut own: Vec<View> = sites.iter().filter(|s| same(s.get("owner"), id) && s.get("state").str() != "ruin").collect();
+    if !own.is_empty() { let start = (now as usize / 5) % own.len(); own.rotate_left(start); }
     let units: Vec<View> = world.get("units").iter().filter(|u| same(u.get("owner"), id) && u.get("hp").num_or(0.0) > 0.0).collect();
     let income = me.path("rts.cpu.income").num_or(0.0);
     let bank = me.path("rts.cpu.bank").num_or(0.0);
@@ -79,7 +115,7 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     let mut jobs = Value::arr();
     let mut services = Value::arr();
     for s in &own {
-        if cycles_left() < 3500.0 { break; }
+        if cycles_left() < 4500.0 || jobs.len() >= 24 { break; }
         if s.get("state").str() != "ready" { continue; }
         let mut j = obj! { "id" => s.get("id"), "extract" => 0, "extractSlot" => 0, "faith" => 0, "civic" => 0,
             "watch" => 0, "watchWater" => -1, "supply" => 0, "guard" => false, "target" => 0,
@@ -119,12 +155,46 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
         }
         jobs.push(j);
     }
+    // Nearby allies can use a funded repair court. Merchant houses charge a
+    // small accepted fee; other houses donate a bounded amount to their pact.
+    let grants = me.path("rts.structureGrants");
+    if safe && cycles_left() > 6500.0 {
+        let mut offered = Value::arr();
+        for s in &own {
+            if cycles_left() < 5000.0 || offered.len() >= 4 { break; }
+            if s.get("state").str() != "ready" || !port(*s, "repair") { continue; }
+            if let Some(guest) = world.get("units").iter().take_while(|_| cycles_left() > 4500.0).find(|u|
+                realm::is_ally(me, u.get("owner").num()) && u.get("owner").num() != id.num()
+                && u.get("hp").num() < u.get("hpMax").num_or(0.0) && near(*u, *s, 6.0)) {
+                if !grants.iter().any(|g| same(g.get("site"), s.get("id")) && same(g.get("user"), guest.get("owner"))
+                    && g.get("until").num_or(0.0) > now) {
+                    offered.push(obj! {"site"=>s.get("id"),"user"=>guest.get("owner"),"quota"=>6,"rate"=>0.5,
+                        "price"=>if style == 7 {0.25} else {0.0},"until"=>now+60.0,"payer"=>"owner"});
+                }
+            }
+        }
+        if !offered.is_empty() { orders.set("structureGrants", offered); }
+    }
+    if safe && cycles_left() > 4500.0 {
+        for grant in grants.iter() {
+            if cycles_left() < 3500.0 || services.len() >= 8 { break; }
+            if !same(grant.get("user"), id) || grant.get("quota").num_or(0.0) <= 0.0 || grant.get("until").num_or(0.0) <= now
+                || grant.get("price").num_or(0.0) > 0.25 { continue; }
+            let site = sites.iter().find(|s| same(s.get("id"), grant.get("site")) && s.get("state").str() == "ready");
+            if let Some(site) = site {
+                if let Some(u) = units.iter().find(|u| near(**u, site, 6.0) && u.get("hp").num() < u.get("hpMax").num_or(0.0)) {
+                    services.push(obj! {"site"=>site.get("id"),"target"=>u.get("id"),"amount"=>0.5,"maxPrice"=>0.25});
+                }
+            }
+        }
+    }
     if !jobs.is_empty() { orders.set("structureJobs", jobs); }
     if !services.is_empty() { orders.set("structureService", services); }
-    if !safe || now < 35.0 || now % 30.0 >= 10.0 || own.len() >= d.limit
-        || own.iter().any(|s| s.get("state").str() != "ready") || sites.len() >= 250 || cycles_left() < 6000.0 { return; }
+    if safe && cycles_left() > 8000.0 { besiege(orders, world, me, &units, sites, now); }
+    if !safe || now < 35.0 || now % 30.0 >= 10.0
+        || own.iter().any(|s| s.get("state").str() != "ready") || cycles_left() < 6000.0 { return; }
     let mut land: Vec<View> = world.get("provinces").iter().filter(|p| same(p.get("owner"), id)
-        && (!p.get("active").is_bool() || p.get("active").truthy()) && !own.iter().any(|s| same(s.get("p"), p.get("id")))).collect();
+        && (!p.get("active").is_bool() || p.get("active").truthy())).collect();
     let score = |p: View| {
         let capital = same(p.get("id"), me.get("capital"));
         let coast = world.get("waters").iter().any(|w| w.get("coast").has_num(p.get("id").num()));
@@ -145,7 +215,10 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
         let province = p.get("id").num();
         let mut spot = None;
         // Compact town placements keep builders, supplies and the defended ring together.
-        for (x, y) in [(2.8, 0.0), (-2.8, 0.0), (0.0, 2.8), (0.0, -2.8), (0.0, 0.0)] {
+        let mut spots = vec![(2.8, 0.0), (-2.8, 0.0), (0.0, 2.8), (0.0, -2.8), (0.0, 0.0)];
+        for r in [6.2, 9.6, 13.0] { for (dx, dy) in [(1.,0.),(-1.,0.),(0.,1.),(0.,-1.),(0.7,0.7),(-0.7,0.7),(0.7,-0.7),(-0.7,-0.7)] { spots.push((dx*r,dy*r)); } }
+        for (x, y) in spots {
+            if cycles_left() < 3500.0 { break; }
             if !realm::ground(p, x, y).is_some_and(|g| !matches!(g.kind, "water" | "cliff")) { continue; }
             if !units.iter().any(|u| !u.get("air").truthy() && distance(*u, province, x, y) <= 7.0) { continue; }
             if sites.iter().any(|s| s.get("state").str() != "ruin" && same(s.get("p"), p.get("id"))
@@ -160,11 +233,26 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
         if d.range > 0.0 && tech.get("ranged").truthy() { ports.push(obj! { "kind" => "weapon", "range" => d.range, "arc" => 360 }); quote += c.get("weaponPort").num() * (d.range / 5.0).powi(2); }
         if tech.get("repair").truthy() && !matches!(style, 5 | 6) { ports.push("repair"); quote += c.get("repairPort").num(); }
         if matches!(style, 3 | 7 | 9) && tech.get("extraction").truthy() && open_slot(p, me).is_some() { ports.push("extract"); quote += c.get("extractPort").num(); }
+        // Price the nearby recurring savings before expanding. Assume only 60% of
+        // the current supply demand stays here and require a five-minute payback.
+        // Defense, repair, civic stability and extraction are extra benefits.
+        let mut returns: Vec<f64> = units.iter().filter(|u| distance(**u, province, x, y) <= 8.0)
+            .map(|u| supply_return(me, *u)).collect();
+        returns.sort_by(|a, b| b.total_cmp(a));
+        let supplied = own.iter().filter(|s| same(s.get("p"), p.get("id")) && port(**s, "logistics")
+            && (s.get("x").num() - x).hypot(s.get("y").num() - y) < 16.0).count() * 6;
+        let supply = returns.iter().skip(supplied).take(6).sum::<f64>() * 0.6;
+        let faith = if same(p.path("faith.by"), id) && !own.iter().any(|s| same(s.get("p"), p.get("id")) && port(*s, "support")) {
+            if style == 2 { 0.8 } else { 0.35 }
+        } else { 0.0 };
+        // Subtract the support bill as well as counting only retained demand.
+        let retained = supply - quote / c.get("maintenancePeriod").num_or(600.0).max(1.0) + p.path("faith.zeal").num_or(0.0) * faith * price(me)
+            - (6.0 + if matches!(style, 4 | 6) { 13.0 } else { 0.0 }) * price(me);
+        if retained <= 0.0 || quote / retained > 300.0 { continue; }
         // Keep unit fabrication and several seconds of income ahead of each new site.
         let reserve = income * 2.0 + quote * 3.0;
         if bank < reserve { continue; }
-        let key = (0..32).map(|i| format!("home-{province:.0}-{i}")).find(|k| !sites.iter().any(|s| same(s.get("owner"), id) && s.get("key").str() == k));
-        let Some(key) = key else { continue; };
+        let key = format!("home-{province:.0}-{now:.0}");
         orders.set("structures", arr![obj! { "key" => key, "p" => province, "x" => x, "y" => y,
             "shell" => obj! { "radius" => 2, "height" => d.height, "integrity" => d.integrity },
             "ports" => ports, "appearance" => architecture(style), "budget" => quote + price(me) }]);
