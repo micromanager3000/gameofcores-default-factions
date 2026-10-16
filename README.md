@@ -52,6 +52,7 @@ The same programs retain their earlier mining policy in saved worlds without log
 After the first minute, logistics houses review their strategy every five seconds.
 Unit callbacks, standing orders, research and building jobs continue between those reviews.
 A low bank or stalled units pause optional spending while workers recover.
+Once funded, armies regain callbacks that recovery disabled, even while the next full plan waits.
 Full province-plan reads wait for a funded miner callback.
 
 Military targets use defenders in the town ring when that observation is available.

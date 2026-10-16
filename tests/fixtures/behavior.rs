@@ -203,6 +203,36 @@ fn recovery_intervals_stop_optional_spending_and_leave_workers_funded() {
 }
 
 #[test]
+fn funded_armies_resume_callbacks_left_disabled_by_recovery() {
+    for state in ["funded", "poor", "stalled"] {
+        let (mut world, mut me, _) = fixture();
+        world.set("seconds", 101);
+        me.entry("rts").entry("cpu").set("bank", if state == "poor" { 2000 } else { 1000000 });
+        me.entry("units").set("stalled", if state == "stalled" { 1 } else { 0 });
+        me.entry("units").entry("byType").set("screen", 6);
+        me.entry("units").entry("byType").set("wing", 3);
+        me.set("types", obj! {"miner"=>obj!{},"screen"=>obj!{},"wing"=>obj!{},"scout"=>obj!{}});
+        me.entry("compute").set("types", obj! {
+            "miner"=>obj!{"cycles"=>7000,"every"=>2},
+            "screen"=>obj!{"share"=>0,"every"=>8},
+            "wing"=>obj!{"cycles"=>12000,"every"=>3},
+            "scout"=>obj!{"share"=>0,"every"=>8}});
+        let args = views(&[world,me]);
+        let orders = common::govern(args[0],args[1],0.4,||panic!("no replanning between intervals"));
+        let types = orders.get("compute").get("types");
+        if state == "funded" {
+            assert_eq!(types.get("screen").get("cycles").num(), 8000.0);
+            assert_eq!(types.get("screen").get("every").num(), 5.0);
+            assert!(types.get("wing").is_undef(), "preserve the house's existing flight allowance");
+            assert!(types.get("scout").is_undef(), "empty types need no allowance");
+        } else {
+            assert_eq!(types.get("screen").get("share").num(), 0.0, "{state}");
+        }
+        assert!(orders.get("spawn").is_empty() && orders.get("disband").is_empty());
+    }
+}
+
+#[test]
 fn capital_assault_counts_armed_ground_units_before_siege_headcount() {
     let capital = obj! {"id"=>1,"owner"=>2,"capital"=>true,"visible"=>true,"townGarrison"=>20};
     let soldier = |owner,at| obj! {"owner"=>owner,"at"=>at,"type"=>"guard","hp"=>4,"doing"=>"idle","build"=>obj!{"strength"=>2}};

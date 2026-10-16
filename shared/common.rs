@@ -1302,7 +1302,20 @@ use super::{air, theme};
                 let old = if old <= 1.0 { old * income } else { old };
                 let peak = me.path("compute.thinkPeak").num_or(0.0);
                 cpu.entry("limits").set("think", old.max(32000.0).max(peak * 1.35 + 6000.0));
-                obj! { "compute" => obj! { "cpu" => cpu } }
+                let mut out = obj! { "compute" => obj! { "cpu" => cpu } };
+                // A short planner can leave recovery's zero allowances after the economy has recovered.
+                // Existing armies still need callbacks to follow their standing plan while a full review waits.
+                if me.path("rts.cpu.bank").num_or(0.0) > income * 4.0 {
+                    let have = me.path("units.byType");
+                    for (ty, cfg) in me.path("compute.types").entries() {
+                        if matches!(ty, "miner" | "hauler" | "freighter") || have.get(ty).num_or(0.0) <= 0.0 { continue; }
+                        if cfg.get("every").num_or(0.0) == 8.0 && cfg.get("share").num_or(0.0) == 0.0
+                            && cfg.get("cycles").num_or(0.0) == 0.0 {
+                            out.entry("compute").entry("types").set(ty, obj! {"cycles"=>8000,"every"=>5});
+                        }
+                    }
+                }
+                out
             }
         } else { govern_units(world, me, share, strategy) };
         maintain_freighters(&mut orders, world, me);
