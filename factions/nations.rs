@@ -16,8 +16,9 @@
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
+use shared::common::{hauler, freighter};
 
-program!(think, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, reflex, research, duel, challenge, look, build3d, live3d);
 
 // The bodies: points in hp, speed, strength, carry and vision, and for some in range and wings.
 fn miner_body() -> Value {

@@ -184,6 +184,14 @@ impl Theme {
                 types.set(k, art.filter(Value::truthy).unwrap_or_else(none));
             }
         }
+        // Cargo crews use their house's worker body and carry no decorative weapon.
+        // Freighters use the ship preset at sea; this body also covers ground previews.
+        let worker = l.get("units").get("miner").clone();
+        for (unit, name) in [("hauler", "Hauler"), ("freighter", "Freighter")] {
+            l.entry("units").set(unit, worker.clone());
+            l.entry("names").set(unit, name);
+            types.set(unit, none());
+        }
         l.set("combat", obj! { "default" => weapon_art(self.style, self.number), "types" => types });
         let primary = match st.primary {
             Some(p) if self.own => Value::from(p),
