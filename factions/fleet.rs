@@ -579,14 +579,14 @@ fn conserve(world: View, me: View) -> Value {
 
 fn think(world: View, me: View) -> Value {
     let mut out=common::govern(world, me, 0.4, || strategy(world, me));
-    // A completed cargo voyage leaves a ship docked. Retire an empty corsair there when no paying target remains.
+    // Retire an empty corsair when neither a paying target nor a reachable wreck remains.
     if world.get("logistics").truthy() && me.path("units.byType.corsair").num_or(0.0)>0.0 && cycles_left()>5000.0 {
         for u in world.get("units").iter() {
             if cycles_left()<3500.0 {break;}
             if u.get("owner").num()!=me.get("id").num() || u.get("type").str()!="corsair" {continue;}
             let cargo=u.path("rts.cargo");
-            if cargo.get("cycles").num_or(0.0)==0.0 && cargo.get("dock").is_num() && !cargo.get("job").truthy()
-                && quarry(u,me,world,2).is_none() && !out.get("disband").items().iter().any(|v|v.num()==u.get("id").num()) {
+            if cargo.get("cycles").num_or(0.0)==0.0 && !u.get("hired").truthy() && !cargo.get("job").truthy()
+                && quarry(u,me,world,2).is_none() && common::salvage_target(u,world,me).is_none() && !out.get("disband").items().iter().any(|v|v.num()==u.get("id").num()) {
                 out.entry("disband").push(u.get("id").value());
             }
         }
@@ -686,7 +686,7 @@ fn strategy(world: View, me: View) -> Value {
     let launched = slip
         && miners >= min(room, 4.0)
         && (miners >= room || shade_ready || have.get("runner").or(0.0) >= 3.0)
-        && naval_spawn(&mut orders, me, &naval, rival_ships, threatened);
+        && naval_spawn(&mut orders, world, me, &naval, rival_ships, threatened);
     if miners < room {
         add_spawn(&mut orders, me, "miner", miner_body(), &[]);
     } else if !shade_ready {
@@ -1485,7 +1485,7 @@ fn prize_intel(world: View, me: View, log: &Value) -> Intel {
 
 /// One junk a second at most, toward the fleet the plan needs: a picket for every crossing and the next landing, then
 /// warjunks, then up to two corsairs when visible cargo can pay for a raid. True when one was ordered.
-fn naval_spawn(orders: &mut Value, me: View, naval: &Naval, rival_ships: f64, threatened: bool) -> bool {
+fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_ships: f64, threatened: bool) -> bool {
     let techs = me.get("techs");
     let has = |t: &str| techs.get(t).truthy();
     if !has("seaTraversal") || me.path("rts.sea.ports").is_empty() {
@@ -1515,10 +1515,13 @@ fn naval_spawn(orders: &mut Value, me: View, naval: &Naval, rival_ships: f64, th
     let provinces = me.get("provinces").or(1.0);
     let want_war = if guns { (1.0 + (provinces / 4.0).floor()).min(4.0) } else { 0.0 };
     // A raider needs a visible cargo opportunity. Empty water does not justify a replacement hull.
+    let home=shore_water(world,me.get("capital").num());
+    let adj=sea::index(world).get(home).get("adj");
+    let nearby=|water:f64|water>=0.0&&(water==home||adj.has_num(water));
     let prospects=me.path("rts.sea.contacts").iter().filter(|c| c.get("ship").truthy()
-        && c.path("cargo.load").num_or(0.0)>=2.0 && c.path("build.range").num_or(0.0)==0.0
+        && nearby(c.get("water").num_or(-1.0)) && c.path("cargo.load").num_or(0.0)>=2.0 && c.path("build.range").num_or(0.0)==0.0
         && c.path("build.carry").num_or(0.0)>=2.0).count();
-    let salvage=me.path("rts.logistics.wrecks").iter().any(|w|w.get("sea").truthy()&&w.get("cycles").num_or(0.0)>160000.0*common::price_level(me));
+    let salvage=me.path("rts.logistics.wrecks").iter().any(|w|w.get("sea").truthy()&&nearby(w.get("water").num_or(-1.0))&&w.get("cycles").num_or(0.0)>160000.0*common::price_level(me));
     let want_cors = if guns && (prospects>0 || salvage) { (prospects as f64).clamp(1.0,2.0) } else { 0.0 };
     let _=rival_ships;
     let pick: Option<(&str, Value, Vec<&str>)> = if pickets < want_pick {

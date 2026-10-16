@@ -45,7 +45,7 @@ Every house supports physical CPU cargo when `world.logistics` is present.
 Miners unload locally, ground carriers connect depots, and freighters carry cargo between docks.
 Carriers leave exhausted depots with partial loads and prioritize useful delivery trips.
 Quiet Fleet recovers visible wreck cargo and returns it through the capital's dock.
-It retires an empty, docked corsair after delivery when no worthwhile target remains.
+It retires an empty corsair when no worthwhile target or nearby wreck remains.
 The same programs retain their earlier mining policy in saved worlds without logistics.
 
 Export a structure example with `node tools/source.mjs foundry /tmp/foundry.rs`.

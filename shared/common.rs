@@ -282,12 +282,23 @@ use super::{air, theme};
             if let Some(home)=receiving_dock(world,me){if let Some(o)=logistics::transfer(u,world,me,logistics::Endpoint::dock(home),false,None){order(o);}}
             return true;
         }
-        if logistics::capacity(u)>0.0 {if let Some(w)=me.path("rts.logistics.wrecks").iter().filter(|w|
-            w.get("sea").truthy() && w.get("p").num()==u.get("at").num()
-            && w.get("cycles").num_or(0.0)>20000.0*price_level(me)
-            && w.get("until").num_or(0.0)>world.get("seconds").num_or(0.0)*5.0+50.0)
-            .max_by(|a,b|a.get("cycles").num().total_cmp(&b.get("cycles").num())) {order(logistics::salvage(u,w));return true;}}
+        if let Some(w)=salvage_target(u,world,me) {order(logistics::salvage(u,w));return true;}
         false
+    }
+    /// A visible, reachable sea wreck whose recoverable cargo covers the estimated short return trip.
+    pub fn salvage_target(u:View,world:View,me:View)->Option<View> {
+        let hold=logistics::capacity(u);if hold<=0.0{return None;}
+        let here=u.path("rts.sea.water").num_or(-1.0);if here<0.0{return None;}
+        let near=sea::index(world).get(here).get("adj");
+        let now=world.get("seconds").num_or(0.0);let level=price_level(me);
+        me.path("rts.logistics.wrecks").iter().filter(|w| {
+            if !w.get("sea").truthy(){return false;}
+            let water=w.get("water").num_or(-1.0);
+            let hops=if water==here {0.0}else if near.has_num(water){1.0}else{return false};
+            let travel=35.0+20.0*hops;
+            w.get("cycles").num_or(0.0).min(hold)>travel*700.0*level*1.5
+                && w.get("until").num_or(0.0)>(now+travel)*5.0
+        }).max_by(|a,b|a.get("cycles").num().min(hold).total_cmp(&b.get("cycles").num().min(hold)))
     }
     fn logistics_budget(world:View,me:View,mut out:Value)->Value{
         if !world.get("logistics").truthy(){return out;}
