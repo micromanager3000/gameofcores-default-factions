@@ -103,6 +103,9 @@ fn strategy(world: View, me: View) -> Value {
     if world.get("logistics").truthy() {
         // Leave room for the governor's body-cost review after planning a recruit.
         orders.entry("compute").entry("cpu").entry("limits").set("think",(me.path("compute.thinkPeak").num_or(0.0)*1.6+6000.0).max(20000.0));
+        // Scouting needs one complete map scan even between cargo deliveries.
+        orders.entry("compute").entry("types").set("scout",obj!{"cycles"=>6000,"every"=>4});
+        orders.entry("compute").entry("types").set("longbow",obj!{"cycles"=>(3000.0+2200.0*me.path("units.byType.longbow").num_or(0.0)).max(7000.0),"every"=>2});
     }
     orders
 }
@@ -147,6 +150,7 @@ fn guard(units: View, world: View, me: View) {
 
 // Longbows (range 1: 4 cells) go with the army and shoot from behind it, and come home with it.
 fn longbow(units: View, world: View, me: View) {
+    if world.get("logistics").truthy() && cycles_left()<4500.0 {return;}
     if !home_alarm(units, world, me) {
         common::defend_then(&units.iter().collect::<Vec<View>>(), world, me, "fight");
     }
@@ -181,6 +185,7 @@ fn spy(units: View, world: View, me: View) {
 fn scout(units: View, world: View, me: View) -> Vec<Value> {
     let mut out = Vec::new();
     for u in units.iter() {
+        if world.get("logistics").truthy() && cycles_left()<2000.0+20.0*world.get("provinces").len() as f64 {break;}
         if is_str(u.get("doing"), "move") {
             continue; // walking
         }
