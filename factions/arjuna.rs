@@ -38,6 +38,11 @@ const TECHS: [&str; 19] = [
     "capture", "influence", "cloak", "stealth", "seaTraversal", "mountainTraversal", "gate",
 ];
 
+// Emu High Command shares the campaign controller but invests in fast ground raids.
+const EMU_TECHS: [&str;19] = ["extraction","dash","ranged","armor","capture","repair","artillery","antiAir","pierce","seaTraversal","mountainTraversal","scan","influence","computeBoost","cloak","stealth","flight","airWeapons","gate"];
+const EMU_SCREEN: Build = &[("hp",3.0),("speed",4.0),("strength",3.0),("carry",0.0),("vision",0.0)];
+const EMU_SKIRM: Build = &[("hp",2.0),("speed",3.0),("strength",2.0),("carry",0.0),("vision",1.0),("range",1.0)];
+
 fn build(b: Build) -> Value {
     let mut o = Obj::new();
     for (k, v) in b {
@@ -133,7 +138,7 @@ fn spawn(orders: &mut Value, ty: &str, b: Build, modules: Vec<&str>) -> bool {
 // miners: a flier whose call runs short can't be ordered down, and its burn climbs the longer it stays up.
 const TYPES: [(&str, f64, f64); 10] = [
     ("miner", 5000.0, 1.0),
-    ("wing", 5000.0, 1.0),
+    ("wing", 8000.0, 2.0),
     ("screen", 6000.0, 1.0),
     ("runner", 6000.0, 1.0),
     ("skirm", 6000.0, 1.0),
@@ -305,7 +310,7 @@ fn think(world: View, me: View) -> Value {
         return emergency_recovery_policy();
     }
     if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
-        return recovery_policy(me);
+        return common::govern(world, me, 0.4, || recovery_policy(me));
     }
     common::govern(world, me, 0.4, || strategy(world, me))
 }
@@ -352,6 +357,8 @@ fn recovery_policy(me: View) -> Value {
 }
 
 fn strategy(world: View, me: View) -> Value {
+    let emu=me.get("seat").num_or(-1.0)==8.0;
+    let doctrine=if emu {&EMU_TECHS}else{&TECHS};
     let rts = me.get("rts");
     if rts.truthy() && cycles_left() < 3000.0 {
         return common::recovery(world, me);
@@ -396,8 +403,7 @@ fn strategy(world: View, me: View) -> Value {
         plan.set("field", field);
     }
     let cpu = rts_cpu(me);
-    // cpu && cpu.available && cpu.available.fabrication, less about what this think costs (the last one's): fabrication
-    // is charged right after think
+    // Fabrication has its own lane. Think reduces the shared bank once.
     let available = if cpu.truthy() { cpu.get("available") } else { cpu };
     let fab = if available.truthy() { available.get("fabrication") } else { available };
     let fabrication = if !rts.truthy() {
@@ -405,7 +411,7 @@ fn strategy(world: View, me: View) -> Value {
     } else if fab.is_undef() {
         rts.get("bank").value()
     } else {
-        Value::Num(n(fab) - me.path("compute.used.think").or(0.0))
+        Value::Num(common::fabrication_room(me).unwrap_or_else(|| n(fab)))
     };
     let mut orders = obj! {
         "policy" => obj! { "extraction" => if defend >= 0.0 { 0.38 } else { 0.5 }, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true },
@@ -432,8 +438,17 @@ fn strategy(world: View, me: View) -> Value {
         spawn(&mut orders, "miner", MINER, vec![]);
     }
     let wings = count("wing");
+    // Recruit the first affordable vimana before replacing the whole ground army. The shared economy guard
+    // still charges its actual upkeep; additional wings require another 30,000 cycles of income each.
+    let want_wings = if !emu && has("flight") && total >= 8.0 && income >= 18000.0 {
+        jmin(jmin(8.0, jmax(1.0, (income / 30000.0).floor())), (total * 0.25).floor())
+    } else { 0.0 };
+    if wings < want_wings {
+        let archer = has("airWeapons") && (wings as i64) % 3 == 2;
+        spawn(&mut orders, "wing", if archer { WING_SHOT } else { WING }, mods(me, "wing"));
+    }
     if screens < jmax(3.0, ((skirms + guns + 1.0) * 0.42).floor()) {
-        spawn(&mut orders, "screen", SCREEN, mods(me, "screen"));
+        spawn(&mut orders, "screen", if emu {EMU_SCREEN}else{SCREEN}, mods(me, "screen"));
     }
     // Ranged is its own license. Before it arrives, fast melee runners scout and pull defenders out of position without
     // issuing invalid range spawns.
@@ -444,15 +459,7 @@ fn strategy(world: View, me: View) -> Value {
         spawn(&mut orders, "lancer", SKIRM, if has("dash") { vec!["pierce", "dash"] } else { vec!["pierce"] });
     }
     if has("ranged") && skirms < jmax(4.0, screens * 2.0) {
-        spawn(&mut orders, "skirm", SKIRM, mods(me, "skirm"));
-    }
-    // Vimanas once Flight allows them and the army on the ground stands: one for every 30,000 cycles of income (each
-    // costs about 1,500 a second to keep and as much again up on a sortie), up to 8, and never more than a quarter of
-    // the army. With Air weapons every third one carries a bow.
-    let want_wings = if has("flight") && total >= 12.0 { jmin(jmin(8.0, (income / 30000.0).floor()), (total * 0.25).floor()) } else { 0.0 };
-    if wings < want_wings {
-        let archer = has("airWeapons") && (wings as i64) % 3 == 2;
-        spawn(&mut orders, "wing", if archer { WING_SHOT } else { WING }, mods(me, "wing"));
+        spawn(&mut orders, "skirm", if emu {EMU_SKIRM}else{SKIRM}, mods(me, "skirm"));
     }
     if spawning(&orders) < 3 && has("scan") && has("ranged") && sentries < 2.0 {
         spawn(&mut orders, "sentry", SENTRY, mods(me, "sentry"));
@@ -474,14 +481,16 @@ fn strategy(world: View, me: View) -> Value {
     let type_calls = common::calls(world, &TYPES, income, control, bt);
     // common::budget keeps its useful research choice, rent choice and type schedules. In CPU RTS the old split is
     // ignored; cpu_policy below atomically installs caps and reserves for the one shared balance.
-    let budget = common::Budget { research: if has("repair") { 0.06 } else { 0.12 }, code: 0.72, techs: &TECHS, types: Some(&type_calls) };
+    let budget = common::Budget { research: if has("repair") { 0.06 } else { 0.12 }, code: 0.72, techs: doctrine, types: Some(&type_calls) };
     common::budget(&mut orders, world, me, &budget);
     let mut policy = cpu_policy(me, &plan, &type_calls);
     common::fit_cpu(&mut policy, me);
     orders.entry("compute").set("cpu", policy);
     // the sorties so far (sky::tally), and the memo spectators read: where the vimanas fly, or how near Flight is
     let air = if (wings > 0.0 || !last.get("sky").is_undef()) && cycles_left() > 9000.0 { sky::tally(world, me, &mut orders) } else { sky::Tally::default() };
-    let memo = if has("flight") {
+    let memo = if emu {
+        format!("Emu High Command: {} runners and {} skirmishers advancing on the frontier",js_num(screens),js_num(skirms))
+    } else if has("flight") {
         let at = |id: f64| realm::index(world).get(id).get("name").str().to_string();
         let doing = match &strike {
             Some(st) if st.verb == "raid" => format!("raiding {}", at(st.at)),
@@ -508,10 +517,10 @@ fn strategy(world: View, me: View) -> Value {
     let at = mem::get(me.get("ramCapital"), CLOCK);
     let mut clock = Clock { at: if at.truthy() { at } else { Value::obj() }, changed: false };
     warlord(&mut orders, world, me, &plan, &mut clock);
-    secrets(&mut orders, world, me, &mut clock);
+    if !emu { secrets(&mut orders, world, me, &mut clock); }
     if cycles_left() > 2000.0 {
         let pact = |m: View| me.get("pacts").is_empty() && pact_leader.is_none_or(|l| !same(m.get("from"), l.get("id")));
-        common::answer(&mut orders, me, world, pact, &TECHS);
+        common::answer(&mut orders, me, world, pact, doctrine);
     }
     if clock.changed {
         let ops = mem::put(CLOCK, &clock.at, "local", None, 2).unwrap_or_default();
@@ -576,8 +585,8 @@ fn warlord(orders: &mut Value, world: View, me: View, plan: &Value, clock: &mut 
         }
     }
     // largesse in the most restless province we hold, so land we took doesn't revolt straight back to its neighbour: it
-    // waits only on a bank under a quarter of a unit's price once this second's spawns are paid
-    if coin > n(me.get("costs").get("unit")) / 4.0 && due(clock, "largesse", 10.0, now) {
+    // waits until 60◆ remains after this second's spawns
+    if coin >= 60.0 && due(clock, "largesse", 10.0, now) {
         let mut worst: Option<View> = None;
         for p in world.get("provinces").iter() {
             if same(p.get("owner"), me_id) && n(p.get("risk")) > 0.04 && worst.is_none_or(|w| n(p.get("risk")) > n(w.get("risk"))) {
@@ -674,6 +683,14 @@ fn war_order(u: View, world: View, me: View) -> Option<Value> {
     let target = if defending { defend } else { vn(p.get("attack")) };
     if target.is_nan() || target < 0.0 {
         return orders::to(u, "fight", n(me.get("capital")), world, me, ());
+    }
+    // A carried plan can outlive a pact or change of ownership. Return for new orders before attacking an ally.
+    if !defending {
+        let owner=realm::index(world).get(target).get("owner").num_or(-1.0);
+        let conduct=u.get("conduct");
+        if realm::is_ally(me,owner) || (conduct.get("seconds").num_or(0.0)>0.0 && conduct.get("from").num_or(-2.0)==owner) {
+            return orders::to(u,"fight",n(me.get("capital")),world,me,());
+        }
     }
     let mut o = carry(orders::to(u, if defending { "fight" } else { "capture" }, target, world, me, ()), u, &p, me);
     if let Some(o) = &mut o {
@@ -814,25 +831,18 @@ fn wing(units: View, world: View, me: View) {
         return;
     }
     if rts && cycles_left() < 6000.0 {
-        // short of cycles, only the way home: a flier past its turn comes down, since an unpaid one crashes
-        for u in units.iter() {
-            if cycles_left() < 300.0 {
-                break;
-            }
-            let a = u.path("rts.air");
-            if a.truthy() && a.get("aloft").truthy() && n(a.get("heat")) >= TURN - 10.0 && !is_str(u.get("doing"), "move") {
-                order(obj! { "id" => u.get("id"), "land" => true });
-            }
-        }
+        // A short call still flies the army's target and lands hot aircraft.
+        common::fly(units, world, me);
         return;
     }
+
     let geo = sky::Geo::new(world, me, 12.0);
     // the strike is in the plan our land holds: read where a vimana stands on it (abroad, none is needed)
     let pl = match units.iter().find(|u| plan::here(me, *u)) {
         Some(u) => plan::of(me, u),
         None => Rc::new(Value::obj()),
     };
-    let target = vn(pl.get("sky"));
+    let target = if vn(pl.get("sky")) >= 0.0 { vn(pl.get("sky")) } else { vn(pl.get("attack")) };
     let target = if target.is_nan() { -1.0 } else { target };
     let verb = if is_str_v(pl.get("skyVerb"), "raid") { "raid" } else { "fight" };
     let by_id = realm::index(world);

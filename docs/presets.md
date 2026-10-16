@@ -76,11 +76,11 @@ if army::check(&body, &Value::Null, me).is_none() {
 
 New Atlantis recruits a small `aeronaut` wing after Flight once it has a ground screen and can afford specialists.
 Quiet Fleet's `kite` and Null Pointer Society's `wing` rotate through scouts, fighters and licensed strike craft.
-The other founding strategies keep their existing recruitment choices. Their winged units use the new models too;
-custom programs can opt into any of the definitions with their own unit functions. The viewer chooses the airframe
+Arjuna prioritizes an affordable first wing and launches sorties; Emu prioritizes ground troops.
+Custom programs can use any of these definitions with their own unit functions. The viewer chooses the airframe
 from a house model's style and its permanent build: range selects strike craft, vision of at least two selects a
 scout, and the remaining winged bodies are fighters. Explicit custom 3D models retain their own geometry.
 
 Landing on friendly/allied land cools the unit and removes its flight burn; it keeps its wings. Atlantis's controller
 returns hot aircraft to land, keeps cooling units down, then reads their carried plan again. Null and Quiet Fleet
-keep their existing flight controllers and cooling rules. No flight or combat rule changed.
+keep their flight controllers and cooling rules. Presentation helpers do not change flight or combat rules.

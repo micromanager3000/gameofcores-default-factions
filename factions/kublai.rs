@@ -298,8 +298,13 @@ fn think(world: View, me: View) -> Value {
     if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
         return emergency_recovery_policy(me);
     }
+    // Let cargo recovery recruit the first miners before the full planner fits.
+    if world.get("logistics").truthy() && me.path("units.total").num_or(0.0) < 4.0
+        && me.path("rts.cpu.income").num_or(0.0) < 30000.0 {
+        return common::govern(world, me, 0.55, || strategy(world, me));
+    }
     if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
-        return recovery_policy(me);
+        return common::govern(world, me, 0.55, || recovery_policy(me));
     }
     common::govern(world, me, 0.55, || strategy(world, me))
 }
@@ -411,8 +416,7 @@ fn strategy(world: View, me: View) -> Value {
         plan.set("field", field);
     }
     let cpu = rts_cpu(me);
-    // cpu && cpu.available && cpu.available.fabrication, less about what this think costs (the last one's): fabrication
-    // is charged right after think
+    // Fabrication has its own lane. Think reduces the shared bank once.
     let available = if cpu.truthy() { cpu.get("available") } else { cpu };
     let fab = if available.truthy() { available.get("fabrication") } else { available };
     let fabrication = if !rts.truthy() {
@@ -420,7 +424,7 @@ fn strategy(world: View, me: View) -> Value {
     } else if fab.is_undef() {
         rts.get("bank").value()
     } else {
-        Value::Num(n(fab) - me.path("compute.used.think").or(0.0))
+        Value::Num(common::fabrication_room(me).unwrap_or_else(|| n(fab)))
     };
     let mut orders = obj! {
         "policy" => obj! { "extraction" => if defend >= 0.0 { 0.38 } else { 0.5 }, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true },
@@ -444,7 +448,7 @@ fn strategy(world: View, me: View) -> Value {
     // engine's normal cap.
     // (the horde: three in ten units mine, the rest ride; more skirmishers and lancers to each screen than the founders
     // field, so a mustered army reaches a capital's siege odds)
-    if miners < jmax(8.0, (total * 0.3).floor()) && miners < common::miner_room(me, &plan) {
+    if miners < jmax(6.0, (total * 0.3).floor()) && miners < common::miner_room(me, &plan) {
         spawn(&mut orders, "miner", MINER, vec![]);
     }
     if screens < jmax(4.0, ((skirms + guns + 1.0) * 0.5).floor()) {

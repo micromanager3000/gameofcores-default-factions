@@ -54,8 +54,8 @@ fn kite_shot_body() -> Value {
 // What the faction wants, in order: researched when nobody sells it, bought when somebody does. Compute boost comes
 // after defensive capabilities; faith is left to the priests.
 const TECHS: [&str; 19] = [
-    "extraction", "ranged", "capture", "dash", "cloak", "armor", "antiAir", "scan", "influence", "repair", "pierce", "artillery",
-    "computeBoost", "seaTraversal", "mountainTraversal", "flight", "airWeapons", "stealth", "gate",
+    "extraction", "seaTraversal", "armor", "ranged", "repair", "influence", "capture", "dash", "cloak", "antiAir", "scan", "pierce", "artillery",
+    "computeBoost", "mountainTraversal", "flight", "airWeapons", "stealth", "gate",
 ];
 
 // ---- JavaScript's arithmetic, where this program follows it ----
@@ -583,11 +583,11 @@ fn strategy(world: View, me: View) -> Value {
     let shade_ready = has("dash") && has("cloak") && has("ranged");
     let specialist_bank = tactical_bank > 2450.0 * common::price_level(me);
     let total = me.get("units").get("total").num();
-    let guards = total - miners;
+    let guards = common::fighters(me);
     let guard_floor = if threatened { max(4.0, plan.get("threat").num_or(0.0) * 1.5) } else { 2.0 };
     if miners >= 2.0 && guards < guard_floor {
         add_spawn(&mut orders, me, "runner", runner_body(), &[]);
-    } else if miners < room {
+    } else if miners < room.min((me.get("provinces").num_or(1.0)*2.0).clamp(4.0,12.0)) {
         add_spawn(&mut orders, me, "miner", miner_body(), &[]);
     } else if !shade_ready {
         add_spawn(&mut orders, me, "runner", runner_body(), &[]);
@@ -1609,7 +1609,7 @@ fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
         // those the plan sends to defend (common::defends), the rest on the target
         let defend = Value::Num(common::defends(&pl, u));
         let goal = if num(&defend) >= 0.0 { &defend } else { pl.get("target") };
-        let verb = if num(&defend) >= 0.0 { "fight" } else { "capture" };
+        let verb = if num(&defend) >= 0.0 || u.get("air").truthy() || u.path("build.wings").truthy() { "fight" } else { "capture" };
         // A route is expensive code.  The engine already retains an accepted
         // order, so recalculate only when the strategic destination changes.
         let doing = u.get("doing").str();

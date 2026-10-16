@@ -5,7 +5,7 @@ export const manifest=JSON.parse(readFileSync(new URL('manifest.json',root),'utf
 export function source(name){
   const path=manifest.programs.includes(name)?`factions/${name}.rs`:manifest.examples.includes(name)?`examples/structures/${name}.rs`:null;
   if(!path)throw new Error(`Unknown faction: ${name}`);
-  const modules=manifest.programs.includes(name)?manifest.shared:manifest.shared.filter(m=>m!=='common');
+  const modules=manifest.programs.includes(name)?manifest.shared:manifest.shared.filter(m=>m!=='common'&&m!=='structures');
   const shared='\n#[allow(dead_code, unused_imports)]\nmod shared {\n'+modules.map(m=>`pub mod ${m} {\n${readFileSync(new URL(`shared/${m}.rs`,root),'utf8')}\n}\n`).join('')+'}\n';
   return readFileSync(new URL(path,root),'utf8')+shared;
 }

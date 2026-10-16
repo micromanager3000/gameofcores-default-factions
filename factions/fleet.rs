@@ -50,9 +50,9 @@ fn kite_shot_body() -> Value {
 }
 
 // The junks: every build is 10 points, and range costs 2 a step. Each carries the hull and one more module.
-// A warjunk is an ironclad gun ship; a picket holds a crossing, sees far and still has guns; a corsair is fast.
+// Warjunks carry a small hold for recovered cargo. Pickets hold crossings; corsairs carry more loot.
 fn warjunk_body() -> Value {
-    obj! { "hp" => 3, "speed" => 2, "strength" => 3, "carry" => 0, "vision" => 0, "range" => 1 }
+    obj! { "hp" => 3, "speed" => 2, "strength" => 2, "carry" => 1, "vision" => 0, "range" => 1 }
 }
 fn picket_body(guns: bool) -> Value {
     if guns {
@@ -578,7 +578,20 @@ fn conserve(world: View, me: View) -> Value {
 }
 
 fn think(world: View, me: View) -> Value {
-    common::govern(world, me, 0.4, || strategy(world, me))
+    let mut out=common::govern(world, me, 0.4, || strategy(world, me));
+    // Retire an empty corsair when neither a paying target nor a reachable wreck remains.
+    if world.get("logistics").truthy() && me.path("units.byType.corsair").num_or(0.0)>0.0 && cycles_left()>5000.0 {
+        for u in world.get("units").iter() {
+            if cycles_left()<3500.0 {break;}
+            if u.get("owner").num()!=me.get("id").num() || u.get("type").str()!="corsair" {continue;}
+            let cargo=u.path("rts.cargo");
+            if cargo.get("cycles").num_or(0.0)==0.0 && !u.get("hired").truthy() && !cargo.get("job").truthy()
+                && quarry(u,me,world,2).is_none() && common::salvage_target(u,world,me).is_none() && !out.get("disband").items().iter().any(|v|v.num()==u.get("id").num()) {
+                out.entry("disband").push(u.get("id").value());
+            }
+        }
+    }
+    out
 }
 
 fn strategy(world: View, me: View) -> Value {
@@ -673,7 +686,7 @@ fn strategy(world: View, me: View) -> Value {
     let launched = slip
         && miners >= min(room, 4.0)
         && (miners >= room || shade_ready || have.get("runner").or(0.0) >= 3.0)
-        && naval_spawn(&mut orders, me, &naval, rival_ships, threatened);
+        && naval_spawn(&mut orders, world, me, &naval, rival_ships, threatened);
     if miners < room {
         add_spawn(&mut orders, me, "miner", miner_body(), &[]);
     } else if !shade_ready {
@@ -1041,7 +1054,10 @@ fn march(u: View, pl: &Value, world: View, me: View, cloak: bool) {
         // those the plan sends to defend (common::defends), the rest on the target
         let defend = Value::Num(common::defends(pl, u));
         let goal = if num(&defend) >= 0.0 { &defend } else { pl.get("target") };
-        let verb = if num(&defend) >= 0.0 { "fight" } else { "capture" };
+        let owner=realm::index(world).get(num(goal)).get("owner").num_or(-1.0);
+        let conduct=u.get("conduct");
+        let safe=realm::is_ally(me,owner) || (conduct.get("seconds").num_or(0.0)>0.0 && conduct.get("from").num_or(-2.0)==owner);
+        let verb = if num(&defend) >= 0.0 || safe || u.get("air").truthy() || u.path("build.wings").truthy() { "fight" } else { "capture" };
         // A route is expensive code.  The engine already retains an accepted
         // order, so recalculate only when the strategic destination changes.
         let doing = u.get("doing").str();
@@ -1468,8 +1484,8 @@ fn prize_intel(world: View, me: View, log: &Value) -> Intel {
 }
 
 /// One junk a second at most, toward the fleet the plan needs: a picket for every crossing and the next landing, then
-/// warjunks and a corsair (three once rival ships are about). True when one was ordered.
-fn naval_spawn(orders: &mut Value, me: View, naval: &Naval, rival_ships: f64, threatened: bool) -> bool {
+/// warjunks, then up to two corsairs when visible cargo can pay for a raid. True when one was ordered.
+fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_ships: f64, threatened: bool) -> bool {
     let techs = me.get("techs");
     let has = |t: &str| techs.get(t).truthy();
     if !has("seaTraversal") || me.path("rts.sea.ports").is_empty() {
@@ -1497,11 +1513,20 @@ fn naval_spawn(orders: &mut Value, me: View, naval: &Naval, rival_ships: f64, th
     };
     let want_pick = (naval.stations as f64 + if naval.landing >= 0.0 { 1.0 } else { 0.0 }).min(5.0);
     let provinces = me.get("provinces").or(1.0);
-    let want_war = if guns { (2.0 + (provinces / 3.0).floor()).min(8.0) } else { 0.0 };
-    let want_cors = if guns { if rival_ships > 0.0 { 3.0 } else { 1.0 } } else { 0.0 };
+    let want_war = if guns { (1.0 + (provinces / 4.0).floor()).min(4.0) } else { 0.0 };
+    // A raider needs a visible cargo opportunity. Empty water does not justify a replacement hull.
+    let home=shore_water(world,me.get("capital").num());
+    let adj=sea::index(world).get(home).get("adj");
+    let nearby=|water:f64|water>=0.0&&(water==home||adj.has_num(water));
+    let prospects=me.path("rts.sea.contacts").iter().filter(|c| c.get("ship").truthy()
+        && nearby(c.get("water").num_or(-1.0)) && c.path("cargo.load").num_or(0.0)>=2.0 && c.path("build.range").num_or(0.0)==0.0
+        && c.path("build.carry").num_or(0.0)>=2.0).count();
+    let salvage=me.path("rts.logistics.wrecks").iter().any(|w|w.get("sea").truthy()&&nearby(w.get("water").num_or(-1.0))&&w.get("cycles").num_or(0.0)>160000.0*common::price_level(me));
+    let want_cors = if guns && (prospects>0 || salvage) { (prospects as f64).clamp(1.0,2.0) } else { 0.0 };
+    let _=rival_ships;
     let pick: Option<(&str, Value, Vec<&str>)> = if pickets < want_pick {
         Some(("picket", picket_body(guns), armor("armor")))
-    } else if war < want_war.min(2.0) {
+    } else if war < want_war.min(1.0) {
         Some(("warjunk", warjunk_body(), armor("armor")))
     } else if corsairs < want_cors {
         Some(("corsair", corsair_body(me.path("rts.logistics").truthy()), armor("dash")))
@@ -1590,7 +1615,21 @@ fn quarry(u: View, me: View, world: View, role: u8) -> Option<View> {
             continue;
         };
         let armed = c.get("build").get("range").num_or(0.0) > 0.0;
-        let s = c.get("hp").num_or(5.0) + hops * 1.5 + if role == 2 && armed { 3.0 } else { 0.0 };
+        let mut value=0.0;
+        if (role==2 || !armed) && world.get("logistics").truthy() {
+            let load=c.path("cargo.load").num_or(0.0);
+            if armed || load<2.0 || u.get("hp").num()<u.get("hpMax").num()*0.7 {continue;}
+            let escorted=me.path("rts.sea.contacts").iter().any(|guard|guard.get("id").num()!=c.get("id").num()
+                && guard.get("ship").truthy()&&guard.get("water").num_or(-1.0)==w&&guard.path("build.range").num_or(0.0)>0.0);
+            if escorted {continue;}
+            // The public load band supplies a lower bound; exact rival cargo stays private.
+            let prize=c.path("build.carry").num_or(0.0)*160000.0*common::price_level(me)*if load>=3.0 {1.0}else{0.5};
+            let recoverable=(prize*0.7).min(logistics::capacity(u));
+            let trip=(55.0+hops*30.0)*(600.0*common::price_level(me)+1500.0);
+            if recoverable<trip*1.5 {continue;}
+            value=recoverable/1e6;
+        }
+        let s = c.get("hp").num_or(5.0) + hops * 1.5 + if role == 2 && armed { 3.0 } else { 0.0 } - value;
         if s < score {
             score = s;
             best = Some(c);
@@ -1625,7 +1664,7 @@ fn junks(units: View, world: View, me: View, role: u8) -> Value {
             }
             continue;
         }
-        if role == 2 && common::recover_ship(u,world,me) { continue; }
+        if role != 1 && common::recover_ship(u,world,me) { continue; }
         let id = u.get("id").num();
         let k = ids.iter().position(|&x| x == id).unwrap_or(0);
         let carried = mem::get(u.get("ramUnit"), 1);
@@ -1663,6 +1702,9 @@ fn junks(units: View, world: View, me: View, role: u8) -> Value {
                 o.set("sail", obj! { "chase" => tid, "keep" => if role == 2 { 3.5 } else { 4.5 } });
                 send = true;
             }
+        } else if role==2 && world.get("logistics").truthy() {
+            let home=heard.get("hw").num_or(carried.get("h").num_or(-1.0));
+            if home>=0.0 && water!=home && chasing<0.0 && sea::route(world,water,home).is_some(){o.set("sail",home);send=true;}
         } else if goal >= 0.0 {
             // back to its water: when it's stopped elsewhere, lost a chase, or the reflex left it on a heading
             let on_way = match course {
@@ -1690,7 +1732,7 @@ fn junks(units: View, world: View, me: View, role: u8) -> Value {
         }
         // armour only while rivals are about: it charges every second it's on
         let armored = u.path("rts.modules").has_str("armor");
-        let want_armor = if armored && contacts > 0 && prey.is_some() { 450.0 } else { 0.0 };
+        let want_armor = if armored && prey.is_some_and(|t|t.path("build.range").num_or(0.0)>0.0) { 450.0 } else { 0.0 };
         let p = u.path("rts.power");
         if send || p.get("armor").num_or(0.0) != want_armor || u.get("alert").num_or(0.0) < 8.0 {
             o.set("power", obj! { "drive" => if role == 2 { 420 } else { 260 }, "armor" => want_armor, "weapon" => 300 });
@@ -1724,6 +1766,9 @@ fn junk_reflex(u: View, ns: View, pool: &mut Pool) -> Option<Value> {
     let sea = r.get("sea");
     let modules = r.get("modules");
     let reach = u.get("reach").num_or(1.0);
+    let merchant=u.get("type").str()=="corsair" && r.get("cargo").truthy();
+    let carrying=logistics::cargo(u)>0.0;
+    let transferring=r.path("cargo.job").truthy();
     let (mut port, mut star) = (0, 0);
     let mut ship: Option<View> = None;
     let mut shot: Option<View> = None;
@@ -1734,6 +1779,8 @@ fn junk_reflex(u: View, ns: View, pool: &mut Pool) -> Option<Value> {
             continue;
         }
         let d = t.get("d").num();
+        if merchant && (carrying || t.path("rts.cargo.load").num_or(0.0)<2.0)
+            && t.get("range").num_or(0.0)==0.0 {continue;}
         if d <= 7.0 {
             near += 1;
         }
@@ -1773,16 +1820,17 @@ fn junk_reflex(u: View, ns: View, pool: &mut Pool) -> Option<Value> {
         if u.get("type").str() == "corsair" && hurt && t.get("d").num() < 6.0 {
             // run: away from it, dashing if it can
             o.set("head", obj! { "x" => -t.get("dx").num(), "y" => -t.get("dy").num() });
+            if transferring {o.set("cargo",Value::Null);}
             if modules.has_str("dash") && ready("dash") && pool.take("abilities", 900.0) {
                 o.set("ability", "dash");
             }
             act = true;
-        } else if t.get("d").num() <= 7.0 && !sea::in_arc(u, t, 30.0) {
+        } else if !carrying && !transferring && t.get("d").num() <= 7.0 && !sea::in_arc(u, t, 30.0) {
             let b = sea::beam(u, t);
             o.set(if stopped { "face" } else { "head" }, obj! { "x" => b.x, "y" => b.y });
             act = true;
         }
-    } else if let Some(t) = foe.filter(|_| stopped) {
+    } else if let Some(t) = foe.filter(|_| stopped && !transferring && !carrying) {
         // a boat rowing past, or troops on the shore: closer when it's out of the guns' reach (a picket keeps its
         // station), else the beam to it
         if t.get("d").num() > 5.5 && u.get("type").str() != "picket" {

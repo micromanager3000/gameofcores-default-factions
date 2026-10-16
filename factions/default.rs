@@ -15,13 +15,15 @@ program!(think, hauler, freighter, miner, guard, longbow, spy, scout, reflex, re
 
 // What to research, in order: a CPU RTS world's ids, then a classic world's (archery is ranged there, espionage is
 // cloak). Ids the world lacks are skipped.
-const TECHS: [&str; 11] = ["extraction", "ranged", "dash", "seaTraversal", "mountainTraversal", "cloak", "mining", "archery", "boats", "alpine", "espionage"];
+const TECHS: [&str; 12] = ["extraction", "ranged", "dash", "repair", "seaTraversal", "mountainTraversal", "cloak", "mining", "archery", "boats", "alpine", "espionage"];
 
 fn think(world: View, me: View) -> Value {
     common::govern(world, me, 0.4, || strategy(world, me))
 }
 
 fn strategy(world: View, me: View) -> Value {
+    let research_techs: Vec<&str> = TECHS.iter().copied()
+        .filter(|t| *t != "repair" || me.path("rts.structureCosts").truthy()).collect();
     let mut orders = obj! { "policy" => obj! { "extraction" => 0.45, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true } };
     // targets: the best neighbouring land, marked down where the army couldn't hold on to it (common::can_hold); while
     // someone else claims the Crown, the claimant's land first (common::rally)
@@ -38,7 +40,10 @@ fn strategy(world: View, me: View) -> Value {
     let techs = me.get("techs");
     let has = |a: &str, b: &str| techs.get(a).truthy() || techs.get(b).truthy();
     let mut mix = if has("ranged", "archery") {
-        vec![("miner", 0.6), ("guard", 0.22), ("longbow", 0.13), ("scout", 0.05)]
+        if world.get("logistics").truthy() && me.path("units.byType.guard").num_or(0.0)>=1.0 && me.path("units.byType.longbow").num_or(0.0)==0.0 {
+            // A small cargo economy pairs its first guard with ranged support before adding more melee upkeep.
+            vec![("miner", 0.55), ("guard", 0.1), ("longbow", 0.3), ("scout", 0.05)]
+        } else {vec![("miner", 0.6), ("guard", 0.22), ("longbow", 0.13), ("scout", 0.05)]}
     } else {
         vec![("miner", 0.6), ("guard", 0.35), ("scout", 0.05)]
     };
@@ -84,7 +89,7 @@ fn strategy(world: View, me: View) -> Value {
                 !same(m.get("from"), t.get("id")) && members.iter().all(|x| !same(x, t.get("id")))
             })
     };
-    common::answer(&mut orders, me, world, pact, &TECHS);
+    common::answer(&mut orders, me, world, pact, &research_techs);
     // unit code: guards and longbows get most of it and think every 2 s; miners, the scout and the spy only when one goes
     // idle, is attacked or is caught
     let types = obj! {
@@ -94,7 +99,14 @@ fn strategy(world: View, me: View) -> Value {
         "scout" => obj! { "share" => 0.05, "every" => 0 },
         "spy" => obj! { "share" => 0.15, "every" => 0 },
     };
-    common::budget(&mut orders, world, me, &common::Budget { research: 0.1, techs: &TECHS, types: Some(&types), ..common::Budget::default() });
+    common::budget(&mut orders, world, me, &common::Budget { research: 0.1, techs: &research_techs, types: Some(&types), ..common::Budget::default() });
+    if world.get("logistics").truthy() {
+        // Leave room for the governor's body-cost review after planning a recruit.
+        orders.entry("compute").entry("cpu").entry("limits").set("think",(me.path("compute.thinkPeak").num_or(0.0)*1.6+6000.0).max(20000.0));
+        // Scouting needs one complete map scan even between cargo deliveries.
+        orders.entry("compute").entry("types").set("scout",obj!{"cycles"=>6000,"every"=>4});
+        orders.entry("compute").entry("types").set("longbow",obj!{"cycles"=>(3000.0+2200.0*me.path("units.byType.longbow").num_or(0.0)).max(7000.0),"every"=>2});
+    }
     orders
 }
 
@@ -138,6 +150,7 @@ fn guard(units: View, world: View, me: View) {
 
 // Longbows (range 1: 4 cells) go with the army and shoot from behind it, and come home with it.
 fn longbow(units: View, world: View, me: View) {
+    if world.get("logistics").truthy() && cycles_left()<4500.0 {return;}
     if !home_alarm(units, world, me) {
         common::defend_then(&units.iter().collect::<Vec<View>>(), world, me, "fight");
     }
@@ -172,6 +185,7 @@ fn spy(units: View, world: View, me: View) {
 fn scout(units: View, world: View, me: View) -> Vec<Value> {
     let mut out = Vec::new();
     for u in units.iter() {
+        if world.get("logistics").truthy() && cycles_left()<2000.0+20.0*world.get("provinces").len() as f64 {break;}
         if is_str(u.get("doing"), "move") {
             continue; // walking
         }

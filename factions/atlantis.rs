@@ -512,9 +512,10 @@ fn think(world: View, me: View) -> Value {
         let mut recovery = mem::get(me.get("ramCapital"), 244);
         if !matches!(recovery, Value::Obj(_)) { recovery = obj! {}; }
         recovery.set("r", true);
-        return obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
+        return common::govern(world, me, 0.4, || obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
             "ram" => mem::put(244, &recovery, "local", None, 1).unwrap_or_default(),
-            "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0 };
+            "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0,
+            "memo" => "Recovering production" });
     }
     common::govern(world, me, 0.4, || strategy(world, me))
 }
@@ -783,8 +784,8 @@ fn landlord(orders: &mut Value, world: View, me: View, clock: &mut Clock, calm: 
             }
         }
     }
-    // largesse (60◆) is paid before spawns (payable): it waits only on a bank under a quarter of a unit's price
-    if me.get("bank").num() > me.get("costs").get("unit").num() / 4.0 && due(clock, "largesse", 10.0, now) {
+    // largesse (60◆) is paid before spawns (payable): it requires at least 60◆ in the bank
+    if me.get("bank").num() >= 60.0 && due(clock, "largesse", 10.0, now) {
         let mut worst: Option<View> = None;
         for p in world.get("provinces").iter() {
             let risk = p.get("risk").num();
@@ -1433,6 +1434,13 @@ mod atlantis_ext {
     /// puzzles it has solved); else the tech under way while it can go on; else the first tech in the list you can
     /// start, a listed tech you can't standing for its first missing prerequisite.
     pub fn choose_research(orders: &mut Value, world: View, me: View) {
+        // Tabula builds a broad toolbox before specializing; Atlantis pursues world-first research below.
+        if me.get("seat").num_or(-1.0)==9.0 {
+            let mut choice=Value::obj();
+            common::budget(&mut choice,world,me,&common::Budget{techs:&["extraction","ranged","armor","seaTraversal","repair","capture","influence","mountainTraversal","flight","artillery","antiAir","scan","dash","computeBoost","faith","cloak","pierce","airWeapons","stealth","gate"],..Default::default()});
+            if choice.get("research").truthy(){orders.set("research",choice.get("research").clone());}
+            return;
+        }
         let (all, mine) = (world.get("techs"), me.get("techs"));
         let me_id = me.get("id").num();
         let now = me.path("research.tech").str().to_string();

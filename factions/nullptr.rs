@@ -376,13 +376,18 @@ fn think(world: View, me: View) -> Value {
         return common::govern(world, me, 0.4, || strategy(world, me));
     }
     if cycles_left() < 3000.0 { return think_emergency(); }
+    if world.get("logistics").truthy() && me.path("units.total").num_or(0.0) < 4.0
+        && me.path("rts.cpu.income").num_or(0.0) < 30000.0 {
+        return common::govern(world, me, 0.4, || strategy(world, me));
+    }
     // The recent peak includes execution and ABI serialization, but excludes RAM application.
     let peak = me.path("compute.thinkPeak").num_or(0.0);
     let writes = me.get("ramCapital").len() as f64 * 32.0 + 32.0;
-    if cycles_left() < 18000.0 || cycles_left() < peak * 1.1 + writes + 600.0 {
-        return think_recovery(me);
-    }
     let orders = common::govern(world, me, 0.4, || {
+        // Cargo support and recovery must survive a planner admission failure.
+        if cycles_left() < 18000.0 || cycles_left() < peak * 1.1 + writes + 600.0 {
+            return think_recovery(me);
+        }
         let mut orders = strategy(world, me);
         // Governance scans visible bodies after strategy when it checks proposed recruits.
         let review = 1500.0 + world.get("units").len() as f64 * 15.0
@@ -466,7 +471,7 @@ fn strategy(world: View, me: View) -> Value {
     // Maintain a small mining base first, no bigger than what our mines can use (common::miner_room: past that a miner
     // stands idle); then rotate combat specialties instead of massing one dominant body. Three spawns is also the
     // engine's normal cap.
-    if miners < jmax(8.0, (total * 0.4).floor()) && miners < common::miner_room(me, &plan) {
+    if miners < jmax(6.0, (total * 0.3).floor()) && miners < common::miner_room(me, &plan) {
         spawn(&mut orders, "miner", MINER, vec![]);
     }
     // A small air wing only if Flight ever arrives (stolen, most likely): a tenth of the army, between 2 and 4 fliers.
@@ -477,14 +482,13 @@ fn strategy(world: View, me: View) -> Value {
         spawn_build(&mut orders,"wing",||frame.build(),mods(me,"wing"),Some(format!("{} {serial:.0}",frame.name)));
     }
 
-    // The exploits, once Cloak allows stealth and there's a rival capital to visit: one at 10 units, a second at 24 and a
-    // third at 40 while the bank can feed them (a spy's errands cost ◆). One every 20 s at most, so the queue can't
-    // double them up.
+    // One exploit after eight units, a second after sixteen, while the treasury can pay for espionage.
+    // Eight seconds between recruits gives each spy time to leave fabrication.
     let marks = world.get("factions").iter().filter(|f| realm::is_rival(world, me, n(f.get("id"))) && n(f.get("capital")) >= 0.0).count();
     let now = world.get("seconds").or(0.0).floor();
     let bank = n(me.get("bank"));
-    let want_spies = if total >= 24.0 && bank >= 250.0 { 2.0 } else if total >= 10.0 { 1.0 } else { 0.0 };
-    if has("cloak") && marks > 0 && now % 20.0 == 0.0 && jmax(ghosts, spies.count as f64) < want_spies {
+    let want_spies = if total >= 16.0 && bank >= 350.0 { 2.0 } else if total >= 8.0 && bank>=150.0 { 1.0 } else { 0.0 };
+    if has("cloak") && marks > 0 && now % 8.0 == 0.0 && jmax(ghosts, spies.count as f64) < want_spies {
         spawn(&mut orders, "ghost", if has("stealth") { GHOST_DEEP } else { GHOST }, mods(me, "ghost"));
     }
     if screens < jmax(3.0, ((skirms + guns + 1.0) * 0.4).floor()) {
@@ -696,7 +700,7 @@ fn warlord(orders: &mut Value, world: View, me: View, plan: &Value, clock: &mut 
     }
     // largesse in the most restless province we hold, so land we took doesn't revolt straight back to its neighbour: it
     // waits only on a bank under a quarter of a unit's price once this second's spawns are paid
-    if coin > n(me.get("costs").get("unit")) / 4.0 && due(clock, "largesse", 25.0, now) {
+    if coin >= 60.0 && due(clock, "largesse", 25.0, now) {
         let mut worst: Option<View> = None;
         for p in world.get("provinces").iter() {
             if same(p.get("owner"), me_id) && n(p.get("risk")) > 0.08 && worst.is_none_or(|w| n(p.get("risk")) > n(w.get("risk"))) {
@@ -747,6 +751,14 @@ fn war_order(u: View, world: View, me: View) -> Option<Value> {
     let target = if defending { defend } else { vn(p.get("attack")) };
     if target.is_nan() || target < 0.0 {
         return orders::to(u, "fight", n(me.get("capital")), world, me, ());
+    }
+    // A carried plan can outlive a pact or change of ownership. Return for new orders before attacking an ally.
+    if !defending {
+        let owner=realm::index(world).get(target).get("owner").num_or(-1.0);
+        let conduct=u.get("conduct");
+        if realm::is_ally(me,owner) || (conduct.get("seconds").num_or(0.0)>0.0 && conduct.get("from").num_or(-2.0)==owner) {
+            return orders::to(u,"fight",n(me.get("capital")),world,me,());
+        }
     }
     let mut o = carry(orders::to(u, if defending { "fight" } else { "capture" }, target, world, me, ()), u, &p, me);
     if let Some(o) = &mut o {

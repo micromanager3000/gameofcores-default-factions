@@ -11,8 +11,22 @@ The programs use the public `gameofcores` SDK. Aircraft builds, house themes, na
 | `src/catalog.rs` | Founding seats, colours, newcomer names and house program assignments. |
 | `examples/structures/` | Foundry, Lantern and Raiders programs for worlds with programmable structures enabled. |
 
-Emu High Command uses Arjuna's strategy. Tabula Rasa uses Atlantis through the `steward` assignment.
-Their own house presentation is selected by seat. Those assignments match the existing game.
+Emu shares Arjuna's program with a separate ground doctrine selected by seat.
+Tabula shares Atlantis through `steward`, using a broader research order.
+Their presentation also follows their own seat.
+
+| Faction | Strategy |
+| --- | --- |
+| Kublai Khan's Alt | Expand with mobile ground columns, passage deals and border support. |
+| Arjuna's Halting Problem | Build a ground screen, buy useful technologies, then launch aircraft sorties. |
+| Knights Templated | Combine faith, armored troops, artillery and local support. |
+| New Atlantis | Research early technologies, trade access and field specialist units. |
+| Quiet Fleet | Hold crossings, ship cargo, and pursue exposed cargo when recovery can pay. |
+| The Kernel Manifesto | Expand production, spread influence and support a broad ground army. |
+| Null Pointer Society | Scout with cloaked units and attack with a mobile mixed force. |
+| Compute of Nations | Combine leases, hired troops, bribes, technology trade and military expansion. |
+| Emu High Command | Prioritize quick ground troops and practical ground technologies. |
+| Tabula Rasa | Learn a broad set of practical technologies and adapt its specialist force. |
 
 ## Export a program
 
@@ -29,7 +43,10 @@ Both the Rust package and the Node exporter produce the same source; `npm test` 
 
 Every house supports physical CPU cargo when `world.logistics` is present.
 Miners unload locally, ground carriers connect depots, and freighters carry cargo between docks.
-Quiet Fleet also recovers visible wreck cargo. The same programs retain their earlier mining policy in saved worlds without logistics.
+Carriers leave exhausted depots with partial loads and prioritize useful delivery trips.
+Quiet Fleet recovers visible wreck cargo and returns it through the capital's dock.
+It retires an empty corsair when no worthwhile target or nearby wreck remains.
+The same programs retain their earlier mining policy in saved worlds without logistics.
 
 Export a structure example with `node tools/source.mjs foundry /tmp/foundry.rs`.
 The names `lantern` and `raiders` select the other two programs.
@@ -54,3 +71,8 @@ The lock file records the repository, commit and file hashes. Edit this reposito
 Ordinary game builds use the installed snapshot without fetching another repository.
 
 Run the game's Rust, viewer and copy checks before shipping a new snapshot.
+
+The default programs also build when a CPU RTS world enables structures.
+Their shared policy reads `me.rts.structureCosts` before issuing building orders.
+Both the uniform default program and the separate house programs use each seat's design.
+See [default buildings](docs/buildings.md) for their priorities and spending limits.
