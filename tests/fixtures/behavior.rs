@@ -106,6 +106,24 @@ fn healthy_recovery_keeps_flight_research_moving() {
     assert_eq!(orders.get("research").str(),"flight");
     assert_eq!(orders.get("compute").get("cpu").get("limits").get("research").num(),0.12);
 }
+
+#[test]
+fn a_quiet_planning_second_preserves_other_lanes_and_raises_a_stale_limit() {
+    let (mut world, mut me, _) = fixture();
+    world.set("seconds", 101);
+    me.entry("rts").entry("cpu").set("limits", obj! {"think"=>18000,"research"=>0.12,"upkeep"=>0.7});
+    me.entry("rts").entry("cpu").set("reserve", obj! {"control"=>0.1});
+    me.entry("rts").entry("cpu").set("upkeepOrder", arr!["miner","wing"]);
+    me.entry("compute").set("thinkPeak",18000);
+    let args=views(&[world,me]);
+    let orders=common::govern(args[0],args[1],0.4,||panic!("standing plans should continue"));
+    let cpu=orders.get("compute").get("cpu");
+    assert!(cpu.get("limits").get("think").num()>=32000.0);
+    assert_eq!(cpu.get("limits").get("research"),&Value::from(0.12));
+    assert_eq!(cpu.get("reserve"),&obj!{"control"=>0.1});
+    assert_eq!(cpu.get("upkeepOrder"),&arr!["miner","wing"]);
+    assert!(orders.get("ram").is_empty() && orders.get("spawn").is_empty());
+}
 #[test]
 fn flight_research_waits_for_recovery_and_preserves_emu_doctrine() {
     for state in ["stalled","poor","costly","emu"] {

@@ -1237,7 +1237,21 @@ use super::{air, theme};
     /// Runs a house's own strategy, with its own economic safety policy around every return path. Classic worlds
     /// keep the house's strategy. No engine allocation, exemption or rule is involved.
     pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
-        let mut orders = govern_units(world, me, share, strategy);
+        // Standing unit orders, research and building jobs keep running between plans.
+        // A quiet second also repairs a fixed allowance before another full planner can overrun it.
+        let now = world.get("seconds").num_or(0.0).floor();
+        let mut orders = if world.get("logistics").truthy() && now >= 60.0 && now % 5.0 != 0.0
+            && me.path("units.stalled").num_or(0.0) == 0.0
+            && me.path("rts.cpu.bank").num_or(0.0) > me.path("rts.cpu.income").num_or(0.0) * 2.0 {
+            let mut cpu = obj! { "limits" => me.path("rts.cpu.limits"),
+                "reserve" => me.path("rts.cpu.reserve"), "upkeepOrder" => me.path("rts.cpu.upkeepOrder") };
+            let income = me.path("rts.cpu.income").num_or(20000.0);
+            let old = cpu.get("limits").get("think").num_or(0.0);
+            let old = if old <= 1.0 { old * income } else { old };
+            let peak = me.path("compute.thinkPeak").num_or(0.0);
+            cpu.entry("limits").set("think", old.max(32000.0).max(peak * 1.35 + 6000.0));
+            obj! { "compute" => obj! { "cpu" => cpu } }
+        } else { govern_units(world, me, share, strategy) };
         maintain_freighters(&mut orders, world, me);
         super::structures::apply(&mut orders, world, me);
         orders
