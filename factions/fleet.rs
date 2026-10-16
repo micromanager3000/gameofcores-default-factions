@@ -1494,7 +1494,7 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
     let have = me.get("units").get("byType");
     let (pickets, war, corsairs) = (have.get("picket").or(0.0), have.get("warjunk").or(0.0), have.get("corsair").or(0.0));
     let income = me.get("rts").get("cpu").get("income").or(0.0);
-    // the fleet's size follows income: about one junk per 16,000 cycles a second, at least three
+    // Income bounds affordable hulls; an actual crossing, escort or target must justify each one.
     let fleet_max = max(3.0, (income / 20000.0).floor()).min(12.0);
     // (the land army first: at least three soldiers ashore and one more for every two junks, since the land is what
     // feeds the yard)
@@ -1512,8 +1512,6 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
         }
     };
     let want_pick = (naval.stations as f64 + if naval.landing >= 0.0 { 1.0 } else { 0.0 }).min(5.0);
-    let provinces = me.get("provinces").or(1.0);
-    let want_war = if guns { (1.0 + (provinces / 4.0).floor()).min(4.0) } else { 0.0 };
     // A raider needs a visible cargo opportunity. Empty water does not justify a replacement hull.
     let home=shore_water(world,me.get("capital").num());
     let adj=sea::index(world).get(home).get("adj");
@@ -1523,7 +1521,11 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
         && c.path("build.carry").num_or(0.0)>=2.0).count();
     let salvage=me.path("rts.logistics.wrecks").iter().any(|w|w.get("sea").truthy()&&nearby(w.get("water").num_or(-1.0))&&w.get("cycles").num_or(0.0)>160000.0*common::price_level(me));
     let want_cors = if guns && (prospects>0 || salvage) { (prospects as f64).clamp(1.0,2.0) } else { 0.0 };
-    let _=rival_ships;
+    // Warships defend observed traffic and contested crossings. Land area alone
+    // does not justify several idle hulls charging upkeep throughout the epoch.
+    let escorts: f64 = if have.get("freighter").num_or(0.0) > 0.0 { 1.0 } else { 0.0 };
+    let contested = rival_ships.min(3.0) + naval.blockade.min(1) as f64;
+    let want_war = if guns { escorts.max(contested).max(if prospects > 0 { 1.0 } else { 0.0 }).min(4.0) } else { 0.0 };
     let pick: Option<(&str, Value, Vec<&str>)> = if pickets < want_pick {
         Some(("picket", picket_body(guns), armor("armor")))
     } else if war < want_war.min(1.0) {
