@@ -197,7 +197,16 @@ use super::{air, theme};
             let slot=p.get("mines").iter().enumerate().find(|(k,v)|v.num_or(0.0)>0.0 && realm::worker(p,*k as f64)==me.get("id").num() && p.get("staff").at(*k).num_or(0.0)<2.0);
             if let Some((k,_))=slot {
                 if let Some(mut o)=orders::to(u,"gather",cap,world,me,()){o.set("slot",k);order(o);}
-            }else if let Some(o)=orders::gather(u,world,me){order(o);}
+            } else {
+                // A cold province plan can fill all 16 RAM pages. Price its read before asking for a route.
+                let first = me.get("ramProvince").key(at).key(0.0).get("bytes");
+                let cold = if plan::known(me,u).is_none() && first.is_bytes() && first.len() >= 2 {
+                    let b = first.bytes();
+                    2.5 * f64::from(u16::from_le_bytes([b[0],b[1]]))
+                } else { 0.0 };
+                if cycles_left() < 2200.0 + cold { continue; }
+                if let Some(o)=orders::gather(u,world,me){order(o);}
+            }
         }
     }
     fn receiving_dock(world:View,me:View)->Option<f64>{
@@ -394,12 +403,10 @@ use super::{air, theme};
                 && w.get("until").num_or(0.0)>(now+travel)*5.0
         }).max_by(|a,b|a.get("cycles").num().min(hold).total_cmp(&b.get("cycles").num().min(hold)))
     }
-    fn logistics_budget(world:View,me:View,mut out:Value)->Value{
-        if !world.get("logistics").truthy(){return out;}
-        // Recovery must be able to return its policy even when the planner used nearly all its call.
-        if cycles_left()<3500.0{return out;}
+    /// Install affordable worker callbacks without scanning routes, stocks or bodies.
+    fn logistics_controls(me: View, out: &mut Value) {
         let income=me.path("rts.cpu.income").num_or(20000.0);
-        for (ty,cycles) in [("miner",4500),("hauler",10000),("freighter",12000)]{out.entry("compute").entry("types").set(ty,obj!{"cycles"=>cycles,"every"=>2});}
+        for (ty,cycles) in [("miner",7000),("hauler",10000),("freighter",12000)]{out.entry("compute").entry("types").set(ty,obj!{"cycles"=>cycles,"every"=>2});}
         // Route planning and RAM reads need a fixed minimum even between irregular deliveries.
         let cpu=out.entry("compute").entry("cpu");
         for (lane,floor) in [("think",14000.0),("control",22000.0),("drive",8000.0)]{
@@ -411,6 +418,13 @@ use super::{air, theme};
         cpu.set("upkeepOrder",priority);
         // Fixed reserves from a rich second must not lock out code when delivery income falls.
         cpu.set("reserve",obj!{"think"=>0.25,"control"=>0.1,"upkeep"=>0.1,"duel"=>0.05});
+    }
+    fn logistics_budget(world:View,me:View,mut out:Value)->Value{
+        if !world.get("logistics").truthy(){return out;}
+        // Recovery must be able to return its policy even when the planner used nearly all its call.
+        if cycles_left()<3500.0{return out;}
+        let income=me.path("rts.cpu.income").num_or(20000.0);
+        logistics_controls(me, &mut out);
         let depots=me.path("rts.logistics.depots");let stock=depots.iter().filter(|d|d.get("p").num()!=me.get("capital").num()||d.get("dock").truthy()).map(|d|d.get("cycles").num_or(0.0)).sum::<f64>();
         let have=me.path("units.byType");
         if stock>16000.0 && depots.iter().filter(|d|d.get("dock").truthy()).count()>=2 && !me.path("techs.seaTraversal").truthy(){out.set("research","seaTraversal");}
@@ -445,7 +459,7 @@ use super::{air, theme};
     /// into the fog, so it ranks below any land in sight but a well-held capital.
     pub const UNSEEN: f64 = -4.0;
 
-    /// A target's worth: cores first; free land is cheap to take; a garrison and a capital cost; restive land, rebels
+    /// A target's worth: cores first; free land is cheap to take; town defenders and a capital cost; restive land, rebels
     /// and a runaway leader's land invite attack; land deep in another faction's faith costs its zeal ÷ 15, since it
     /// keeps winning its founder favour and revolts back after you take it. Land you've never seen scores [`UNSEEN`],
     /// and a figure you can't read counts as none, so the score is always a number.
@@ -457,7 +471,7 @@ use super::{air, theme};
         if q.get("owner").num() < 0.0 {
             s += 2.5;
         } else {
-            s -= q.get("garrison").or(0.0) * 1.1 + if q.get("capital").truthy() { 6.0 } else { 0.0 };
+            s -= town_defenders(q) * 1.1 + if q.get("capital").truthy() { 6.0 } else { 0.0 };
         }
         if q.get("loyaltyBand").str() == "restive" {
             s += 2.0;
@@ -628,6 +642,11 @@ use super::{air, theme};
     /// (`RULES.siegeOdds`).
     pub const SIEGE_ODDS: f64 = 3.0;
 
+    /// Visible owner defenders in the capture ring. Older observations count the province's garrison.
+    pub fn town_defenders(q: View) -> f64 {
+        q.get("townGarrison").num_or(q.get("garrison").or(0.0))
+    }
+
     /// Gather two capturers for free land. For a rival, use visible town defenders plus two reinforcements.
     /// Capitals need at least four capturers. Older observations fall back to the whole province's garrison.
     pub fn muster_for(q: View) -> f64 {
@@ -637,7 +656,7 @@ use super::{air, theme};
         if n(q.get("owner")) < 0.0 {
             return 2.0;
         }
-        (q.get("townGarrison").num_or(q.get("garrison").or(0.0)) * SIEGE_ODDS + 2.0)
+        (town_defenders(q) * SIEGE_ODDS + 2.0)
             .max(if q.get("capital").truthy() { 4.0 } else { 3.0 })
     }
 
@@ -658,7 +677,33 @@ use super::{air, theme};
     /// ([`fighters`]), so your units there would die without taking it. A siege that came to this, its defenders
     /// reinforced or your army worn down, is given up: the army goes elsewhere until it's big enough.
     pub fn hopeless(me: View, q: View) -> bool {
-        q.get("townGarrison").num_or(q.get("garrison").or(0.0)) * SIEGE_ODDS > fighters(me)
+        town_defenders(q) * SIEGE_ODDS > fighters(me)
+    }
+
+    /// In logistics worlds, a visible capital can be attacked before the army meets the siege headcount.
+    /// Six armed ground units may clear workers when they outnumber visible armed defenders.
+    /// Capturing still uses the engine's ordinary siege odds after the defenders fall.
+    pub fn capital_assault(world: View, me: View, q: View) -> Option<f64> {
+        if !world.get("logistics").truthy() || !q.get("capital").truthy() || !q.get("visible").truthy()
+            || q.get("owner").num_or(-1.0) < 0.0
+            || cycles_left() < 6000.0 + world.get("units").len() as f64 * 60.0 { return None; }
+        let ours = me.get("id").num();
+        let at = q.get("id").num();
+        let mut army = 0.0_f64;
+        let mut defenders = 0.0_f64;
+        for u in world.get("units").iter() {
+            if cycles_left() < 3000.0 { return None; }
+            let build = u.get("build");
+            if u.get("hp").num_or(1.0) <= 0.0 || build.get("wings").truthy() || u.path("rts.sea.ship").truthy()
+                || (build.get("strength").num_or(0.0) <= 0.0 && build.get("range").num_or(0.0) <= 0.0)
+                || matches!(u.get("type").str(), "miner" | "hauler" | "freighter" | "scout")
+                || matches!(u.get("doing").str(), "gather" | "study") { continue; }
+            let owner = u.get("owner").num_or(-1.0);
+            if owner == ours { army += 1.0; }
+            else if owner >= 0.0 && !realm::is_ally(me, owner) && u.get("at").num() == at { defenders += 1.0; }
+        }
+        let need = (defenders * 1.5 + 2.0).ceil().max(4.0);
+        (army >= 6.0 && army >= need).then_some(need)
     }
 
     /// The next target from a ranked list, sticky: the last plan's (`last`, its id) while it's still on the list, so
@@ -709,12 +754,14 @@ use super::{air, theme};
     /// only a change) and your units can tell a plan that stands from land cut off from it (`plan::check`); partner:
     /// unseen land the game said a pact partner holds ([`partner_land`]), left off the targets. The last plan (in capital
     /// RAM) keeps the target sticky. Targets that need more than about 60% of your fighters wait while others are on
-    /// the list, and a hopeless siege ([`hopeless`]) is no target at all. `per_slot` is how deep to stack miners (2 is
-    /// the usual).
+    /// the list. A visible capital with weaker armed defenders may be assaulted first ([`capital_assault`]); other
+    /// hopeless sieges wait. `per_slot` is how deep to stack miners (2 is the usual).
     pub fn survey(world: View, me: View, targets: &[View], per_slot: f64) -> Value {
         let last = mem::get(me.get("ramCapital"), 0).get("attack").num_or(-1.0);
         let me_id = me.get("id").num();
         let partner = partner_land(world, me);
+        let assault = targets.iter().copied().filter(|q| !partner.contains(&q.get("id").num()))
+            .find_map(|q| capital_assault(world, me, q).map(|need| (q, need)));
         let kept: Vec<View> = targets.iter().copied().filter(|q| !partner.contains(&q.get("id").num()) && !hopeless(me, *q)).collect();
         let targets = &kept[..];
         let joint = targets.iter().copied().find(|q| {
@@ -723,8 +770,8 @@ use super::{air, theme};
         });
         let can = (fighters(me) * 0.6).floor().max(4.0);
         let fit: Vec<View> = targets.iter().copied().filter(|q| muster_for(*q) <= can).collect();
-        let t = joint.or_else(|| pick(if fit.is_empty() { targets } else { &fit }, last));
-        let need = if joint.is_some() { 1.0 } else { t.map_or(0.0, muster_for) };
+        let t = joint.or(assault.map(|(q, _)| q)).or_else(|| pick(if fit.is_empty() { targets } else { &fit }, last));
+        let need = if joint.is_some() { 1.0 } else if let Some((_, need)) = assault { need } else { t.map_or(0.0, muster_for) };
         let mines: Vec<Value> = realm::open_mines(world, me, per_slot, 24.0).into_iter().map(|[p, k]| arr![p, k]).collect();
         let mut plan = obj! {
             "mines" => mines,
@@ -1237,7 +1284,40 @@ use super::{air, theme};
     /// Runs a house's own strategy, with its own economic safety policy around every return path. Classic worlds
     /// keep the house's strategy. No engine allocation, exemption or rule is involved.
     pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
-        let mut orders = govern_units(world, me, share, strategy);
+        // Standing unit orders, research and building jobs keep running between plans.
+        // A quiet second also repairs a fixed allowance before another full planner can overrun it.
+        let now = world.get("seconds").num_or(0.0).floor();
+        let mut orders = if world.get("logistics").truthy() && now >= 60.0 && now % 5.0 != 0.0 {
+            let income = me.path("rts.cpu.income").num_or(20000.0);
+            if me.path("units.stalled").num_or(0.0) > 0.0 || me.path("rts.cpu.bank").num_or(0.0) <= income * 2.0 {
+                // Repeated recovery scans can consume the base income before miners receive upkeep.
+                // Pause optional spending now; review bodies and recruitment on the next planning second.
+                let mut out = recovery_policy(me);
+                logistics_controls(me, &mut out);
+                out
+            } else {
+                let mut cpu = obj! { "limits" => me.path("rts.cpu.limits"),
+                    "reserve" => me.path("rts.cpu.reserve"), "upkeepOrder" => me.path("rts.cpu.upkeepOrder") };
+                let old = cpu.get("limits").get("think").num_or(0.0);
+                let old = if old <= 1.0 { old * income } else { old };
+                let peak = me.path("compute.thinkPeak").num_or(0.0);
+                cpu.entry("limits").set("think", old.max(32000.0).max(peak * 1.35 + 6000.0));
+                let mut out = obj! { "compute" => obj! { "cpu" => cpu } };
+                // A short planner can leave recovery's zero allowances after the economy has recovered.
+                // Existing armies still need callbacks to follow their standing plan while a full review waits.
+                if me.path("rts.cpu.bank").num_or(0.0) > income * 4.0 {
+                    let have = me.path("units.byType");
+                    for (ty, cfg) in me.path("compute.types").entries() {
+                        if matches!(ty, "miner" | "hauler" | "freighter") || have.get(ty).num_or(0.0) <= 0.0 { continue; }
+                        if cfg.get("every").num_or(0.0) == 8.0 && cfg.get("share").num_or(0.0) == 0.0
+                            && cfg.get("cycles").num_or(0.0) == 0.0 {
+                            out.entry("compute").entry("types").set(ty, obj! {"cycles"=>8000,"every"=>5});
+                        }
+                    }
+                }
+                out
+            }
+        } else { govern_units(world, me, share, strategy) };
         maintain_freighters(&mut orders, world, me);
         super::structures::apply(&mut orders, world, me);
         orders
@@ -1814,6 +1894,7 @@ use super::{air, theme};
     /// another minute: it buys none of them twice. It sells no passage to a faction whose units stand in your land, unless it renews passage
     /// that faction has from you (passage ends the moment its holder attacks). It takes no mine lease in a province
     /// you're besieging, and no passage from a faction whose land you're besieging: either would stop your own siege.
+    /// In logistics worlds it declines new passage from its last Crown rival; existing contracts still expire normally.
     /// With `world` undefined it sells no land and no passage.
     pub fn fair(m: View, me: View, world: View, techs: &[&str]) -> bool {
         let (give, ask) = (m.get("give"), m.get("ask"));
@@ -1829,6 +1910,14 @@ use super::{air, theme};
         };
         if held("passage") || held("sight") || held("relay") {
             return false;
+        }
+        // Keep existing passage until it expires, but do not renew peace with the last Crown rival.
+        // Buying that right repeatedly would remove every remaining opponent from our frontier.
+        if world.get("logistics").truthy() && give.get("passage").truthy()
+            && (me.get("allies").len() + 1) as f64 <= world.path("crown.maxBloc").num_or(0.0) {
+            let mut rivals = world.get("factions").iter().filter(|f|
+                f.get("alive").truthy() && f.get("id").num() != me_id && !realm::is_ally(me, f.get("id").num()));
+            if rivals.next().is_some_and(|f| f.get("id").num() == from) && rivals.next().is_none() { return false; }
         }
         let hire = give.get("hire");
         let units = give.get("units").len() as f64 + if hire.get("units").truthy() { hire.get("units").len() as f64 } else { hire.get("count").or(0.0) };

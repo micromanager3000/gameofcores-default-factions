@@ -37,7 +37,8 @@ node tools/source.mjs kublai /tmp/kublai.rs
 The export contains the selected program and all shared modules in one Rust source file.
 Exports fit the game's 512 KiB source limit. Players can copy and change the exported source.
 The program compiles against the public game SDK. All faction helpers count toward source RAM.
-The game provides 3,072 free RAM pages to every faction, covering the newly included preset source.
+The game provides 3,072 free RAM pages to every faction.
+Source and other RAM above that allowance incur the ordinary memory upkeep charge.
 Compiled instructions are metered normally.
 Both the Rust package and the Node exporter produce the same source; `npm test` checks every program.
 
@@ -47,6 +48,20 @@ Carriers leave exhausted depots with partial loads and prioritize useful deliver
 Quiet Fleet recovers visible wreck cargo and returns it through the capital's dock.
 It retires an empty corsair when no worthwhile target or nearby wreck remains.
 The same programs retain their earlier mining policy in saved worlds without logistics.
+
+After the first minute, logistics houses review their strategy every five seconds.
+Unit callbacks, standing orders, research and building jobs continue between those reviews.
+Building controls refresh on the next second, with room reserved to return completed orders.
+Construction ranks each candidate province once, keeping repeated map scans out of sorting.
+A low bank or stalled units pause optional spending while workers recover.
+Once funded, armies regain callbacks that recovery disabled, even while the next full plan waits.
+Full province-plan reads wait for a funded miner callback.
+
+Military targets use defenders in the town ring when that observation is available.
+A stronger ground army can attack a worker-held capital before meeting the capture headcount.
+Capturing that capital still requires the engine's siege odds.
+Houses decline new passage from their last Crown rival when their bloc fits the Crown's membership limit.
+Existing passage contracts expire normally. These policies leave the Crown rules unchanged.
 
 Export a structure example with `node tools/source.mjs foundry /tmp/foundry.rs`.
 The names `lantern` and `raiders` select the other two programs.
@@ -77,10 +92,10 @@ Their shared policy reads `me.rts.structureCosts` before issuing building orders
 Both the uniform default program and the separate house programs use each seat's design.
 See [default buildings](docs/buildings.md) for their priorities and spending limits.
 
-## Cargo and Flight checks
+## Strategy checks
 
 Run `npm run test:behavior -- ../gameofcores` against a game checkout with its public SDK.
-The tests exercise route selection, load reservations, idle retirement and Arjuna's research policy.
+The tests cover cargo routes, retirement, research, planning budgets, capital attacks and passage deals.
 They run the exported faction code. Full game simulations and metered callback checks still run in the game repository.
 
 Freighters reserve reachable loads and use a receiving dock connected to the capital.

@@ -106,6 +106,34 @@ fn healthy_recovery_keeps_flight_research_moving() {
     assert_eq!(orders.get("research").str(),"flight");
     assert_eq!(orders.get("compute").get("cpu").get("limits").get("research").num(),0.12);
 }
+
+#[test]
+fn a_quiet_planning_second_preserves_other_lanes_and_raises_a_stale_limit() {
+    let (mut world, mut me, _) = fixture();
+    world.set("seconds", 101);
+    me.entry("rts").entry("cpu").set("limits", obj! {"think"=>18000,"research"=>0.12,"upkeep"=>0.7});
+    me.entry("rts").entry("cpu").set("reserve", obj! {"control"=>0.1});
+    me.entry("rts").entry("cpu").set("upkeepOrder", arr!["miner","wing"]);
+    me.entry("compute").set("thinkPeak",18000);
+    let args=views(&[world,me]);
+    let orders=common::govern(args[0],args[1],0.4,||panic!("standing plans should continue"));
+    let cpu=orders.get("compute").get("cpu");
+    assert!(cpu.get("limits").get("think").num()>=32000.0);
+    assert_eq!(cpu.get("limits").get("research"),&Value::from(0.12));
+    assert_eq!(cpu.get("reserve"),&obj!{"control"=>0.1});
+    assert_eq!(cpu.get("upkeepOrder"),&arr!["miner","wing"]);
+    assert!(orders.get("ram").is_empty() && orders.get("spawn").is_empty());
+}
+
+#[test]
+fn distant_workers_do_not_hide_an_open_town_from_army_planning() {
+    let args=views(&[obj!{"factions"=>arr![]},obj!{"id"=>0},
+        obj!{"owner"=>1,"cores"=>4,"garrison"=>20,"townGarrison"=>0},
+        obj!{"owner"=>1,"cores"=>3,"garrison"=>2,"townGarrison"=>2},
+        obj!{"owner"=>1,"cores"=>4,"garrison"=>20}]);
+    assert!(common::score(args[0],args[1],args[2])>common::score(args[0],args[1],args[3]));
+    assert_eq!(common::town_defenders(args[4]),20.0,"older observations keep their fallback");
+}
 #[test]
 fn flight_research_waits_for_recovery_and_preserves_emu_doctrine() {
     for state in ["stalled","poor","costly","emu"] {
@@ -152,4 +180,112 @@ fn ground_carriers_collect_cargo_from_an_alternate_receiving_dock() {
     common::haul_cargo(args[0],args[1],args[2]);
     let orders:Vec<Value>=abi::TEST_ORDERS.with(|o|o.take()).iter().map(|s|Value::parse(s)).collect();
     assert!(orders.iter().any(|o|o.get("cargo").get("load").get("p").num()==1.0),"{orders:?}");
+}
+
+#[test]
+fn recovery_intervals_stop_optional_spending_and_leave_workers_funded() {
+    for stalled in [0, 12] {
+        let (mut world, mut me, _) = fixture();
+        world.set("seconds", 101);
+        me.entry("units").set("stalled", stalled);
+        me.entry("rts").entry("cpu").set("income", 12500);
+        me.entry("rts").entry("cpu").set("bank", 2000);
+        me.set("types", obj! {"miner"=>obj!{},"hauler"=>obj!{},"guard"=>obj!{}});
+        let args = views(&[world,me]);
+        let orders = common::govern(args[0],args[1],0.4,||panic!("recovery interval must remain cheap"));
+        let compute = orders.get("compute");
+        let limits = compute.get("cpu").get("limits");
+        for lane in ["research","influence","fabrication"] {assert_eq!(limits.get(lane).num(),0.0);}
+        assert_eq!(compute.get("types").get("miner").get("cycles").num(),7000.0);
+        assert_eq!(compute.get("types").get("hauler").get("cycles").num(),10000.0);
+        assert!(orders.get("ram").is_empty() && orders.get("spawn").is_empty() && orders.get("disband").is_empty());
+    }
+}
+
+#[test]
+fn funded_armies_resume_callbacks_left_disabled_by_recovery() {
+    for state in ["funded", "poor", "stalled"] {
+        let (mut world, mut me, _) = fixture();
+        world.set("seconds", 101);
+        me.entry("rts").entry("cpu").set("bank", if state == "poor" { 2000 } else { 1000000 });
+        me.entry("units").set("stalled", if state == "stalled" { 1 } else { 0 });
+        me.entry("units").entry("byType").set("screen", 6);
+        me.entry("units").entry("byType").set("wing", 3);
+        me.set("types", obj! {"miner"=>obj!{},"screen"=>obj!{},"wing"=>obj!{},"scout"=>obj!{}});
+        me.entry("compute").set("types", obj! {
+            "miner"=>obj!{"cycles"=>7000,"every"=>2},
+            "screen"=>obj!{"share"=>0,"every"=>8},
+            "wing"=>obj!{"cycles"=>12000,"every"=>3},
+            "scout"=>obj!{"share"=>0,"every"=>8}});
+        let args = views(&[world,me]);
+        let orders = common::govern(args[0],args[1],0.4,||panic!("no replanning between intervals"));
+        let types = orders.get("compute").get("types");
+        if state == "funded" {
+            assert_eq!(types.get("screen").get("cycles").num(), 8000.0);
+            assert_eq!(types.get("screen").get("every").num(), 5.0);
+            assert!(types.get("wing").is_undef(), "preserve the house's existing flight allowance");
+            assert!(types.get("scout").is_undef(), "empty types need no allowance");
+        } else {
+            assert_eq!(types.get("screen").get("share").num(), 0.0, "{state}");
+        }
+        assert!(orders.get("spawn").is_empty() && orders.get("disband").is_empty());
+    }
+}
+
+#[test]
+fn capital_assault_counts_armed_ground_units_before_siege_headcount() {
+    let capital = obj! {"id"=>1,"owner"=>2,"capital"=>true,"visible"=>true,"townGarrison"=>20};
+    let soldier = |owner,at| obj! {"owner"=>owner,"at"=>at,"type"=>"guard","hp"=>4,"doing"=>"idle","build"=>obj!{"strength"=>2}};
+    let mut units = (0..6).map(|_|soldier(1,0)).collect::<Vec<_>>();
+    units.push(soldier(2,1));
+    for _ in 0..19 {units.push(obj!{"owner"=>2,"at"=>1,"type"=>"miner","doing"=>"gather","build"=>obj!{"strength"=>0}});}
+    let args=views(&[obj!{"logistics"=>obj!{},"units"=>units.clone()},obj!{"id"=>1,"allies"=>arr![]},capital.clone()]);
+    assert_eq!(common::capital_assault(args[0],args[1],args[2]),Some(4.0));
+    for _ in 0..4 {units.push(soldier(2,1));}
+    let args=views(&[obj!{"logistics"=>obj!{},"units"=>units},obj!{"id"=>1,"allies"=>arr![]},capital.clone()]);
+    assert_eq!(common::capital_assault(args[0],args[1],args[2]),None,"a defended capital still needs a stronger army");
+    let wing=obj!{"owner"=>1,"at"=>0,"type"=>"wing","build"=>obj!{"strength"=>3,"wings"=>1}};
+    let args=views(&[obj!{"logistics"=>obj!{},"units"=>vec![wing;12]},obj!{"id"=>1,"allies"=>arr![]},capital]);
+    assert_eq!(common::capital_assault(args[0],args[1],args[2]),None,"aircraft cannot replace a ground assault");
+}
+
+#[test]
+fn passage_stays_useful_until_only_one_crown_rival_remains() {
+    let deal=obj!{"from"=>2,"give"=>obj!{"passage"=>obj!{"units"=>12,"seconds"=>600}},"ask"=>obj!{"coin"=>100}};
+    let me=obj!{"id"=>1,"bank"=>1000,"allies"=>arr![3],"units"=>obj!{"total"=>10,"cap"=>24},"contracts"=>arr![]};
+    let faction=|id|obj!{"id"=>id,"alive"=>true};
+    let mut world=obj!{"logistics"=>obj!{},"crown"=>obj!{"maxBloc"=>3},"factions"=>vec![faction(1),faction(2),faction(3)],"provinces"=>arr![]};
+    let args=views(&[deal.clone(),me.clone(),world.clone()]);
+    assert!(!common::fair(args[0],args[1],args[2],&[]),"the last opponent must remain reachable");
+    world.entry("factions").push(faction(4));
+    let args=views(&[deal.clone(),me.clone(),world.clone()]);
+    assert!(common::fair(args[0],args[1],args[2],&[]),"peace with one of several opponents can still pay");
+    world.set("factions",vec![faction(1),faction(2),faction(3)]);
+    world.entry("crown").set("maxBloc",1);
+    let args=views(&[deal,me,world]);
+    assert!(common::fair(args[0],args[1],args[2],&[]),"a pact too large to claim cannot assume its current partners will win together");
+}
+
+#[test]
+fn building_management_runs_between_full_logistics_plans() {
+    let (mut world, mut me, _) = fixture();
+    me.entry("rts").entry("cpu").set("bank", 1000000);
+    me.entry("rts").set("structureCosts", obj! {"shell"=>900});
+    me.entry("rts").set("structures", arr![obj! {
+        "id"=>10,"owner"=>1,"p"=>0,"x"=>0,"y"=>0,"state"=>"ready",
+        "hp"=>100,"maxHp"=>100,"ports"=>arr!["support"]
+    }]);
+    for second in [60, 61, 65, 66] {
+        world.set("seconds", second);
+        let args=views(&[world.clone(),me.clone()]);
+        let mut planned=false;
+        let orders=common::govern(args[0],args[1],0.4,||{planned=true;obj!{}});
+        assert_eq!(planned,second%5==0);
+        assert_eq!(orders.get("structureJobs").len(),usize::from(second%5==1));
+    }
+    world.set("logistics",Value::Null);
+    world.set("seconds",60);
+    let args=views(&[world,me]);
+    let orders=common::govern(args[0],args[1],0.4,||obj!{});
+    assert_eq!(orders.get("structureJobs").len(),1,"older worlds keep their building interval");
 }

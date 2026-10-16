@@ -269,7 +269,7 @@ fn pick_target(world: View, me: View) -> Option<View> {
         } else {
             0.0
         };
-        enemy + or(q.get("cores"), 0.0) * 2.0 - or(q.get("garrison"), 0.0) * 1.6 - if q.get("capital").truthy() { 3.0 } else { 0.0 }
+        enemy + or(q.get("cores"), 0.0) * 2.0 - common::town_defenders(q) * 1.6 - if q.get("capital").truthy() { 3.0 } else { 0.0 }
             + crusade
             + min(sway::favour(m, num(q.get("id"))), 300.0) / 60.0
             - if hold(q) { 0.0 } else { common::OVER_WATER }
