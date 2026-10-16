@@ -384,7 +384,7 @@ fn recovery_policy(me: View) -> Value {
 
 fn strategy(world: View, me: View) -> Value {
     let emu=me.get("seat").num_or(-1.0)==8.0;
-    let doctrine=if emu {&EMU_TECHS}else{&TECHS};
+    let doctrine: &[&str] = if emu { &EMU_TECHS } else { &TECHS };
     let rts = me.get("rts");
     if rts.truthy() && cycles_left() < 3000.0 {
         return common::recovery(world, me);
