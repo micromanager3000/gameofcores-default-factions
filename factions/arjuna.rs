@@ -14,8 +14,9 @@ use std::rc::Rc;
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
+use shared::common::{hauler, freighter};
 
-program!(think, miner, screen, skirm, runner, lancer, repairer, sentry, gun, wing, ghost, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, miner, screen, skirm, runner, lancer, repairer, sentry, gun, wing, ghost, reflex, research, duel, challenge, look, build3d, live3d);
 
 // Builds: (stat, points), in the order the game shows them.
 type Build = &'static [(&'static str, f64)];
@@ -452,7 +453,7 @@ fn strategy(world: View, me: View) -> Value {
     orders.set("memo", memo);
     // A short second keeps what's decided so far (the plan, spawns and the CPU policy): trade and diplomacy wait a
     // second rather than run think out of cycles and lose it all.
-    if rts.truthy() && cycles_left() < 5000.0 {
+    if cycles_left() < 5000.0 {
         return orders;
     }
     let pact_leader = realm::leader(world);
@@ -460,7 +461,7 @@ fn strategy(world: View, me: View) -> Value {
     let mut clock = Clock { at: if at.truthy() { at } else { Value::obj() }, changed: false };
     warlord(&mut orders, world, me, &plan, &mut clock);
     secrets(&mut orders, world, me, &mut clock);
-    if !rts.truthy() || cycles_left() > 2000.0 {
+    if cycles_left() > 2000.0 {
         let pact = |m: View| me.get("pacts").is_empty() && pact_leader.is_none_or(|l| !same(m.get("from"), l.get("id")));
         common::answer(&mut orders, me, world, pact, &TECHS);
     }
