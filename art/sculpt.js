@@ -5,6 +5,14 @@ export class Sculpt {
  part(shape,at,size,color,motion='',pivot=at,rotation=[0,0,0],amplitude=.5){const p={shape,at,size,color,motion,pivot,rotation,amplitude,on:[]};this.parts.push(p);return p;}
  box(at,size,c,m='',pivot=at,rot=[0,0,0]){return this.part('box',at,size,c,m,pivot,rot);}
  orb(at,size,c,m='',pivot=at){return this.part('ellipsoid',at,size,c,m,pivot);}
+ // The renderer keeps these as the same cheap retained ellipsoids as heads and wheels.
+ // Use them for living bodies and fairings; boxes are reserved for planks, armour plates,
+ // and machinery so a unit reads as sculpted instead of assembled from blocks.
+ capsule(at,size,c,m='',pivot=at,rot=[0,0,0]){const p=this.part('capsule',at,size,c,m,pivot,rot);p.rounded=true;return p;}
+ taper(a,b,r,c,m='',pivot=a){
+  const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],len=Math.hypot(dx,dy,dz);
+  return this.capsule(a.map((x,i)=>(x+b[i])/2),[r*1.45,len+r*.35,r*1.45],c,m,pivot,[Math.atan2(dz,Math.hypot(dx,dy)),0,-Math.atan2(dx,dy)]);
+ }
  poly(at,points,depth,c,m='',pivot=at,rot=[0,0,0]){const p=this.part('poly',at,[.1,.1,depth],c,m,pivot,rot);p.points=points;return p;}
  rod(a,b,r,c,m='',pivot=a){const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],len=Math.hypot(dx,dy,dz);return this.box(a.map((x,i)=>(x+b[i])/2),[r,len,r],c,m,pivot,[Math.atan2(dz,Math.hypot(dx,dy)),0,-Math.atan2(dx,dy)]);}
  wheel(at,r,c){

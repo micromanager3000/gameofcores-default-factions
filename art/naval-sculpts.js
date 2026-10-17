@@ -26,7 +26,11 @@ export const navalVariant=u=>u.type==='picket'?'picket':u.type==='corsair'?'raid
 function plate(s,points,y,depth,c){s.poly([0,y,0],points,depth,c,'',[0,y,0],[Math.PI/2,0,0]);}
 function hull(s,{length=1.15,beam=.38,c=WOOD,deck=DECK,square=false}={}){
  const points=square?[-length,-beam,length*.74,-beam,length,-beam*.6,length,beam*.6,length*.74,beam,-length,beam]:[-length,-beam*.65,-length*.7,-beam,length*.57,-beam,length,0,length*.57,beam,-length*.7,beam,-length,beam*.65];
- plate(s,points.map(v=>v*.84),.20,.22,DARK);plate(s,points,.38,.27,c);plate(s,points.map(v=>v*.94),.53,.045,deck);
+ // Three stepped waterlines and a rounded bow make the ships read as boats rather
+ // than as a single rectangular platform.  These remain static cache parts.
+ plate(s,points.map(v=>v*.72),.14,.16,DARK);plate(s,points.map(v=>v*.84),.27,.22,DARK);plate(s,points,.40,.27,c);plate(s,points.map(v=>v*.94),.55,.045,deck);
+ s.orb([length*.76,.37,0],[length*.42,.25,beam*1.18],c);
+ s.orb([-length*.76,.34,0],[length*.28,.20,beam*.96],DARK);
  for(const z of [-beam,beam])s.box([-.10,.55,z],[length*1.5,.065,.045],c);
 }
 function flag(s,x,y,c=P){s.rod([x,.57,0],[x,y,0],.035,WOOD);s.poly([x,y-.26,0],[0,0,.40,.05,.31,.26,0,.26],.035,c,'sway',[x,y,0]);}
@@ -42,7 +46,7 @@ function oars(s,beam=.36,n=3){for(const z of [-1,1])for(let i=0;i<n;i++){const x
 function gun(s,x,y,z=0,{brass=false,twins=false}={}){
  s.box([x,y-.07,z],[.28,.17,.29],P);for(const side of twins?[-.07,.07]:[0])s.box([x+.27,y+.03,z+side],[.58,.07,.07],brass?GOLD:IRON,'recoil');
 }
-function tower(s,x,y,c=P){s.box([x,.55+y/2,0],[.32,y,.36],c);s.box([x,.57+y,0],[.43,.06,.47],S);}
+function tower(s,x,y,c=P){s.capsule([x,.55+y/2,0],[.34,y,.38],c);s.box([x,.57+y,0],[.43,.06,.47],S);s.orb([x+.03,.57+y,0],[.22,.11,.22],c);}
 function lantern(s,x,y,z=0){s.rod([x,.55,z],[x,y,z],.035,WOOD);s.box([x,y-.12,z],[.19,.25,.19],GOLD);s.box([x,y-.12,z+.10],[.13,.15,.025],'#fff0ad');}
 function cross(s,x,y,z,c=RED){s.box([x,y,z],[.055,.29,.025],c);s.box([x,y+.045,z],[.23,.055,.03],c);}
 function landing(s,{c=DECK,beam=.47,length=1.0}={}){

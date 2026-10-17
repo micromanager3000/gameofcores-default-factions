@@ -9,6 +9,9 @@ function wing(s,x,y,span,c,{feathers=false,flap=feathers,swept=false,thin=false}
   const z=side*.16,m=flap?(side<0?'walkL':'walkR'):'',pivot=[x,y,z];
   s.poly([x,y,z],swept?[-.46,0,.45,0,-.45,side*span,-.94,side*span*.84]:[-.42,0,.42,0,.22,side*span,-.36,side*span],thin?.035:.08,c,m,pivot,[Math.PI/2,0,0]);
   s.parts.at(-1).amplitude=flap?.22:0;
+  // A slim rounded leading edge catches the light and keeps every house's aircraft
+  // from reading as a flat card. It is cheaper than a second high-detail wing mesh.
+  const edge=s.taper([x+.30,y+.025,z],[x-.22,y+.025,z+side*span*.82],.026,c,m,pivot);edge.amplitude=flap?.22:0;
   if(feathers)for(let i=0;i<3;i++){
    const f=s.box([x-.35-i*.10,y-.02,z+side*(span*.58+i*.14)],[.50-i*.08,.06,.11],i%2?S:c,m,pivot);f.amplitude=flap?.22:0;
   }
@@ -18,22 +21,22 @@ function tail(s,x,y,c,span=.43){s.box([x,y,0],[.30,.05,span*2],c);s.poly([x,y,0]
 function rotor(s,x,y,z,c=IRON,r=.55){s.rod([x,y-.22,z],[x,y,z],.055,DARK);s.box([x,y,z],[r*2,.035,.10],c,'spin',[x,y,z]);s.box([x,y,z],[.10,.035,r*2],c,'spin',[x,y,z]);}
 function bird(s,{coat='#8b7252',span=.95,armor=false}={}){
  s.orb([0,.71,0],[1.06,.48,.43],coat);s.rod([.37,.75,0],[.59,1.02,0],.20,coat);s.orb([.68,1.04,0],[.35,.30,.32],coat);s.box([.90,1.02,0],[.25,.08,.15],GOLD);
- for(const z of [-.12,.12]){s.box([.77,1.11,z],[.055,.055,.035],DARK);s.rod([-.02,.57,z],[.09,.32,z],.055,GOLD);s.box([.19,.30,z],[.24,.045,.10],GOLD);}
+ for(const z of [-.12,.12]){s.orb([.77,1.11,z],[.075,.065,.050],DARK);s.taper([-.02,.57,z],[.09,.32,z],.045,GOLD);s.box([.19,.30,z],[.24,.045,.10],GOLD);}
  wing(s,-.06,.85,span,coat,{feathers:true,swept:true});tail(s,-.64,.68,coat,.27);
  if(armor){s.box([.03,.97,0],[.43,.13,.49],P);s.orb([.68,1.10,0],[.38,.15,.36],IRON);}
 }
 function rider(s,{x=0,y=1.05,c=P,helmet=false}={}){
- s.box([x,y,0],[.20,.30,.23],c);s.orb([x+.04,y+.26,0],[.22,.23,.21],helmet?IRON:'#caa381');
- for(const z of [-.20,.20])s.rod([x,y-.07,z*.6],[x+.12,y-.28,z],.07,DARK);
- s.rod([x+.13,y+.10,.19],[x+.31,y+.67,.19],.045,WOOD);s.poly([x+.31,y+.67,.19],[-.06,0,.06,0,0,.19],.05,GOLD);
+ s.capsule([x,y,0],[.22,.33,.24],c);s.orb([x+.04,y+.26,0],[.22,.23,.21],helmet?IRON:'#caa381');
+ for(const z of [-.20,.20])s.taper([x,y-.07,z*.6],[x+.12,y-.28,z],.052,DARK);
+ s.taper([x+.13,y+.10,.19],[x+.31,y+.67,.19],.034,WOOD);s.poly([x+.31,y+.67,.19],[-.06,0,.06,0,0,.19],.05,GOLD);
 }
 function gondola(s,c=WOOD,length=1.4){s.poly([0,.43,0],[-length/2,0,length/2,0,length*.37,-.27,-length*.40,-.27],.44,c);for(const z of [-.24,.24])s.box([0,.49,z],[length,.07,.05],GOLD);}
 function balloon(s,{c=IVORY,length=1.65,beam=.75,y=1.35}={}){
  s.orb([-.08,y,0],[length,.72,beam],c,'bob');for(const z of [-beam*.30,beam*.30])s.rod([-.12,.46,z],[-.12,y-.27,z],.025,WOOD);
  tail(s,-length*.48,y,c,.40);
 }
-function cockpit(s,x,y,c='#91bac6'){s.orb([x,y,0],[.47,.31,.34],c);s.box([x,y+.12,0],[.05,.04,.35],IRON);}
-function engine(s,x,y,z,c=IRON){s.part('cylinder',[x,y,z],[.29,.29,.55],c,'',[x,y,z],[0,Math.PI/2,0]);s.part('cylinder',[x-.30,y,z],[.15,.15,.035],GOLD,'',[x-.30,y,z],[0,Math.PI/2,0]);}
+function cockpit(s,x,y,c='#91bac6'){s.orb([x,y,0],[.47,.31,.34],c);s.capsule([x-.12,y-.02,0],[.31,.22,.24],c);s.box([x,y+.12,0],[.05,.04,.35],IRON);}
+function engine(s,x,y,z,c=IRON){s.part('cylinder',[x,y,z],[.29,.29,.55],c,'',[x,y,z],[0,Math.PI/2,0]);s.capsule([x+.12,y,z],[.43,.24,.24],c);s.part('cylinder',[x-.30,y,z],[.15,.15,.035],GOLD,'',[x-.30,y,z],[0,Math.PI/2,0]);}
 function bomb(s,x,y,z,c=DARK){s.orb([x,y,z],[.35,.17,.17],c);s.box([x-.14,y,z],[.12,.035,.28],IRON);}
 function cross(s,x,y,z){s.box([x,y,z],[.05,.26,.025],RED);s.box([x,y+.04,z],[.22,.05,.03],RED);}
 function star(s,x,y,z){const pts=[];for(let i=0;i<10;i++){const a=i*Math.PI/5,r=i%2?.07:.16;pts.push(Math.cos(a)*r,Math.sin(a)*r);}s.poly([x,y,z],pts,.025,RED);}

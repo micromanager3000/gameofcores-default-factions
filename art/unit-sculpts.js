@@ -4,7 +4,7 @@ import { navalSculpt } from './naval-sculpts.js';
 export { navalSculpt } from './naval-sculpts.js';
 // House-authored RTS miniatures. Generated once per look/role, retained by GPUUnits.
 // +x is forward, +y is up, z separates the left/right limbs. No textures or per-frame JS rigs.
-const P='primary',S='secondary',A='accent',IRON='#788b95',DARK='#26333a',WOOD='#785239',GOLD='#dab866',IVORY='#e6dcc2';
+const P='primary',S='secondary',A='accent',IRON='#788b95',DARK='#26333a',WOOD='#785239',GOLD='#dab866',IVORY='#e6dcc2',LIGHT='#a3fff0';
 export const HOUSE_SCULPTS=[
  ['archer','keshig','horseman','artisan','falconer','shaman','trebuchet','camel'],
  ['chariot','archer','servant','elephant','mace','sage','giant','healer'],
@@ -22,22 +22,26 @@ function human(s,{coat=P,skin='#d6a17e',legs=DARK,hat='cap',trim=S,armor=false,r
  const start=s.parts.length;
  for(const z of [-.16,.16]){
   const motion=z<0?'strideL':'strideR',pivot=[0,.65,z];
-  s.box([-.02,.50,z],[.20,.31,.20],legs,motion,pivot);
-  const knee=z<0?'kneeL':'kneeR';s.box([-.02,.23,z],[.16,.30,.18],legs,knee,pivot);
-  s.box([.07,.08,z],[.32,.16,.23],DARK,knee,pivot);
+  // Separate thigh, knee and calf give every walking unit a readable gait from the
+  // strategy camera without adding a skinned mesh or a per-frame rig.
+  s.capsule([-.04,.51,z],[.20,.34,.20],legs,motion,pivot);
+  const knee=z<0?'kneeL':'kneeR';s.orb([.02,.33,z],[.17,.14,.17],legs,knee,pivot);
+  s.capsule([.06,.20,z],[.16,.29,.17],legs,knee,pivot);
+  s.poly([.15,.075,z],[-.18,-.06,.20,-.06,.30,.045,.08,.10,-.22,.06],.23,DARK,knee,pivot);
  }
-  s.poly([lean,.78,0],[-.20,0,.21,0,.24,.35,.18,.46,-.18,.46,-.24,.35],.43,coat);
+ s.capsule([lean,.92,0],[.46,.66,.43],coat,'',[lean,.92,0]);
+ s.poly([lean+.12,.88,0],[-.12,-.20,.23,-.12,.28,.14,.14,.25,-.18,.18],.45,coat);
  if(robe)s.poly([0,.19,0],[-.33,0,.30,0,.22,.64,-.22,.64],.51,coat);
- s.box([lean,.80,0],[.47,.075,.51],trim);
- if(armor){s.poly([lean+.03,.89,0],[-.16,0,.16,0,.22,.32,.14,.39,-.14,.39,-.22,.32],.49,coat);for(const z of [-.30,.30])s.orb([0,1.15,z],[.28,.20,.25],IRON);}
+ s.box([lean,.80,0],[.47,.052,.51],trim);
+ if(armor){s.poly([lean+.03,.89,0],[-.16,0,.16,0,.22,.32,.14,.39,-.14,.39,-.22,.32],.49,coat);for(const z of [-.30,.30]){s.orb([lean,1.15,z],[.29,.22,.26],IRON);s.box([lean+.05,1.16,z],[.20,.07,.12],coat);}}
  s.orb([lean+.03,1.40,0],[.30,.34,.29],skin);
  // A nose and a dark brow make the facing readable without a face texture.
  s.box([lean+.193,1.40,0],[.075,.09,.11],skin);
  s.box([lean+.174,1.46,0],[.035,.035,.24],DARK);
  for(const z of [-.31,.31]){
   const m=z<0?'strideR':'strideL',pivot=[lean,1.15,z];
-  s.rod([lean,1.15,z],[.17,.84,z],.16,coat,m,pivot);
-  s.orb([.20,.82,z],[.15,.16,.16],skin,m,pivot);
+  s.taper([lean,1.15,z],[.17,.84,z],.135,coat,m,pivot);
+  s.orb([.18,.84,z],[.15,.16,.16],skin,m,pivot);
  }
  headwear(s,hat,lean,trim);
  return start;
@@ -82,14 +86,15 @@ function animal(s,{coat='#926044',camel=false,elephant=false}={}){
  s.orb([-.05,h,0],[L,elephant?.90:.55,elephant?.80:.52],coat);
  for(const x of [-.45,.43])for(const z of [-.23,.23]){
   const motion=(x*z>0)?'strideL':'strideR',pivot=[x,h-.1,z];
-  s.box([x,h/2-.05,z],[elephant?.20:.115,h-.10,elephant?.22:.12],coat,motion,pivot);
-  s.box([x+.04,.06,z],[elephant?.25:.19,.12,elephant?.26:.14],elephant?coat:DARK,motion,pivot);
+  s.capsule([x,h/2-.05,z],[elephant?.22:.14,h-.10,elephant?.24:.15],coat,motion,pivot);
+  s.orb([x+.03,.14,z],[elephant?.22:.16,.16,elephant?.23:.17],coat,motion,pivot);
+  s.poly([x+.13,.055,z],[-.15,-.05,.22,-.05,.30,.05,.06,.10,-.19,.06],elephant?.27:.15,elephant?coat:DARK,motion,pivot);
  }
- s.rod([.45,h+.10,0],[.65,h+(elephant?.16:.65),0],elephant?.5:.24,coat);
+ s.taper([.45,h+.10,0],[.65,h+(elephant?.16:.65),0],elephant?.5:.24,coat);
  s.orb([.80,h+(elephant?.12:.61),0],[elephant?.64:.46,elephant?.62:.28,elephant?.65:.30],coat);
  s.rod([-.62,h+.1,0],[-.82,h-.25,0],.08,DARK,'sway',[-.62,h+.1,0]);
  if(camel){s.orb([-.24,h+.34,0],[.5,.45,.4],coat);s.orb([.19,h+.32,0],[.43,.42,.4],coat);}
- if(elephant){s.orb([.65,h+.15,.36],[.12,.59,.35],coat);s.orb([.65,h+.15,-.36],[.12,.59,.35],coat);s.rod([1.02,h+.1,0],[1.12,.18,0],.19,coat);for(const z of [-.23,.23])s.rod([1,h+.35,z],[1.35,h+.28,z],.07,IVORY);}
+ if(elephant){s.orb([.65,h+.15,.36],[.12,.59,.35],coat);s.orb([.65,h+.15,-.36],[.12,.59,.35],coat);s.taper([1.02,h+.1,0],[1.12,.18,0],.19,coat);for(const z of [-.23,.23])s.taper([1,h+.35,z],[1.35,h+.28,z],.07,IVORY);}
  else {s.box([.79,h+.66,0],[.33,.06,.36],WOOD);s.box([.42,h+.28,0],[.55,.065,.57],P);}
 }
 function mounted(s,{coat,camel=false,rider={},weapon='spear',standard=false}={}){
@@ -113,9 +118,10 @@ function cart(s,{tank=false,truck=false,cannon=false,rockets=false,culture=0}={}
 function emu(s,{forager=false,gunner=false}={}){
  const coat=forager?'#9c8b69':'#786c55';
  s.orb([-.10,.78,0],[.85,.78,.61],coat);
- for(const z of [-.18,.18]){const m=z<0?'strideL':'strideR',pivot=[0,.60,z];s.rod([0,.60,z],[.13,.21,z],.065,'#514a38',m,pivot);s.rod([.13,.21,z],[.03,.05,z],.055,'#514a38',m,pivot);s.box([.16,.04,z],[.35,.055,.15],DARK,m,pivot);}
- s.rod([.13,1.05,0],[.30,1.67,0],.17,coat,'bob');s.orb([.35,1.70,0],[.31,.28,.25],DARK,'bob');s.box([.55,1.65,0],[.20,.07,.13],'#bca77c','bob');s.box([.43,1.75,.13],[.045,.045,.025],'#efb94b');
+ for(const z of [-.18,.18]){const m=z<0?'strideL':'strideR',pivot=[0,.60,z];s.taper([0,.60,z],[.13,.21,z],.052,'#514a38',m,pivot);s.orb([.13,.21,z],[.09,.11,.09],'#514a38',m,pivot);s.taper([.13,.21,z],[.03,.05,z],.043,'#514a38',m,pivot);s.poly([.17,.04,z],[-.17,-.04,.20,-.04,.27,.04,.06,.08,-.20,.05],.15,DARK,m,pivot);}
+ s.taper([.13,1.05,0],[.30,1.67,0],.14,coat,'bob');s.orb([.35,1.70,0],[.31,.28,.25],DARK,'bob');s.poly([.56,1.65,0],[-.10,-.04,.11,-.04,.16,.04,.02,.07,-.14,.04],.13,'#bca77c','bob');s.orb([.43,1.75,.13],[.055,.055,.025],'#efb94b');
  for(const z of [-.30,.30])s.orb([-.22,.87,z],[.56,.48,.12],coat,'sway',[-.11,1.06,z]);
+ for(const z of [-1,1])s.poly([-.22,.92,z*.13],[-.39,0,.20,.06,.42,.20,-.12,.16],.025,z<0?'#a69570':'#695f4d','sway',[-.11,1.06,z]);
  s.box([-.07,1.02,0],[.28,.11,.67],P);
  if(forager){s.box([-.37,.72,.38],[.30,.35,.20],WOOD);tool(s,'pick',{x:.28,y:.75,z:.35});}
  if(gunner){s.box([.16,.94,.39],[.87,.10,.11],WOOD);s.box([.79,.96,.39],[.56,.06,.065],IRON);s.rod([-.2,.9,0],[.30,.94,.39],.07,DARK);s.part('cylinder',[.34,1.04,.39],[.23,.23,.05],DARK,'recoil',[.34,1.04,.39],[Math.PI/2,0,0]);}
@@ -203,13 +209,13 @@ function manifesto(s,body){
 function nullSociety(s,body){
  if(body==='bug'){
   s.orb([0,.4,0],[.79,.34,.49],DARK);s.orb([.28,.46,0],[.37,.25,.32],P);
-  for(const x of [-.25,0,.25])for(const z of [-1,1]){const m=x*z<0?'strideL':'strideR';s.rod([x,.41,z*.18],[x-.14,.05,z*.48],.055,IRON,m,[x,.41,z*.18]);}s.box([.46,.48,0],[.06,.07,.23],'#bdfcf4');return;
+  for(const x of [-.25,0,.25])for(const z of [-1,1]){const m=x*z<0?'strideL':'strideR';s.taper([x,.41,z*.18],[x-.14,.05,z*.48],.042,IRON,m,[x,.41,z*.18]);}for(const z of [-.24,.24])s.poly([-.08,.54,z],[-.32,-.05,.26,-.05,.43,.11,.08,.18,-.30,.10],.035,IRON,'sway',[-.08,.54,z]);s.taper([.37,.59,-.12],[.55,.79,-.22],.022,IRON,'sway',[.37,.59,-.12]);s.taper([.37,.59,.12],[.55,.79,.22],.022,IRON,'sway',[.37,.59,.12]);s.box([.46,.48,0],[.06,.07,.23],'#bdfcf4');return;
  }
  if(body==='bomb'){
   s.orb([0,.60,0],[.87,.87,.80],DARK,'bob');s.box([0,.70,0],[.93,.08,.08],P);for(const z of [-1,1])s.box([0,.70,z*.32],[.12,.43,.1],IRON);s.rod([0,1,0],[.2,1.35,0],.07,GOLD,'sway',[0,1,0]);s.orb([.22,1.38,0],[.14,.14,.14],'#d5fff7','bob');return;
  }
  if(body==='watch'){
-  s.box([0,.12,0],[.65,.20,.65],DARK);s.box([0,.67,0],[.18,.95,.18],IRON);s.part('cylinder',[0,1.30,0],[.75,.75,.19],P,'sway',[0,1.30,0]);s.orb([.04,1.30,.13],[.27,.27,.12],'#d5fff7');return;
+  s.orb([0,.12,0],[.72,.20,.69],DARK);s.capsule([0,.67,0],[.20,.95,.20],IRON);s.part('cylinder',[0,1.30,0],[.75,.75,.19],P,'sway',[0,1.30,0]);for(const z of [-.23,.23])s.taper([0,1.30,z],[.28,1.30,z],.025,LIGHT,'spin',[0,1.30,0]);s.orb([.04,1.30,.13],[.27,.27,.12],'#d5fff7');return;
  }
  if(body==='collector'){
   cart(s);s.box([-.12,.66,0],[.80,.51,.59],DARK);s.box([-.1,.95,0],[.83,.08,.63],P);s.rod([.28,.81,0],[.70,1.25,0],.12,IRON,'strike',[.28,.81,0]);s.rod([.70,1.25,0],[1,.91,0],.10,IRON,'strike',[.28,.81,0]);return;
@@ -231,8 +237,8 @@ function nations(s,body){
  else{tool(s,'sword');s.box([-.24,.83,.35],[.32,.35,.23],WOOD);}
 }
 function garden(s,body){
- if(body==='eye'){s.orb([0,1,0],[.65,.42,.44],IVORY,'bob');s.orb([.32,1,0],[.06,.29,.27],P,'bob');s.orb([.36,1,0],[.045,.16,.14],DARK,'bob');for(const z of [-1,1])s.poly([-.12,.95,z*.23],[-.4,0,0,.12,.25,0,0,-.14],.08,S,'sway',[-.12,.95,z*.23]);return;}
- if(body==='thorn'){s.orb([0,.22,0],[.75,.43,.66],'#6a8760');for(const z of [-.23,.23])s.rod([-.24,.27,z],[.15,.95,z],.15,'#587450');s.rod([.15,.95,0],[.73,1.28,0],.20,P,'strike',[.15,.95,0]);s.poly([.73,1.28,0],[0,0,-.09,.28,.12,.10,.30,.12],.17,IVORY);s.orb([-.18,.71,0],[.60,.50,.52],P);return;}
+ if(body==='eye'){s.orb([0,1,0],[.65,.42,.44],IVORY,'bob');s.orb([.32,1,0],[.06,.29,.27],P,'bob');s.orb([.36,1,0],[.045,.16,.14],DARK,'bob');for(const z of [-1,1]){s.poly([-.12,.95,z*.23],[-.4,0,0,.12,.25,0,0,-.14],.08,S,'sway',[-.12,.95,z*.23]);s.poly([-.16,1.15,z*.27],[-.28,0,.12,.08,.31,.02,.03,-.14],.025,'#d6a0a8','sway',[-.12,.95,z*.23]);}return;}
+ if(body==='thorn'){s.orb([0,.22,0],[.75,.43,.66],'#6a8760');for(const z of [-.23,.23])s.taper([-.24,.27,z],[.15,.95,z],.12,'#587450');s.taper([.15,.95,0],[.73,1.28,0],.17,P,'strike',[.15,.95,0]);s.poly([.73,1.28,0],[0,0,-.09,.28,.12,.10,.30,.12],.17,IVORY);for(const z of [-.31,.31])s.poly([.15,.62,z],[-.30,0,.14,.08,.34,.22,.02,.16],.028,'#91aa75','sway',[.15,.95,z]);s.orb([-.18,.71,0],[.60,.50,.52],P);return;}
  if(body==='tree'){
   for(const z of [-.22,.22]){s.rod([0,.7,z],[z*.4,.08,z],.21,'#72523b',z<0?'strideL':'strideR',[0,.7,z]);s.rod([0,1.1,z],[.45,.68,z*2],.14,WOOD,'strike',[0,1.1,z]);}
   s.poly([0,.56,0],[-.24,0,.24,0,.19,.81,-.16,.81],.47,WOOD);s.orb([-.04,1.53,0],[.98,.65,.86],P);s.orb([.32,1.45,.17],[.58,.44,.55],'#91aa75');s.box([.22,1.25,-.12],[.035,.06,.08],GOLD);s.box([.22,1.25,.12],[.035,.06,.08],GOLD);return;

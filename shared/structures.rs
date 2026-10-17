@@ -382,11 +382,12 @@ impl Art {
     }
 }
 
-/// A house's building kit (shared/buildings.txt).
-struct Kit { wall: u8, base: u8, roof: u8, spire: u8, garden: bool }
+/// A house's building kit (shared/buildings.txt). The optional sixth glyph controls
+/// the small forecourt marker; older lines use their house's chosen fallback tone.
+struct Kit { wall: u8, base: u8, roof: u8, spire: u8, garden: bool, accent: u8 }
 fn kit(code: &str) -> Kit {
     let b = code.as_bytes();
-    Kit { wall: b[0], base: b[1], roof: b[2], spire: b[3], garden: b[4] == b'y' }
+    Kit { wall: b[0], base: b[1], roof: b[2], spire: b[3], garden: b[4] == b'y', accent: *b.get(5).unwrap_or(&b'g') }
 }
 /// The house roof over a block w × d centred at (x, y) whose walls end at z.
 fn roof(a: &mut Art, k: &Kit, x: f64, y: f64, z: f64, w: f64, d: f64) {
@@ -507,9 +508,33 @@ fn piece(a: &mut Art, k: &Kit, s: &str, sx: f64) {
 pub fn architecture(style: usize, role: Role) -> Value {
     let line = super::art(style);
     let f: Vec<&str> = line.split('|').collect();
-    let k = kit(f[0]);
+    let mut k = kit(f[0]);
+    if f[0].len() < 6 {
+        k.accent = match style {
+            3 => b'g', // Bensalem's instrument brass
+            4 => b'b', // Longjiang's red-lacquer timber
+            5 => b'g', // Reading Room gilt
+            6 => b'M', // Address Zero's illuminated alloy
+            7 => b'g', // Kirkcaldy's exchange gold
+            8 => b'g', // Campion's brass field fittings
+            _ => b'g', // Flux's warm civic trim
+        };
+    }
     let mut a = Art(Vec::new());
     let i = ROLES.iter().position(|r| *r == role).unwrap_or(1);
+    // Every site now begins with a stepped, house-coloured civic footing and a
+    // small front marker.  This breaks up the old isolated boxes without changing
+    // footprint, ports, budgets, or any planner decision.  The sixth kit glyph
+    // chooses the marker material per house, so the same role still reads as its
+    // owner at map scale.
+    let (w, d) = match role {
+        Role::Landmark | Role::Hall => (4.9, 4.5),
+        Role::Yard | Role::Works => (3.5, 3.1),
+        Role::Bastion => (3.7, 3.7),
+        Role::Bay => (3.4, 3.0),
+    };
+    a.add(b'p', 0.0, 0.0, 0.02, w, 0.12, d, k.base);
+    a.add(b'x', 0.0, -d * 0.52, 0.14, w * 0.3, 0.12, 0.22, k.accent);
     draw(&mut a, &k, if i == 0 { f[7] } else { DESIGNS[i - 1] }, 1.0);
     a.value(f[1 + i])
 }
