@@ -173,10 +173,11 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
     let id = me.get("id");
     let income = me.path("rts.cpu.income").num_or(0.0);
     let bank = me.path("rts.cpu.bank").num_or(0.0);
-    // Plants are paid from savings above the floor an army keeps (common::govern drops to its recovery policy below
-    // four seconds of income). The floor comes down while the grid runs short, since a dim province mines less.
+    // Plants are paid from savings above the floor an army keeps: common::govern drops to its recovery policy, which
+    // disbands units, below four seconds of income. The floor comes down to just above that while the grid runs short,
+    // since a dim province mines less.
     let short = e.get("powered").num_or(1.0) < 0.92;
-    let floor = income * if short { 2.0 } else { 5.0 };
+    let floor = income * if short { 4.5 } else { 5.0 };
     if me.path("units.stalled").num_or(0.0) > 0.0 || bank < floor + income { return; }
     let sites = me.path("rts.structures");
     let mine: Vec<View> = sites.iter().filter(|s| same(s.get("owner"), id) && s.get("state").str() != "ruin").collect();

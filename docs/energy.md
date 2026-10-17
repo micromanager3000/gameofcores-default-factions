@@ -49,8 +49,8 @@ It orders a plant when all of these hold:
   realm runs on the generator.
 - No unit is stalled.
 - Fewer than two of its plants are going up, and the second only while an island is more than 1.5 MW short.
-- Its bank holds one second of income above a floor. The floor is five seconds of income, or two while the grid meets
-  less than 92% of its draw.
+- Its bank holds one second of income above a floor. The floor is five seconds of income, or four and a half while the
+  grid meets less than 92% of its draw.
 
 The plant may cost 70% of the bank above that floor. `common::govern` drops to its recovery policy when the bank falls
 below four seconds of income, so a plant never pushes a healthy house into recovery.
