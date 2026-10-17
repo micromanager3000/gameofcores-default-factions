@@ -1,6 +1,6 @@
 use gameofcores::*;
 use shared::{air, capital, common, theme};
-use shared::common::{hauler, freighter};
+use shared::common::{hauler, freighter, escort};
 // Knights Templated — paid armor, mobile lancers, ballistas and Hospitallers.
 // A faction program owns its strategy, CPU allocation and Crusader art.
 // The plan stays small and tactical CPU is deliberately left in the combat bank.
@@ -10,7 +10,7 @@ use shared::common::{hauler, freighter};
 
 use std::rc::Rc;
 
-program!(think, hauler, freighter, miner, line, bulwark, artillery, medic, interceptor, piercer, scout, reflex, research, duel, challenge, guard, longbow, spy, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, line, bulwark, artillery, medic, interceptor, piercer, scout, reflex, research, duel, challenge, guard, longbow, spy, look, build3d, live3d);
 
 fn build(hp: f64, speed: f64, strength: f64, carry: f64, vision: f64, range: Option<f64>) -> Value {
     let mut b = obj! { "hp" => hp, "speed" => speed, "strength" => strength, "carry" => carry, "vision" => vision };
@@ -40,9 +40,10 @@ fn scout_body() -> Value {
 
 // Extraction and armor equip the first line. Influence and faith support expansion
 // before the order adds ranged weapons and specialist capabilities.
-const TECHS: [&str; 20] = [
-    "extraction", "armor", "influence", "faith", "ranged", "capture", "dash", "repair", "scan", "antiAir", "artillery", "pierce",
-    "computeBoost", "seaTraversal", "mountainTraversal", "flight", "gate", "cloak", "stealth", "airWeapons",
+const TECHS: [&str; 24] = [
+    "extraction", "armor", "turbines", "influence", "faith", "ranged", "capture", "dash", "repair", "scan", "antiAir",
+    "artillery", "storage", "pierce", "computeBoost", "seaTraversal", "mountainTraversal", "flight", "cooling",
+    "transmission", "gate", "cloak", "stealth", "airWeapons",
 ];
 const FAITHS: [&str; 8] = [
     "The Church of the Halting Problem",

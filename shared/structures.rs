@@ -69,7 +69,9 @@ fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: Vie
             !protected && near(u, *s, reach + s.get("radius").num_or(0.0))
         }).min_by(|a, b| {
             // An armed shell stops the advance; finish damaged shells within the same priority.
-            let priority = |s: View| s.get("hp").num_or(100.0) - if port(s, "weapon") { 300.0 } else { 0.0 };
+            // Then plants: a rival's dark towns are a weaker rival.
+            let priority = |s: View| s.get("hp").num_or(100.0) - if port(s, "weapon") { 300.0 } else { 0.0 }
+                - if s.get("power").truthy() { 150.0 } else { 0.0 };
             priority(*a).total_cmp(&priority(*b))
         });
         let Some(target) = target else { continue; };
@@ -78,7 +80,7 @@ fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: Vie
             && same(foe.path("pos.p"), u.path("pos.p"))
             && (foe.path("pos.x").num() - u.path("pos.x").num()).hypot(foe.path("pos.y").num() - u.path("pos.y").num()) < reach + 1.0));
         if enemy_near { continue; }
-        attacks.push(obj! { "unit" => u.get("id"), "target" => target.get("id"), "until" => now + 5.0 });
+        attacks.push(obj! { "unit" => u.get("id"), "target" => target.get("id"), "until" => now + 6.0 });
     }
     if !attacks.is_empty() { orders.set("structureAttacks", attacks); }
 }
@@ -102,11 +104,12 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     let id = me.get("id");
     let style = seat(me);
     let now = world.get("seconds").num_or(0.0);
-    // Refresh at most every five seconds; short standing jobs cover the interval.
-    if now.floor() % 5.0 != 0.0 && orders.get("memo").str() != "Recovering production" { return; }
+    // Refresh every sixth second, a full-think second for a resting house (common::govern); short standing jobs cover
+    // the interval.
+    if now.floor() % 6.0 != 0.0 && orders.get("memo").str() != "Recovering production" { return; }
     let sites = me.path("rts.structures");
     let mut own: Vec<View> = sites.iter().filter(|s| same(s.get("owner"), id) && s.get("state").str() != "ruin").collect();
-    if !own.is_empty() { let start = (now as usize / 5) % own.len(); own.rotate_left(start); }
+    if !own.is_empty() { let start = (now as usize / 6) % own.len(); own.rotate_left(start); }
     let units: Vec<View> = world.get("units").iter().filter(|u| same(u.get("owner"), id) && u.get("hp").num_or(0.0) > 0.0).collect();
     let income = me.path("rts.cpu.income").num_or(0.0);
     let bank = me.path("rts.cpu.bank").num_or(0.0);
@@ -277,7 +280,8 @@ fn plan(orders: &mut Value, world: View, me: View, style: usize, own: &[View], u
     }
     wants.sort_by(|a, b| b.value.total_cmp(&a.value));
     for w in wants.into_iter().take(4) {
-        if cycles_left() < 4000.0 { break; }
+        // A site search reads the ground round the town before its own checks: leave it room to finish.
+        if cycles_left() < 20000.0 { break; }
         // Keep unit fabrication and several seconds of income ahead of each new site.
         if bank < income * 2.0 + w.quote * 3.0 { continue; }
         let Some((x, y)) = spot(w.p, sites, w.r, units) else { continue; };

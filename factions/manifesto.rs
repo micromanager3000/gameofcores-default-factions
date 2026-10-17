@@ -11,9 +11,9 @@
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
-use shared::common::{hauler, freighter};
+use shared::common::{hauler, freighter, escort};
 
-program!(think, hauler, freighter, miner, line, spark, scout, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, line, spark, scout, reflex, research, duel, challenge, look, build3d, live3d);
 
 // The bodies: points in hp, speed, strength, carry and vision. A stat at or under its standard of 2 costs no upkeep over
 // the base, so the army is cheap and the agitators cheaper: persuasion does not read the body at all.
@@ -35,8 +35,8 @@ fn scout_body() -> Value {
 }
 
 // Extraction for the economy, influence for the papers (persuasion 60% stronger, morale +8), capture for the Red Army,
-// rifles and armor for its ranks, then the crossings when the land runs out.
-const TECHS: [&str; 7] = ["extraction", "influence", "capture", "ranged", "armor", "mountainTraversal", "seaTraversal"];
+// rifles and armor for its ranks, then the crossings when the land runs out, and power for the grid after them.
+const TECHS: [&str; 12] = ["extraction", "turbines", "influence", "capture", "ranged", "armor", "mountainTraversal", "seaTraversal", "cooling", "drilling", "transmission", "storage"];
 
 // The Manifesto, ported to compute: a line at a time for the memo (at most 90 characters with what it is doing).
 const QUOTES: [&str; 12] = [

@@ -2,7 +2,9 @@
 // deliberately plain: mine CPU, keep a guard in the capital's ring, take the best neighbouring land it can hold, scout
 // a little, field longbows once it has ranged fire and a spy once it can cloak, and answer research and duel puzzles
 // with its own solver. The founding seats wear their house style (shared faction code: look, anthem, 3D capital and, where
-// it names them, unit names); every other seat a plain one.
+// it names them, unit names); every other seat a plain one. In a world with energy it runs on its house generator alone,
+// and it ships cargo without escorts: the house programs' grid planner (shared/energy.rs) and escorts are left out of
+// it, since a program pays for its length in memory.
 //
 // It's written on the SDK in the gameofcores crate (docs part sdk). Its strategy is the `common` module at the end,
 // which the house programs share: picking targets, mustering, spawning, splitting cycles, deals and pacts, and the
@@ -15,7 +17,7 @@ program!(think, hauler, freighter, miner, guard, longbow, spy, scout, reflex, re
 
 // What to research, in order: a CPU RTS world's ids, then a classic world's (archery is ranged there, espionage is
 // cloak). Ids the world lacks are skipped.
-const TECHS: [&str; 12] = ["extraction", "ranged", "dash", "repair", "seaTraversal", "mountainTraversal", "cloak", "mining", "archery", "boats", "alpine", "espionage"];
+const TECHS: [&str; 14] = ["extraction", "ranged", "dash", "repair", "turbines", "seaTraversal", "mountainTraversal", "storage", "cloak", "mining", "archery", "boats", "alpine", "espionage"];
 
 fn think(world: View, me: View) -> Value {
     common::govern(world, me, 0.4, || strategy(world, me))
