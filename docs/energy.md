@@ -72,12 +72,18 @@ the capital until they hold its store of that island's draw. Each battery holds 
 The best four candidates are tried in order. The first with room for its shell beside a living builder is ordered.
 The search stops when fewer than 25,000 cycles of think are left, so think never runs out and loses its orders.
 
-## Paying for construction
+## Paying for plants
 
 A site's first construction second is charged when it is accepted. The rest is charged over the next 12 seconds
-through the fabrication lane, which recruits also use. Every second that the house sends a compute policy, the
-planner raises its fabrication limit by the construction rate of each plant going up. The house's own limit stays
-for its units.
+through the fabrication lane, which recruits also use. A standing plant's upkeep comes out of the upkeep lane before
+any unit's. Every second that the house sends a compute policy, the planner raises both limits by what its plants
+cost:
+
+- fabrication, by the construction rate of each plant going up;
+- upkeep, by each plant's quote ÷ 600 a second, counting a plant going up by the share of it that is built.
+
+A limit given as a share of income becomes that share of last second's income plus the plants' cost. The house's own
+limits stay for its units, so a grid never stalls the army that guards it.
 
 ## Running the grid
 
