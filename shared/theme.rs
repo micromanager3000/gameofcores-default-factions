@@ -1521,9 +1521,9 @@ fn scene3(info: View, budget: f64) -> Value {
             hall_label: Some("ENGINE-HOUSE"),
             screen_title: Some("EXPERIMENTS OF LIGHT"),
             banners: 2.0,
-            // At its base budget, preserve the furnaces, smoke and data lantern;
-            // the generic approach lamps join once there is room for them.
-            forecourt_lights: budget >= 226.0,
+            // The nine authored Lamps already light Bensalem; keep the civic extras
+            // out so the base scene and the ten-light renderer cap both hold.
+            forecourt_lights: false,
             ..Civic::default()
         },
     );
@@ -1826,6 +1826,8 @@ fn scene4(info: View, budget: f64) -> Value {
             hall_label: Some("TRIBUTE OFFICE"),
             screen_title: Some("GIFTS RECEIVED"),
             banners: 2.0,
+            // The shipyard has its own dock lamps.
+            forecourt_lights: false,
             ..Civic::default()
         },
     );
@@ -2682,6 +2684,8 @@ fn scene7(info: View, budget: f64) -> Value {
             hall_label: Some("CUSTOM HOUSE"),
             screen_title: Some("PRICE TICKER"),
             banners: 2.0,
+            // Kirkcaldy has its own harbour lamps.
+            forecourt_lights: false,
             ..Civic::default()
         },
     );
