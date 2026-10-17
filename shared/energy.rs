@@ -320,16 +320,15 @@ fn sell(orders: &mut Value, world: View, me: View) {
     if !me.get("techs").get("transmission").truthy() { return; }
     let id = me.get("id").num();
     let islands: Vec<View> = e.get("islands").iter().collect();
-    let by = realm::index(world);
     let mut links: Vec<(f64, usize)> = Vec::new();
-    // Keep the first border for each neighbour: `deal_link` uses the first owned province and neighbour in this order.
-    for p in world.get("provinces").iter().filter(|p| p.get("owner").num_or(-1.0) == id) {
-        let Some(at) = islands.iter().position(|i| i.get("provinces").has_num(p.get("id").num())) else { continue };
-        for q in p.get("adj").iter() {
-            let buyer = by.at(q).get("owner").num_or(-1.0);
-            if buyer >= 0.0 && buyer != id && !links.iter().any(|(other, _)| *other == buyer) {
-                links.push((buyer, at));
-            }
+    // The engine has already applied `wire_neighbors` and `deal_link`'s ordering to these links. It is the only
+    // source that can know whether a moving ship still relays an overseas route, so a missing observation is unsafe.
+    for link in e.get("exportLinks").iter() {
+        let buyer = link.get("with").num_or(-1.0);
+        let at = link.get("at").num_or(-1.0);
+        let Some(at) = islands.iter().position(|i| i.get("provinces").has_num(at)) else { continue };
+        if buyer >= 0.0 && buyer != id && !links.iter().any(|(other, _)| *other == buyer) {
+            links.push((buyer, at));
         }
     }
     let buyer = world.get("factions").iter().filter_map(|f| {

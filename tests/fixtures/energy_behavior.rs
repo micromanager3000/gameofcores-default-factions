@@ -13,7 +13,7 @@ fn power_market(supply: f64, demand: f64, remote_supply: f64, transmission: bool
             ], "plants"=>arr![
                 obj! { "p"=>0, "mw"=>(supply - 3.0).max(0.0), "ports"=>arr![obj! { "kind"=>"wind", "capacity"=>(supply - 3.0).max(0.0) }] },
                 obj! { "p"=>1, "mw"=>remote_supply, "ports"=>arr![obj! { "kind"=>"wind", "capacity"=>remote_supply }] }
-            ], "deals"=>deals }
+            ], "exportLinks"=>arr![obj! { "with"=>2, "at"=>0 }], "deals"=>deals }
     };
     (world, me)
 }
@@ -48,6 +48,22 @@ fn a_locally_surplus_grid_offers_power_at_the_default_fair_price() {
 fn remote_surplus_cannot_be_sold_through_a_short_local_grid() {
     // Province 0 is the first and only border link to faction 2. Its island is short, even though island 1 is rich.
     let (orders, _, _) = power_orders(4.0, 4.0, 20.0, true, arr![]);
+    assert!(orders.get("send").is_empty(), "{orders:?}");
+}
+
+#[test]
+fn a_first_mountain_route_selects_its_own_island_for_power_sales() {
+    // The engine reports its first `deal_link` result: province 0's pass to faction 2 precedes province 1's land
+    // border. Island 0 is short, so the rich second island must not create an offer.
+    let (mut world, mut me) = power_market(4.0, 4.0, 20.0, true, arr![]);
+    let Value::Arr(provinces) = world.entry("provinces") else { panic!("provinces") };
+    provinces[0].set("adj", arr![]);
+    provinces[0].set("routes", obj! { "pass"=>arr![2] });
+    provinces[1].set("adj", arr![2]);
+    me.entry("energy").set("exportLinks", arr![obj! { "with"=>2, "at"=>0 }]);
+    let args = views(&[world, me]);
+    let mut orders = obj! {};
+    shared::energy::apply(&mut orders, args[0], args[1]);
     assert!(orders.get("send").is_empty(), "{orders:?}");
 }
 

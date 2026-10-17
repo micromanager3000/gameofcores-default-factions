@@ -97,7 +97,9 @@ Every twelve seconds the house sends `grid` orders:
 
 Compute of Nations and unclaimed default seats offer spare power once a minute after `transmission` research. They offer
 to the bordering faction whose grid meets the least of its draw, when that grid is below 90%. A deal uses the first grid
-link the engine finds, so the planner only offers that island's own generation after keeping 15% of its local draw.
+link the engine finds, reported in `me.energy.exportLinks`. Each entry is `{ "with": factionId, "at": provinceId }`:
+the first live link to that faction and its own province. The planner makes no power offer until that observation is
+available, then only offers that island's own generation after keeping 15% of its local draw.
 Imported power, batteries and boiler fuel are never offered onward. The offer is up to 6 MW for 180 seconds, at 0.125 ◆
 a second for each MW.
 
