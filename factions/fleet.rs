@@ -69,9 +69,9 @@ fn corsair_body(cargo: bool) -> Value {
 const FAITHS: [&str; 4] = ["The Silent Cache", "The Order of the Dark Fibre", "The Church of the Idle Loop", "The Brotherhood of the Hidden Bit"];
 
 const TECHS: [&str; 21] = [
-    "extraction", "seaTraversal", "turbines", "ranged", "armor", "dash", "transmission", "cloak", "scan", "influence",
-    "faith", "pierce", "artillery", "subseaCable", "antiAir", "repair", "mountainTraversal", "flight", "airWeapons",
-    "storage", "gate",
+    "extraction", "seaTraversal", "turbines", "ranged", "armor", "dash", "cloak", "scan", "influence", "faith",
+    "pierce", "artillery", "antiAir", "repair", "mountainTraversal", "flight", "airWeapons", "storage", "transmission",
+    "subseaCable", "gate",
 ];
 
 // ---- JavaScript's arithmetic, where this program follows it ----

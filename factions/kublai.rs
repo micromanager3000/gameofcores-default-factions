@@ -35,8 +35,8 @@ const WING_SHOT: Build = &[("hp", 2.0), ("speed", 2.0), ("strength", 1.0), ("car
 // What to research, in order. Capture follows the first combat licenses to press territory sooner; Flight follows for
 // crossings and a small air wing that can raid miners ground units cannot reach.
 const TECHS: [&str; 23] = [
-    "extraction", "dash", "armor", "ranged", "turbines", "capture", "flight", "pierce", "drilling", "scan", "antiAir",
-    "artillery", "airWeapons", "repair", "cloak", "stealth", "seaTraversal", "mountainTraversal", "influence",
+    "extraction", "dash", "armor", "ranged", "turbines", "capture", "flight", "pierce", "scan", "antiAir", "artillery",
+    "airWeapons", "repair", "drilling", "cloak", "stealth", "seaTraversal", "mountainTraversal", "influence",
     "transmission", "storage", "computeBoost", "gate",
 ];
 

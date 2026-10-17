@@ -37,9 +37,9 @@ const GHOST_DEEP: Build = &[("hp", 1.0), ("speed", 3.0), ("strength", 0.0), ("ca
 // dear techs from whoever has them, so the list past it is what's left to do ourselves. A tech a spy is copying now is
 // left out of the list that second (think filters it).
 const TECHS: [&str; 23] = [
-    "extraction", "dash", "ranged", "storage", "cloak", "armor", "cooling", "scan", "pierce", "repair", "capture",
-    "antiAir", "artillery", "influence", "turbines", "seaTraversal", "mountainTraversal", "stealth", "computeBoost",
-    "flight", "faith", "airWeapons", "gate",
+    "extraction", "dash", "ranged", "cloak", "armor", "scan", "storage", "pierce", "repair", "capture", "antiAir",
+    "artillery", "influence", "turbines", "seaTraversal", "mountainTraversal", "stealth", "computeBoost", "flight",
+    "faith", "airWeapons", "cooling", "gate",
 ];
 
 fn build(b: Build) -> Value {

@@ -15,7 +15,7 @@ program!(think, hauler, freighter, escort, miner, guard, longbow, spy, scout, re
 
 // What to research, in order: a CPU RTS world's ids, then a classic world's (archery is ranged there, espionage is
 // cloak). Ids the world lacks are skipped.
-const TECHS: [&str; 14] = ["extraction", "ranged", "dash", "repair", "turbines", "storage", "seaTraversal", "mountainTraversal", "cloak", "mining", "archery", "boats", "alpine", "espionage"];
+const TECHS: [&str; 14] = ["extraction", "ranged", "dash", "repair", "turbines", "seaTraversal", "mountainTraversal", "storage", "cloak", "mining", "archery", "boats", "alpine", "espionage"];
 
 fn think(world: View, me: View) -> Value {
     common::govern(world, me, 0.4, || strategy(world, me))

@@ -34,9 +34,9 @@ const WING_SHOT: Build = &[("hp", 2.0), ("speed", 2.0), ("strength", 1.0), ("car
 // Establish mining and a mobile archer screen, then pursue Flight and its crossings.
 // Ground upgrades follow Flight; Air weapons still requires Artillery.
 const TECHS: [&str; 23] = [
-    "extraction", "dash", "ranged", "flight", "storage", "armor", "antiAir", "pierce", "transmission", "artillery",
-    "airWeapons", "computeBoost", "turbines", "scan", "repair", "capture", "influence", "cloak", "stealth",
-    "seaTraversal", "mountainTraversal", "cooling", "gate",
+    "extraction", "dash", "ranged", "flight", "armor", "antiAir", "storage", "pierce", "artillery", "airWeapons",
+    "computeBoost", "turbines", "scan", "repair", "capture", "influence", "cloak", "stealth", "seaTraversal",
+    "mountainTraversal", "transmission", "cooling", "gate",
 ];
 
 // Emu High Command shares the campaign controller but invests in fast ground raids.

@@ -45,8 +45,8 @@ fn scout_body() -> Value {
 // holds yet (Mountain traversal, Influence, Capture, Cloak, Faith) jumps the queue once the army's techs are in: a
 // world first for 60 puzzles.
 const TECHS: [&str; 25] = [
-    "extraction", "armor", "drilling", "dash", "ranged", "storage", "pierce", "antiAir", "seaTraversal", "repair",
-    "artillery", "fission", "scan", "mountainTraversal", "fusion", "computeBoost", "influence", "capture", "cloak",
+    "extraction", "armor", "dash", "ranged", "drilling", "storage", "pierce", "antiAir", "seaTraversal", "repair",
+    "artillery", "fission", "scan", "mountainTraversal", "computeBoost", "fusion", "influence", "capture", "cloak",
     "faith", "turbines", "flight", "gate", "stealth", "airWeapons",
 ];
 
@@ -58,8 +58,9 @@ const GOODS: [&str; 8] = ["extraction", "seaTraversal", "mountainTraversal", "in
 /// The tier-2 techs the army fields (medics, artillery, scanners): researched in this order whoever holds them, before
 /// any world first.
 const ARMY: [&str; 3] = ["repair", "artillery", "scan"];
-// In a world with energy, the road to fusion comes before the army's tier-2 techs: rift wells, batteries, reactors.
-const POWER: [&str; 4] = ["drilling", "storage", "fission", "fusion"];
+// In a world with energy, the road to reactors comes before the army's tier-2 techs: rift wells, batteries, fission.
+// Fusion waits its turn in TECHS, after the army.
+const POWER: [&str; 3] = ["drilling", "storage", "fission"];
 
 // ---- JavaScript's arithmetic, where this program follows it ----
 

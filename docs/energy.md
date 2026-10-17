@@ -25,7 +25,8 @@ is done. Kinds it can't build yet are skipped.
 Battery store is seconds of the house's draw. Arjuna keeps its 45% reserve only while the sun is up over its capital,
 and 40% of it at night. Every other house keeps 40% of its reserve.
 
-New Atlantis researches drilling, storage, fission and fusion before its army technologies in worlds with energy.
+New Atlantis researches drilling, storage and fission before its army technologies in worlds with energy. Fusion
+comes after its army technologies.
 
 ## When a plant is ordered
 

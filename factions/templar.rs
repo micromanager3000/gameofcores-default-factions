@@ -41,8 +41,8 @@ fn scout_body() -> Value {
 // Extraction and armor equip the first line. Influence and faith support expansion
 // before the order adds ranged weapons and specialist capabilities.
 const TECHS: [&str; 24] = [
-    "extraction", "armor", "turbines", "influence", "faith", "ranged", "storage", "capture", "dash", "cooling",
-    "repair", "scan", "antiAir", "artillery", "pierce", "computeBoost", "seaTraversal", "mountainTraversal", "flight",
+    "extraction", "armor", "turbines", "influence", "faith", "ranged", "capture", "dash", "repair", "scan", "antiAir",
+    "artillery", "storage", "pierce", "computeBoost", "seaTraversal", "mountainTraversal", "flight", "cooling",
     "transmission", "gate", "cloak", "stealth", "airWeapons",
 ];
 const FAITHS: [&str; 8] = [
