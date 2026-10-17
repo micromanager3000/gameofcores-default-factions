@@ -408,10 +408,10 @@ use super::{air, theme};
         let have = me.path("units.byType");
         let freighters = have.get("freighter").num_or(0.0);
         if freighters < 1.0 || me.path("units.queued").num_or(0.0) > 0.0 || me.path("units.stalled").num_or(0.0) > 0.0 { return; }
-        // a look every 5 seconds in the first 30 of each 90, so a house that keeps losing them doesn't sink its bank in
-        // hulls, and one short second doesn't cost a launch
+        // a look every 6 seconds in the first 30 of each 90, on a full-think second (see `resting`), so a house that
+        // keeps losing them doesn't sink its bank in hulls, and one short second doesn't cost a launch
         let now = world.get("seconds").num_or(0.0);
-        if now % 90.0 >= 30.0 || now % 5.0 != 3.0 { return; }
+        if now % 90.0 >= 30.0 || now % 6.0 != 3.0 { return; }
         let raiders = me.path("rts.sea.contacts").iter().any(raider);
         let want = if raiders || freighters >= 2.0 { 2.0 } else { 1.0 };
         let income = me.path("rts.cpu.income").num_or(0.0);

@@ -80,7 +80,7 @@ fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: Vie
             && same(foe.path("pos.p"), u.path("pos.p"))
             && (foe.path("pos.x").num() - u.path("pos.x").num()).hypot(foe.path("pos.y").num() - u.path("pos.y").num()) < reach + 1.0));
         if enemy_near { continue; }
-        attacks.push(obj! { "unit" => u.get("id"), "target" => target.get("id"), "until" => now + 5.0 });
+        attacks.push(obj! { "unit" => u.get("id"), "target" => target.get("id"), "until" => now + 6.0 });
     }
     if !attacks.is_empty() { orders.set("structureAttacks", attacks); }
 }
@@ -104,11 +104,12 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     let id = me.get("id");
     let style = seat(me);
     let now = world.get("seconds").num_or(0.0);
-    // Refresh at most every five seconds; short standing jobs cover the interval.
-    if now.floor() % 5.0 != 0.0 && orders.get("memo").str() != "Recovering production" { return; }
+    // Refresh every sixth second, a full-think second for a resting house (common::govern); short standing jobs cover
+    // the interval.
+    if now.floor() % 6.0 != 0.0 && orders.get("memo").str() != "Recovering production" { return; }
     let sites = me.path("rts.structures");
     let mut own: Vec<View> = sites.iter().filter(|s| same(s.get("owner"), id) && s.get("state").str() != "ruin").collect();
-    if !own.is_empty() { let start = (now as usize / 5) % own.len(); own.rotate_left(start); }
+    if !own.is_empty() { let start = (now as usize / 6) % own.len(); own.rotate_left(start); }
     let units: Vec<View> = world.get("units").iter().filter(|u| same(u.get("owner"), id) && u.get("hp").num_or(0.0) > 0.0).collect();
     let income = me.path("rts.cpu.income").num_or(0.0);
     let bank = me.path("rts.cpu.bank").num_or(0.0);

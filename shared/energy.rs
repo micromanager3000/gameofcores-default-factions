@@ -112,8 +112,9 @@ pub fn prize(world: View, me: View, q: View) -> f64 {
 /// One plant the planner could order next.
 struct Pick { p: View, kind: &'static str, cap: f64, cost: f64, score: f64 }
 
-/// The grid for a second: settings every five seconds, a look for a plant to build every three, power for sale once a
-/// minute. None of it runs in the second `structures` plans its buildings (every fifth), so the two never share a call.
+/// The grid for a second: a look for a plant to build every six seconds, settings every twelve, power for sale once a
+/// minute. A resting house thinks in full only every third second (`common::govern`), and `structures` plans its
+/// buildings on every sixth, so the grid takes the full-think seconds between them and the two never share a call.
 pub fn apply(orders: &mut Value, world: View, me: View) {
     let e = me.get("energy");
     if !e.truthy() || !world.get("energy").truthy() || cycles_left() < 7000.0 { return; }
@@ -121,10 +122,10 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     let seat = me.get("seat").num_or(9.0).max(0.0) as usize;
     let d = doctrine(seat);
     fund(orders, me);
-    if now % 5.0 == 0.0 { return; }
-    if now % 5.0 == 2.0 && cycles_left() > 10000.0 { settings(orders, world, me, &d); }
-    if now % 3.0 == 1.0 && cycles_left() > 30000.0 { build(orders, world, me, &d, now); }
-    if d.sell && now % 60.0 == 7.0 && cycles_left() > 10000.0 { sell(orders, world, me); }
+    if now % 6.0 != 3.0 { return; }
+    if cycles_left() > 30000.0 { build(orders, world, me, &d, now); }
+    if now % 12.0 == 9.0 && cycles_left() > 10000.0 { settings(orders, world, me, &d); }
+    if d.sell && now % 60.0 == 3.0 && cycles_left() > 10000.0 { sell(orders, world, me); }
 }
 
 /// A plant going up is charged a twelfth of its build cost a second through the fabrication lane, which recruits share,

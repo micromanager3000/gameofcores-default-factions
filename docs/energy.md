@@ -34,8 +34,9 @@ come after its army technologies.
 
 ## When a plant is ordered
 
-The planner looks for a plant every three seconds. It skips the second the building planner (`shared/structures.rs`)
-runs, every fifth second, and it starts only with 30,000 cycles of think left.
+The planner looks for a plant every six seconds. A resting house thinks in full only every third second; the building
+planner (`shared/structures.rs`) takes every other one of those seconds, and the grid planner the rest. It starts only
+with 30,000 cycles of think left.
 
 Each grid island in `me.energy.islands` balances alone. A plant lights only the island it stands on, and the house
 generator lights only the capital's island, so an overseas town needs a plant of its own. The planner works out each
@@ -87,7 +88,7 @@ limits stay for its units, so a grid never stalls the army that guards it.
 
 ## Running the grid
 
-Every five seconds the house sends `grid` orders:
+Every twelve seconds the house sends `grid` orders:
 
 - `shed` lists its provinces other than the capital, the farthest and least loyal first. They go dark first in a
   shortfall. The Kernel Manifesto sends no list, so all its provinces dim alike.
