@@ -4,9 +4,9 @@ The default factions plan a power grid in CPU RTS worlds with energy enabled (`w
 The planner is `shared/energy.rs`. Every house program calls it each second through `common::govern`. In a world
 without energy it returns at once.
 
-The default program runs on its house generator alone. `tools/source.mjs` leaves the planner out of it and puts in the
-stubs fenced `// @plain`, since a program pays for its length in memory: the planner is about 220 pages of the 4,096 a
-program's code may fill.
+The default program runs on its house generator alone. `tools/source.mjs` gives it `shared/energy_plain.rs`, which plans
+nothing, in place of the planner, since a program pays for its length in memory: the planner is about 220 pages of the
+4,096 a program's code may fill.
 The engine's rules for plants, grids and batteries are in the game's `docs/rts/energy.md`.
 
 ## Doctrines

@@ -1,14 +1,14 @@
 use std::{env, fs, path::PathBuf};
-/// Shared code fenced `// @house` … `// @end` goes into the house programs and the code fenced `// @plain` … `// @end`
-/// into the default program, which runs plain: a program pays for its length in memory. (tools/source.mjs does the same.)
-fn fence(text: &str, keep: &str) -> String {
+/// The default program runs plain, since a program pays for its length in memory: it leaves out shared code fenced
+/// `// @house` … `// @end`, and carries shared/energy_plain.rs as its `energy` module. (tools/source.mjs does the same.)
+fn fence(text: &str, house: bool) -> String {
     let mut drop = false;
     let mut out: Vec<&str> = Vec::new();
     for line in text.split('\n') {
         let t = line.trim_start();
-        if t.starts_with("// @house") || t.starts_with("// @plain") {
-            drop = !t.starts_with(&format!("// @{keep}"));
-            if !drop { out.push(line); }
+        if t.starts_with("// @house") {
+            drop = !house;
+            if house { out.push(line); }
         } else if t.starts_with("// @end") {
             if !drop { out.push(line); }
             drop = false;
@@ -27,9 +27,15 @@ fn main() {
         let path = format!("shared/{name}.rs");
         println!("cargo:rerun-if-changed={path}");
         let text = fs::read_to_string(path).expect("shared source");
-        let module = format!("pub mod {name} {{\n{}\n}}\n", fence(&text, "house"));
+        let module = format!("pub mod {name} {{\n{}\n}}\n", fence(&text, true));
         shared.push_str(&module);
-        plain.push_str(&format!("pub mod {name} {{\n{}\n}}\n", fence(&text, "plain")));
+        let own = if name == "energy" {
+            println!("cargo:rerun-if-changed=shared/energy_plain.rs");
+            fs::read_to_string("shared/energy_plain.rs").expect("plain grid")
+        } else {
+            text
+        };
+        plain.push_str(&format!("pub mod {name} {{\n{}\n}}\n", fence(&own, false)));
         if name != "common" && name != "structures" && name != "energy" {
             example_shared.push_str(&module);
         }

@@ -9,8 +9,6 @@ use std::f64::consts::PI;
 
 use gameofcores::*;
 
-// @house: the grid planner below goes into the house programs. The default program runs plain on its house
-// generator (the stubs at the end); copy this module to plan a grid of your own.
 /// A house's way with power.
 pub struct Doctrine {
     /// Plant kinds it builds, the ones it likes best first.
@@ -412,9 +410,3 @@ pub fn look(kind: &str, cap: f64, style: usize) -> Value {
     };
     obj! { "name" => name, "pieces" => pieces }
 }
-// @end
-
-// @plain: the default program's grid: its house generator alone, and no plant counted in a rival's land
-pub fn apply(_orders: &mut Value, _world: View, _me: View) {}
-pub fn prize(_world: View, _me: View, _q: View) -> f64 { 0.0 }
-// @end
