@@ -221,18 +221,21 @@ impl Theme {
         // cheap static mesh, and deliberately vary their material language instead
         // of adding another shared building.  They are landmarks, not game state.
         let mark = match self.style {
-            0 => obj! { "type" => "tree", "kind" => "cypress", "x" => 56, "z" => -54, "h" => 20, "color" => "#274a2d", "pri" => 4 },
-            1 => obj! { "type" => "statue", "pose" => "rider", "x" => -54, "z" => -52, "h" => 8, "material" => "metal", "color" => "#c89066", "trim" => "#e8c37a", "label" => "THE CHARIOTEER", "pri" => 4 },
-            2 => obj! { "type" => "statue", "pose" => "robed", "x" => 54, "z" => -52, "h" => 8, "material" => "stone", "color" => "#efe4ce", "trim" => "#d0ab54", "label" => "THE VIGIL", "pri" => 4 },
-            3 => obj! { "type" => "tree", "kind" => "crystal", "x" => -54, "z" => -52, "h" => 18, "color" => "#8ad6e8", "pri" => 4 },
-            4 => obj! { "type" => "statue", "pose" => "orb", "x" => 54, "z" => -52, "h" => 5, "material" => "glass", "color" => "#d9f4ff", "trim" => "#d7a84c", "label" => "TIDE LENS", "pri" => 4 },
-            5 => obj! { "type" => "statue", "pose" => "robed", "x" => 54, "z" => -52, "h" => 5, "material" => "stone", "color" => "#b8322f", "trim" => "#f2c230", "label" => "THE READER", "pri" => 4 },
-            6 => obj! { "type" => "tree", "kind" => "crystal", "x" => -54, "z" => -52, "h" => 22, "color" => "#42d4ff", "pri" => 4 },
-            7 => obj! { "type" => "statue", "pose" => "figure", "x" => 54, "z" => -52, "h" => 5, "material" => "stone", "color" => "#d7b76c", "trim" => "#1c3e6c", "label" => "THE EXCHANGE", "pri" => 4 },
-            8 => obj! { "type" => "statue", "pose" => "mech", "x" => -54, "z" => -52, "h" => 5, "material" => "metal", "color" => "#7a8a6a", "trim" => "#d8b44c", "label" => "THE LOOKOUT", "pri" => 4 },
-            _ => obj! { "type" => "statue", "pose" => "orb", "x" => 54, "z" => -52, "h" => 5, "material" => "glass", "color" => "#e9fff0", "trim" => "#d4b54a", "label" => "THE SENSE", "pri" => 4 },
+            0 => obj! { "type" => "tree", "kind" => "cypress", "x" => 50, "z" => -30, "h" => 20, "color" => "#274a2d", "pri" => 4 },
+            1 => obj! { "type" => "statue", "pose" => "rider", "x" => -50, "z" => -30, "h" => 8, "material" => "metal", "color" => "#c89066", "trim" => "#e8c37a", "label" => "THE CHARIOTEER", "pri" => 4 },
+            2 => obj! { "type" => "statue", "pose" => "robed", "x" => 50, "z" => -30, "h" => 8, "material" => "stone", "color" => "#efe4ce", "trim" => "#d0ab54", "label" => "THE VIGIL", "pri" => 4 },
+            // Salomon's House already spends its base budget on its three furnaces,
+            // perpetual-motion rings, automata and data lantern. Keep those visible
+            // at the base budget instead of displacing one with a new rim prop.
+            3 => Value::Undef,
+            4 => obj! { "type" => "statue", "pose" => "orb", "x" => 50, "z" => -30, "h" => 5, "material" => "glass", "color" => "#d9f4ff", "trim" => "#d7a84c", "label" => "TIDE LENS", "pri" => 4 },
+            5 => obj! { "type" => "statue", "pose" => "robed", "x" => 50, "z" => -30, "h" => 5, "material" => "stone", "color" => "#b8322f", "trim" => "#f2c230", "label" => "THE READER", "pri" => 4 },
+            6 => obj! { "type" => "tree", "kind" => "crystal", "x" => -50, "z" => -30, "h" => 22, "color" => "#42d4ff", "pri" => 4 },
+            7 => obj! { "type" => "statue", "pose" => "figure", "x" => 50, "z" => -30, "h" => 5, "material" => "stone", "color" => "#d7b76c", "trim" => "#1c3e6c", "label" => "THE EXCHANGE", "pri" => 4 },
+            8 => obj! { "type" => "statue", "pose" => "mech", "x" => -50, "z" => -30, "h" => 5, "material" => "metal", "color" => "#7a8a6a", "trim" => "#d8b44c", "label" => "THE LOOKOUT", "pri" => 4 },
+            _ => obj! { "type" => "statue", "pose" => "orb", "x" => 50, "z" => -30, "h" => 5, "material" => "glass", "color" => "#e9fff0", "trim" => "#d4b54a", "label" => "THE SENSE", "pri" => 4 },
         };
-        sc.entry("pieces").push(mark);
+        if mark.truthy() { sc.entry("pieces").push(mark); }
         if !self.own {
             sc.set("title", info.get("name").value());
             sc.set("motto", "");
