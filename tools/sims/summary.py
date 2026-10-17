@@ -97,11 +97,14 @@ def run(f, house=3.0):
                   'rated': e.get('ratedTotal') or {}})
     r['powerSold'] = sum(x.get('sold') or 0 for x in (e.get('byFaction') or []))
     r['crowned'] = 1.0 if d.get('winner') is not None else 0.0
+    shares = [x.get('share', 0) for x in d['byFaction'][:8]]
+    r['leader'] = max(range(len(shares)), key=lambda i: shares[i]) if shares else -1
+    r['contracts'] = (d['series'][-1].get('activity') or {}).get('contracts', 0)
     return r
 
 NAMES = ['Kublai', 'Arjuna', 'Templars', 'Atlantis', 'Fleet', 'Manifesto', 'NullPtr', 'Compute']
 KEYS = ['runs', 'fights', 'kills', 'pitched', 'roles', 'mixedBoth', 'swings', 'sunk', 'broadsides', 'prizes', 'deals', 'deliveries', 'air', 'aircraft',
-        'pacts', 'msgs', 'built', 'income', 'buildShare', 'powered', 'plants', 'dark', 'rho', 'top3', 'blackouts', 'powerSold', 'crowned']
+        'pacts', 'msgs', 'built', 'income', 'buildShare', 'powered', 'plants', 'dark', 'rho', 'top3', 'blackouts', 'powerSold', 'contracts', 'crowned']
 
 def houses(dd):
     agg = [dict(inc=0, n=0, stall=0, sn=0, op=0) for _ in range(8)]
@@ -129,7 +132,11 @@ for dd in sys.argv[1:]:
     if not rows: continue
     m = {'runs': len(rows)}
     for k in rows[0]:
+        if k == 'leader': continue
         vals = [r[k] for r in rows if isinstance(r.get(k), (int, float))]
         m[k] = st.mean(vals) if vals else None
     print(dd[-10:].ljust(10), ' '.join((f'{m[k]:7.2f}' if isinstance(m.get(k), float) and abs(m[k]) < 1000 else str(int(m[k]) if isinstance(m.get(k), float) else m.get(k))).rjust(7) for k in KEYS))
     print('  houses (income/stalled/structure upkeep share):', houses(dd))
+    lead = {}
+    for r in rows: lead[NAMES[r['leader']] if 0 <= r['leader'] < 8 else '?'] = lead.get(NAMES[r['leader']] if 0 <= r['leader'] < 8 else '?', 0) + 1
+    print('  leaders at the end:', ' '.join('%s %d' % kv for kv in sorted(lead.items(), key=lambda kv: -kv[1])))
