@@ -50,6 +50,7 @@ With cargo, income arrives in loads, and the army lives on the bank between deli
 Units stalled between loads stand at no cost until the next one.
 They send a house into recovery only once its bank falls under two seconds of income.
 Once the army's upkeep passes half of income, a recruit waits until the bank can pay the larger army for 30 seconds.
+Buildings and plants count against the army's share of income, since the upkeep lane pays them first.
 Research and influence slow down while the bank holds under 60 seconds of the army's upkeep.
 The upkeep lane may always spend at least 80% of income a second.
 A house disbands units for want of cycles only after 90 seconds short, a few at a time, until upkeep fits in 80% of income.
