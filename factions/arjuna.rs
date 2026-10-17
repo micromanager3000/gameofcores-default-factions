@@ -327,10 +327,15 @@ fn flight_progress(orders: &mut Value, world: View, me: View) {
         || me.path("units.total").num_or(0.0) < 4.0 || me.path("units.stalled").num_or(0.0) > 0.0 { return; }
     let income = me.path("rts.cpu.income").num_or(0.0);
     if income <= 0.0 || me.path("rts.cpu.bank").num_or(0.0) < income * 2.0
-        || common::unit_upkeep(me) > income * 0.5
-        // A research already under way keeps its solved puzzle. Once it finishes, the next sky tech may replace the
-        // cheaper ground upgrade that `common::budget` selected because its offer exceeds the current CPU capacity.
-        || me.path("research.tech").truthy() { return; }
+        || common::unit_upkeep(me) > income * 0.5 { return; }
+    // The engine retains the active topic and its solved puzzle when no replacement is sent. Recovery can zero its
+    // lane, though, so restore the healthy sky-path allocation without changing that topic.
+    if me.path("research.tech").truthy() {
+        let cpu = orders.entry("compute").entry("cpu");
+        cpu.entry("limits").set("research", 0.12);
+        cpu.entry("reserve").set("research", 0.02);
+        return;
+    }
     for tech in ["extraction", "dash", "ranged", "seaTraversal", "mountainTraversal", "flight", "artillery", "airWeapons"] {
         let spec = world.get("techs").get(tech);
         if me.get("techs").get(tech).truthy() || !spec.truthy() { continue; }

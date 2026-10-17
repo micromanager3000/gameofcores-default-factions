@@ -28,3 +28,19 @@ fn interceptors_and_anti_air_choose_a_visible_aircraft_first() {
         "{orders:?}"
     );
 }
+
+
+#[test]
+fn arjuna_funds_an_active_flight_without_replacing_its_topic() {
+    let (world, mut me, _) = fixture();
+    me.set("research", obj! { "tech"=>"flight" });
+    // Model the standing recovery policy that paused research while the bank recovered.
+    let mut orders = obj! { "compute"=>obj! { "cpu"=>obj! {
+        "limits"=>obj! { "research"=>0 }, "reserve"=>obj! { "research"=>0 }
+    } } };
+    let args = views(&[world, me]);
+    super::flight_progress(&mut orders, args[0], args[1]);
+    assert!(orders.get("research").is_undef(), "the existing Flight topic stands in the engine");
+    assert_eq!(orders.get("compute").get("cpu").get("limits").get("research").num(), 0.12);
+    assert_eq!(orders.get("compute").get("cpu").get("reserve").get("research").num(), 0.02);
+}

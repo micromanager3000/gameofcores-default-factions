@@ -68,7 +68,8 @@ fn escort_orders(armed: bool, privateer: bool) -> Vec<Value> {
 #[test]
 fn a_convoy_guard_breaks_off_a_merchant_chase_to_stay_with_its_cargo() {
     let orders = escort_orders(false, false);
-    assert!(orders.iter().any(|o| o.get("id").num() == 108.0 && o.get("sail").num_or(-1.0) == 0.0), "{orders:?}");
+    assert!(orders.iter().any(|o| o.get("id").num() == 108.0 && o.get("sail").num_or(-1.0) == 0.0
+        && matches!(o.get("focus"), Value::Null)), "{orders:?}");
     assert!(!orders.iter().any(|o| matches!(o.get("sail").get("chase"), Value::Num(_))), "{orders:?}");
 }
 

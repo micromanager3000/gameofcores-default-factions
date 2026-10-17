@@ -1307,11 +1307,11 @@ mod market {
         Some(format!("leasing mines in {}", p.get("name").str()))
     }
 
-    /// Mines leased out: with three or more of our slots idle (our miners can't keep up), up to two of them for five
-    /// minutes to a neighbour on that border (a partner first, else the smallest), paid by the second.
+    /// Mines leased out: each idle slot is productive for a neighbour, up to two at a time for five minutes, paid by
+    /// the second. Partners go first, then the smallest neighbour.
     fn lease_out(orders: &mut Value, world: View, me: View) -> Option<String> {
         let idle = trade::idle_mines(world, me);
-        if idle.iter().map(|m| m.slots).sum::<f64>() < 3.0 || running(me).iter().filter(|c| c.get("give").get("mines").truthy()).count() >= 2 {
+        if idle.iter().map(|m| m.slots).sum::<f64>() < 1.0 || running(me).iter().filter(|c| c.get("give").get("mines").truthy()).count() >= 2 {
             return None;
         }
         let by_id = realm::index(world);

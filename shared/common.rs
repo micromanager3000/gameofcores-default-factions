@@ -409,6 +409,9 @@ use super::{air, theme};
                 let going = if course.is_arr() { course.at(course.len().saturating_sub(1)).num() == goal } else { here == goal };
                 if goal >= 0.0 && (course.get("chase").is_num() || !going) && sea::route(world, here, goal).is_some() {
                     o.set("sail", goal);
+                    // A sea-only order does not reset focus like a land `do` order. Clear a former chase target so
+                    // the convoy guard really returns to its anchor instead of still firing at a departing merchant.
+                    o.set("focus", Value::Null);
                     send = true;
                 }
             }

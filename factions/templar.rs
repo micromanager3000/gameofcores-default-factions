@@ -10,7 +10,7 @@ use shared::common::{hauler, freighter, escort};
 
 use std::rc::Rc;
 
-program!(think, hauler, freighter, escort, miner, line, bulwark, artillery, medic, interceptor, piercer, scout, reflex, research, duel, challenge, guard, longbow, spy, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, line, bulwark, artillery, medic, interceptor, piercer, scout, wing, reflex, research, duel, challenge, guard, longbow, spy, look, build3d, live3d);
 
 fn build(hp: f64, speed: f64, strength: f64, carry: f64, vision: f64, range: Option<f64>) -> Value {
     let mut b = obj! { "hp" => hp, "speed" => speed, "strength" => strength, "carry" => carry, "vision" => vision };
@@ -36,6 +36,11 @@ fn interceptor_body() -> Value {
 }
 fn scout_body() -> Value {
     build(2.0, 4.0, 0.0, 0.0, 4.0, None)
+}
+fn wing_body(armed: bool) -> Value {
+    let mut b = build(2.0, 2.0, if armed { 1.0 } else { 3.0 }, 0.0, 0.0, if armed { Some(1.0) } else { None });
+    b.set("wings", 1.0);
+    b
 }
 
 // Extraction and armor equip the first line. Influence and faith support expansion
@@ -513,9 +518,9 @@ fn cpu_policy(world: View, me: View, orders: &Value, pressure: f64) -> Value {
         // During a siege the screen has to remain alive; at peace miners protect
         // future income, then specialized bodies follow.
         "upkeepOrder" => if urgent {
-            vec!["artillery", "bulwark", "medic", "interceptor", "miner", "line", "scout"]
+            vec!["artillery", "bulwark", "medic", "interceptor", "wing", "miner", "line", "scout"]
         } else {
-            vec!["miner", "artillery", "bulwark", "medic", "interceptor", "line", "scout"]
+            vec!["miner", "artillery", "bulwark", "medic", "interceptor", "wing", "line", "scout"]
         },
     }
 }
@@ -671,6 +676,10 @@ fn strategy(world: View, me: View) -> Value {
     if has("antiAir") && has("ranged") && !strained {
         set(&mut mix, "interceptor", if air != 0.0 { 0.17 } else { 0.06 });
     }
+    // The order keeps a small air wing after Flight; it does not displace the ground line while the bank is tight.
+    if has("flight") && !strained {
+        set(&mut mix, "wing", 0.10);
+    }
     let kind = choose_spawn(me, &mix, common::miner_room(me, &survey));
     let pick = |t: &'static str, m: &'static str| if has(t) { Some(m) } else { None };
     let mods = |a: Option<&'static str>, b: Option<&'static str>| a.into_iter().chain(b).collect::<Vec<&str>>();
@@ -682,6 +691,7 @@ fn strategy(world: View, me: View) -> Value {
         Some("medic") => spawn_one(&mut orders, me, kind, medic_body(), mods(pick("repair", "repair"), pick("scan", "scan"))),
         Some("piercer") => spawn_one(&mut orders, me, kind, interceptor_body(), if has("dash") { vec!["pierce", "dash"] } else { vec!["pierce"] }),
         Some("interceptor") => spawn_one(&mut orders, me, kind, interceptor_body(), mods(pick("antiAir", "antiAir"), pick("dash", "dash"))),
+        Some("wing") => spawn_one(&mut orders, me, kind, wing_body(has("airWeapons")), vec![]),
         _ => spawn_one(&mut orders, me, Some("scout"), scout_body(), vec![]),
     }
 
@@ -704,6 +714,7 @@ fn strategy(world: View, me: View) -> Value {
             ("piercer", 6000.0, 5.0),
             ("medic", 6000.0, 6.0),
             ("interceptor", 6000.0, 5.0),
+            ("wing", 4200.0, 3.0),
             ("line", 6000.0, 4.0),
             ("scout", 4000.0, 6.0),
         ],
@@ -1196,6 +1207,10 @@ fn interceptor(units: View, world: View, me: View) {
 
 fn piercer(units: View, world: View, me: View) {
     interceptor(units, world, me)
+}
+
+fn wing(units: View, world: View, me: View) {
+    common::fly(units, world, me);
 }
 
 fn scout(units: View, world: View, me: View) -> Vec<Value> {
