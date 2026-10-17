@@ -760,6 +760,12 @@ fn war_order(u: View, world: View, me: View) -> Option<Value> {
             return orders::to(u,"fight",n(me.get("capital")),world,me,());
         }
     }
+    // a beaten army falls back to the stage, and reinforcements wait there for a wave (common::front)
+    if !defending {
+        if let Some(o) = common::front(u, world, me, &p) {
+            return o;
+        }
+    }
     let mut o = carry(orders::to(u, if defending { "fight" } else { "capture" }, target, world, me, ()), u, &p, me);
     if let Some(o) = &mut o {
         o.set("alert", if is_str(u.get("type"), "sentry") { 8 } else { 7 });

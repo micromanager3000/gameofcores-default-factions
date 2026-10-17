@@ -22,11 +22,30 @@ Their presentation also follows their own seat.
 | Knights Templated | Combine faith, armored troops, artillery and local support. |
 | New Atlantis | Research early technologies, trade access and field specialist units. |
 | Quiet Fleet | Hold crossings, ship cargo, and pursue exposed cargo when recovery can pay. |
-| The Kernel Manifesto | Expand production, spread influence and support a broad ground army. |
+| The Kernel Manifesto | Expand production, spread influence and field line infantry with rifle and armored ranks. |
 | Null Pointer Society | Scout with cloaked units and attack with a mobile mixed force. |
 | Compute of Nations | Combine leases, hired troops, bribes, technology trade and military expansion. |
 | Emu High Command | Prioritize quick ground troops and practical ground technologies. |
 | Tabula Rasa | Learn a broad set of practical technologies and adapt its specialist force. |
+
+## Armies
+
+An army abroad compares the hit points of fighting units in its target province.
+Workers, cargo carriers, scouts and ships don't count toward either side.
+When rivals there outweigh the army 1.6 to 1, it falls back to its stage province.
+At the stage, reinforcements wait until they and the units still in the target outweigh the rivals 1.15 to 1.
+They then go back in together as one wave. Defenders, aircraft and ships keep their own orders.
+
+In CPU RTS worlds, a house runs its full strategy every third second.
+In the seconds between, it returns no orders, so its plans and CPU policy stay in force.
+It still thinks every second when a unit is stalled or the bank holds less than four seconds of income.
+
+With cargo, income arrives in loads, so the army lives on the bank between deliveries.
+A house recruits only while the bank can pay the larger army's upkeep for 30 seconds.
+Research and influence slow down when the bank holds less than 60 seconds of army upkeep.
+The upkeep lane may spend at least 80% of income in a second.
+Units stalled between deliveries stand until the next load arrives.
+A house disbands units for want of cycles after 90 seconds short, or sooner when it is over its unit cap.
 
 ## Export a program
 
