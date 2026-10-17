@@ -835,7 +835,8 @@ use super::{air, theme};
     }
 
     /// An army abroad falls back to its stage once the rivals in the province it stands in outweigh it this many times
-    /// (hit points of fighting units): it lives to come back with the next wave instead of dying to the last unit.
+    /// (hit points of fighting units), each unit once it has taken damage: it lives to come back with the next wave
+    /// instead of dying to the last unit.
     pub const FALL_BACK_ODDS: f64 = 1.6;
     /// From the stage, an army goes back in once it outweighs the rivals at the target this many times, counting those
     /// of yours still there.
@@ -879,10 +880,10 @@ use super::{air, theme};
     }
 
     /// The army's turn at the front, before a ground unit takes the plan's attack (or `target`): `Some(order)` overrides it (`None`
-    /// inside: keep standing). Abroad in the target, a unit outweighed [`FALL_BACK_ODDS`] to one falls back to the
-    /// stage. At the stage, while the target is lost (yours there outweighed that much) and those at the stage with
-    /// yours still in the target fall short of [`PUSH_ODDS`] times the rivals there, it holds the stage: reinforcements
-    /// gather into one wave instead of walking in one by one. `None` leaves the unit to the plan.
+    /// inside: keep standing). Abroad in the target, a hurt unit outweighed [`FALL_BACK_ODDS`] to one falls back to the
+    /// stage. At the stage, while yours in the target are outweighed that much and those at the stage with them fall
+    /// short of [`PUSH_ODDS`] times the rivals there, it holds the stage: reinforcements gather into one wave instead of
+    /// walking in one by one. `None` leaves the unit to the plan.
     pub fn front(u: View, world: View, me: View, pl: &Value) -> Option<Option<Value>> {
         let attack = pl.get("attack").num_or(pl.get("target").num_or(-1.0));
         let stage = pl.get("stage").num_or(-1.0);
@@ -904,10 +905,12 @@ use super::{air, theme};
             return None;
         }
         if at == attack {
-            return (!plan::here(me, u)).then(|| orders::to(u, "fight", stage, world, me, ()));
+            let hurt = u.get("hp").num_or(0.0) < u.get("hpMax").num_or(0.0);
+            return (hurt && !plan::here(me, u)).then(|| orders::to(u, "fight", stage, world, me, ()));
         }
+        // A first attack goes in on the plan. Once yours in the target are losing, the rest wait for a wave.
         let (home, _) = of(stage);
-        (plan::here(me, u) && home + ours < theirs * PUSH_ODDS).then(|| orders::to(u, "fight", stage, world, me, ()))
+        (ours > 0.0 && plan::here(me, u) && home + ours < theirs * PUSH_ODDS).then(|| orders::to(u, "fight", stage, world, me, ()))
     }
 
     // ---- unit orders on the plan ----
@@ -1251,10 +1254,21 @@ use super::{air, theme};
     // Local capital RAM; 224–239 belong to house ledgers, 249–250 to plan::share.
     const RECOVERY_PAGE: u32 = 244;
     const RECOVERY_WAIT: f64 = 12.0;
-    /// An army is retired for want of cycles only after the bank has stayed short this long (s). Cargo arrives in
-    /// loads, so a bank can run dry between deliveries; units left unpaid stand stalled at no cost until the next load.
-    /// Retiring them throws away their fabrication and leaves the faction no army when the cycles return.
+    /// With cargo, an army is retired for want of cycles only after the bank has stayed short this long (s). Cargo
+    /// arrives in loads, so a bank can run dry between deliveries; units left unpaid stand stalled at no cost until the
+    /// next load. Retiring them throws away their fabrication and leaves the faction no army when the cycles return.
+    /// Without cargo, income is steady and a short bank means the army is too big: it waits [`RECOVERY_WAIT`].
     const INSOLVENT_WAIT: f64 = 90.0;
+
+    /// Whether income comes in cargo loads, so recovery waits out a gap between them ([`INSOLVENT_WAIT`]).
+    fn patient(world: View) -> bool {
+        world.get("logistics").truthy()
+    }
+
+    /// Seconds short before recovery retires units.
+    fn insolvent_wait(world: View) -> f64 {
+        if patient(world) { INSOLVENT_WAIT } else { RECOVERY_WAIT }
+    }
     /// The least share of income the upkeep lane may spend a second, in worlds with cargo.
     const UPKEEP_LIMIT: f64 = 0.8;
     /// Seconds of army upkeep the bank should hold before research and influence spend at full rate.
@@ -1354,18 +1368,23 @@ use super::{air, theme};
     /// A house rests only while its costliest recent think is under this share of income: a think after a rest can
     /// cost more than twice as much, and it must still fit in a second's cycles.
     const REST_PEAK: f64 = 0.4;
+    /// Nor while that think came this close to its think limit. A think that runs out returns nothing, so only a think
+    /// that finishes can raise the limit; thinking every second lets one finish.
+    const REST_LIMIT: f64 = 0.9;
 
     /// Whether this second's think can rest: CPU RTS, not a full-think second, no stalled unit, the bank above four
-    /// seconds of income, a recent think peak within [`REST_PEAK`] and no recovery to end. An empty answer leaves
-    /// everything as it stands.
+    /// seconds of income, a recent think peak within [`REST_PEAK`] and [`REST_LIMIT`], and no recovery to end. An empty
+    /// answer leaves everything as it stands.
     fn resting(world: View, me: View) -> bool {
         let cpu = me.path("rts.cpu");
         if !cpu.truthy() || world.get("seconds").num_or(0.0) % THINK_EVERY == 0.0 {
             return false;
         }
         let income = cpu.get("income").num_or(0.0);
+        let limit = cpu.path("limits.think").num_or(f64::INFINITY);
+        let limit = if limit <= 1.0 { limit * income } else { limit };
         cpu.get("bank").num_or(0.0) >= income * 4.0 && me.path("units.stalled").num_or(0.0) == 0.0
-            && me.path("compute.thinkPeak").num_or(f64::INFINITY) <= income * REST_PEAK
+            && me.path("compute.thinkPeak").num_or(f64::INFINITY) <= (income * REST_PEAK).min(limit * REST_LIMIT)
             && !mem::get(me.get("ramCapital"), RECOVERY_PAGE).get("r").truthy()
     }
 
@@ -1419,7 +1438,7 @@ use super::{air, theme};
         if cycles_left() < 6000.0 { return recovery(world, me); }
         let income = me.path("rts.cpu.income").num_or(20000.0).max(1.0);
         let bank = me.path("rts.cpu.bank").num_or(0.0);
-        if me.path("units.stalled").num_or(0.0) > 0.0 && bank < income * 2.0 { return recovery(world, me); }
+        if me.path("units.stalled").num_or(0.0) > 0.0 && (!patient(world) || bank < income * 2.0) { return recovery(world, me); }
         // With no stalled units, last second's paid bill is the whole army's actual upkeep. Keep this
         // entry check cheap; a detailed body scan belongs after the planner, only when it proposes a recruit.
         let shortage = me.path("rts.cpu.last.upkeep").num_or(0.0) > income * 0.7 && bank < income * 8.0;
@@ -1427,8 +1446,13 @@ use super::{air, theme};
         // Stay in recovery until upkeep fits and a little headroom has returned, rather than switching the old
         // spending back on the first second in which upkeep happened to fit.
         if shortage || (was.get("r").truthy() && bank < income * 2.0) {
-            let e = recovery_economy(world, me);
-            return recover_with(world, me, &e, shortage);
+            return recover(world, me, shortage);
+        }
+        // A short bank's recovery leaves the think 70% of income, too little for a whole strategy. One more recovery
+        // think raises it (to 1.2 × income, the bank now holding two seconds) and the strategy resumes next second.
+        let limit = me.path("rts.cpu.limits.think").num_or(f64::INFINITY);
+        if was.get("r").truthy() && (if limit <= 1.0 { limit * income } else { limit }) < income {
+            return recovery(world, me);
         }
         let mut orders = strategy();
         // A short strategy can itself have chosen recovery; its positive miner allocation must survive this wrapper.
@@ -1451,9 +1475,11 @@ use super::{air, theme};
         for sp in orders.get("spawn").items() {
             let b = body_upkeep_value(me, sp.get("build"), sp.get("modules").len() as f64);
             let a = (e.art / (e.units.len() as f64).max(1.0)).max(me.path("costs.draw").entries().map(|(_, v)| v.num_or(0.0)).fold(0.0, f64::max));
-            // A recruit also needs the bank to carry the whole army through a gap between cargo loads.
-            let carried = !world.get("logistics").truthy() || bank >= e.demand(count + 1.0, body + b, art + a) * UPKEEP_BUFFER * 0.5;
-            if e.demand(count + 1.0, body + b, art + a) <= income * share && carried {
+            // Once the army's upkeep passes half of income, a recruit also needs the bank to carry the whole army
+            // through a gap between cargo loads.
+            let demand = e.demand(count + 1.0, body + b, art + a);
+            let carried = !patient(world) || demand <= income * 0.5 || bank >= demand * UPKEEP_BUFFER * 0.5;
+            if demand <= income * share && carried {
                 count += 1.0; body += b; art += a;
                 let mut recruit = sp.clone();
                 if !sp.get("name").truthy() {
@@ -1489,18 +1515,23 @@ use super::{air, theme};
     /// A cheap fallback used by every house's low-budget branch. Even when a map scan cannot fit, clear optional
     /// standing spending and old reserves, and leave real controller cycles for miners on the following second.
     pub fn recovery(world: View, me: View) -> Value {
+        recover(world, me, me.path("units.stalled").num_or(0.0) > 0.0)
+    }
+
+    /// Recovery while the army is short of cycles (`stalled`): the full review when it fits, else the cheap policy.
+    fn recover(world: View, me: View, stalled: bool) -> Value {
+        // The full review ranks every body; with less than a quarter to spare on its estimate it can run out.
         let review=16000.0+70.0*world.get("provinces").len() as f64+100.0*world.get("units").len() as f64;
-        if cycles_left() < review {
+        if cycles_left() < review * 1.25 {
             let mut orders = recovery_policy(me);
             let now=world.get("seconds").num_or(0.0);
-            let stalled=me.path("units.stalled").num_or(0.0)>0.0;
             let old=mem::get(me.get("ramCapital"),RECOVERY_PAGE);
             let since=if stalled {old.get("s").num_or(now).min(now)}else{now};
             ram(&mut orders, mem::put(RECOVERY_PAGE, &obj! { "r" => true,"s"=>since }, "local", None, 1).unwrap_or_default());
             // A short callback can still reduce an unpaid army without ranking every body.
             let over_cap=me.path("units.total").num_or(0.0)>me.path("units.cap").num_or(512.0);
             if stalled && ((over_cap && now-since>=RECOVERY_WAIT)
-                || (now-since>=INSOLVENT_WAIT && me.path("rts.cpu.bank").num_or(0.0)<me.path("rts.cpu.income").num_or(20000.0)*4.0)) {
+                || (now-since>=insolvent_wait(world) && me.path("rts.cpu.bank").num_or(0.0)<me.path("rts.cpu.income").num_or(20000.0)*4.0)) {
                 let mut retire=Vec::new();
                 let mut miners=0;let mut defender=false;
                 for u in world.get("units").iter(){
@@ -1517,7 +1548,7 @@ use super::{air, theme};
             return orders;
         }
         let e = recovery_economy(world, me);
-        recover_with(world, me, &e, me.path("units.stalled").num_or(0.0) > 0.0)
+        recover_with(world, me, &e, stalled)
     }
 
     fn recovery_policy(me: View) -> Value {
@@ -1608,11 +1639,12 @@ use super::{air, theme};
         }
         let income = me.path("rts.cpu.income").num_or(20000.0).max(1.0);
         let over_cap = e.count > e.cap;
-        if shortage && now - since >= if over_cap { RECOVERY_WAIT } else { INSOLVENT_WAIT } {
+        if shortage && now - since >= if over_cap { RECOVERY_WAIT } else { insolvent_wait(world) } {
             let (mut count, mut body, mut art) = (e.count, e.body, e.art);
             let mut disband = Vec::new();
-            // Over the cap, cut deep at once. Short of cycles, shed a few units at a time to 80% of income.
-            let (fits, most) = if over_cap { (0.55, 16) } else { (0.8, 4) };
+            // Over the cap or without cargo, cut deep at once. Between cargo loads, shed a few units at a time to 80%
+            // of income.
+            let (fits, most) = if over_cap || !patient(world) { (0.55, 16) } else { (0.8, 4) };
             for &(i, _) in ranked.iter().rev() {
                 if e.demand(count, body, art) <= income * fits || disband.len() >= most { break; }
                 if protected.contains(&i) || e.units[i].unit.get("hired").truthy() { continue; }
