@@ -1584,12 +1584,14 @@ use super::{air, theme};
         let mut body = e.body + (count - e.units.len() as f64) * mean;
         let mut art = e.art + (count - e.count) * (e.art / e.count.max(1.0));
         let mut keep = Vec::new();
+        // The upkeep lane pays the house's buildings and plants before any unit, so they come out of the army's share.
+        let built = building_upkeep(me);
         for sp in orders.get("spawn").items() {
             let b = body_upkeep_value(me, sp.get("build"), sp.get("modules").len() as f64);
             let a = (e.art / (e.units.len() as f64).max(1.0)).max(me.path("costs.draw").entries().map(|(_, v)| v.num_or(0.0)).fold(0.0, f64::max));
             // Once the army's upkeep passes half of income, a recruit also needs the bank to carry the whole army
             // through a gap between cargo loads.
-            let demand = e.demand(count + 1.0, body + b, art + a);
+            let demand = e.demand(count + 1.0, body + b, art + a) + built;
             let carried = !patient(world) || demand <= income * 0.5 || bank >= demand * UPKEEP_BUFFER * 0.5;
             if demand <= income * share && carried {
                 count += 1.0; body += b; art += a;
