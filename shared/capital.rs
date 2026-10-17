@@ -22,6 +22,8 @@ pub struct Civic<'a> {
     pub screen_title: Option<&'a str>,
     pub banners: f64,
     pub pole_h: f64,
+    /// Whether the hall forecourt has its two decorative lamps.
+    pub forecourt_lights: bool,
 }
 
 impl Default for Civic<'_> {
@@ -40,6 +42,7 @@ impl Default for Civic<'_> {
             screen_title: None,
             banners: 6.0,
             pole_h: 15.0,
+            forecourt_lights: true,
         }
     }
 }
@@ -102,19 +105,21 @@ pub fn civic(info: View, o: &Civic) -> Vec<Value> {
         ("label", Value::from(o.hall_label)),
         ("pri", Value::Num(8.0)),
     ]));
-    // The hall has a lit forecourt at every capital.  They are small, bounded pieces,
-    // so a low cosmetic budget still keeps the landmark and its approach readable.
-    for x in [-34.0, -18.0] {
-        out.push(js::object(vec![
-            ("type", Value::from("light")),
-            ("x", Value::Num(x)),
-            ("z", Value::Num(-11.5)),
-            ("y", Value::Num(4.0)),
-            ("post", Value::Bool(true)),
-            ("power", Value::Num(1.2)),
-            ("color", Value::from(o.trim)),
-            ("pri", Value::Num(6.0)),
-        ]));
+    // Decorative lamps yield first when a house has spent its base scene budget on
+    // authored machinery. That preserves its existing landmark composition at 224.
+    if o.forecourt_lights {
+        for x in [-34.0, -18.0] {
+            out.push(js::object(vec![
+                ("type", Value::from("light")),
+                ("x", Value::Num(x)),
+                ("z", Value::Num(-11.5)),
+                ("y", Value::Num(4.0)),
+                ("post", Value::Bool(true)),
+                ("power", Value::Num(1.2)),
+                ("color", Value::from(o.trim)),
+                ("pri", Value::Num(6.0)),
+            ]));
+        }
     }
     out.push(js::object(vec![
         ("type", Value::from("screen")),

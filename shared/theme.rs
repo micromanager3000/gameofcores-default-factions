@@ -232,7 +232,7 @@ impl Theme {
             5 => obj! { "type" => "statue", "pose" => "robed", "x" => 50, "z" => -30, "h" => 5, "material" => "stone", "color" => "#b8322f", "trim" => "#f2c230", "label" => "THE READER", "pri" => 4 },
             6 => obj! { "type" => "tree", "kind" => "crystal", "x" => -50, "z" => -30, "h" => 22, "color" => "#42d4ff", "pri" => 4 },
             7 => obj! { "type" => "statue", "pose" => "figure", "x" => 50, "z" => -30, "h" => 5, "material" => "stone", "color" => "#d7b76c", "trim" => "#1c3e6c", "label" => "THE EXCHANGE", "pri" => 4 },
-            8 => obj! { "type" => "statue", "pose" => "mech", "x" => -50, "z" => -30, "h" => 5, "material" => "metal", "color" => "#7a8a6a", "trim" => "#d8b44c", "label" => "THE LOOKOUT", "pri" => 4 },
+            8 => obj! { "type" => "statue", "pose" => "mech", "x" => -56, "z" => -22, "h" => 5, "material" => "metal", "color" => "#7a8a6a", "trim" => "#d8b44c", "label" => "THE LOOKOUT", "pri" => 4 },
             _ => obj! { "type" => "statue", "pose" => "orb", "x" => 50, "z" => -30, "h" => 5, "material" => "glass", "color" => "#e9fff0", "trim" => "#d4b54a", "label" => "THE SENSE", "pri" => 4 },
         };
         if mark.truthy() { sc.entry("pieces").push(mark); }
@@ -1521,6 +1521,9 @@ fn scene3(info: View, budget: f64) -> Value {
             hall_label: Some("ENGINE-HOUSE"),
             screen_title: Some("EXPERIMENTS OF LIGHT"),
             banners: 2.0,
+            // At its base budget, preserve the furnaces, smoke and data lantern;
+            // the generic approach lamps join once there is room for them.
+            forecourt_lights: budget >= 226.0,
             ..Civic::default()
         },
     );
