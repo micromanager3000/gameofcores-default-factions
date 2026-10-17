@@ -536,6 +536,22 @@ fn house_massing(a: &mut Art, style: usize, role: Role) {
         // Flux: the service plan opens into a planted court under a glass bowl.
         _ => { a.add(b'g', x, y, 0.16, w * 1.08, 0.12, d, b'g'); a.add(b'a', x, y + d * 0.18, 0.16, w, h * 0.9, d * 0.34, b'm'); a.add(b'D', x, y, 0.24, w * 0.64, h * 0.34, 0., b'G'); }
     }
+    if role != Role::Hall { return; }
+    // Halls get their actual side volumes here. The old shared classical wings
+    // are removed below, so a court reads as a ger camp, temple, laboratory,
+    // dock pavilion, works hall, portal court, exchange, field base, or garden.
+    match style {
+        0 => { a.add(b'd', -1.28, .35, .16, .92, .42, 0., b'm'); a.add(b'D', -1.28, .35, .58, 1.02, .62, 0., b'F'); a.add(b'd', 1.28, .35, .16, .82, .36, 0., b'm'); a.add(b'D', 1.28, .35, .52, .92, .54, 0., b'F'); }
+        1 => { a.add(b'T', -1.22, .42, .16, .94, 1.16, .84, b'n'); a.add(b'T', 1.22, .42, .16, .94, 1.16, .84, b'n'); }
+        2 => { a.add(b'a', -1.28, .42, .16, .78, 1.48, .34, b's'); a.add(b'a', 1.28, .42, .16, .78, 1.48, .34, b's'); }
+        3 => { a.add(b'd', -1.18, .42, .16, .92, .58, 0., b'M'); a.add(b'D', -1.18, .42, .74, 1.02, .62, 0., b'G'); a.add(b'd', 1.18, .42, .16, .92, .58, 0., b'M'); a.add(b'D', 1.18, .42, .74, 1.02, .62, 0., b'G'); }
+        4 => { a.add(b'T', -1.25, .38, .16, .98, 1.30, .84, b'F'); a.add(b'T', 1.25, .38, .16, .98, 1.30, .84, b'F'); }
+        5 => { a.add(b'd', -1.25, .35, .16, .92, 1.06, 0., b'b'); a.add(b'd', 1.25, .35, .16, .92, 1.06, 0., b'b'); }
+        6 => { a.add(b'h', -1.25, .35, .16, .64, 2.18, .64, b'G'); a.add(b'h', 1.25, .35, .16, .64, 1.72, .64, b'G'); }
+        7 => { a.add(b'h', -1.22, .35, .16, .98, .86, .78, b'b'); a.add(b'r', -1.22, .35, 1.02, 1.08, .46, .88, b'k'); a.add(b'h', 1.22, .35, .16, .98, .86, .78, b'b'); a.add(b'r', 1.22, .35, 1.02, 1.08, .46, .88, b'k'); }
+        8 => { a.add(b'h', -1.24, .35, .16, 1.05, .58, .82, b'M'); a.add(b'd', 1.24, .35, .16, .88, 1.02, 0., b'M'); }
+        _ => { a.add(b'g', -1.25, .35, .16, .98, .12, .84, b'g'); a.add(b'a', -1.25, .48, .16, .94, 1.22, .28, b'm'); a.add(b'g', 1.25, .35, .16, .98, .12, .84, b'g'); a.add(b'a', 1.25, .48, .16, .94, 1.22, .28, b'm'); }
+    }
 }
 /// Secondary readable marker for the founder's craft at the forecourt.
 fn house_mark(a: &mut Art, style: usize, role: Role) {
@@ -606,7 +622,7 @@ pub fn architecture(style: usize, role: Role) -> Value {
     let src = if i == 0 { f[7].to_string() } else {
         let s = DESIGNS[i - 1];
         match role {
-            Role::Hall => s.replace("h,.4,.35,2.2,1.5,1.5/W;R,.4,1.85,2.2,1.5;", ""),
+            Role::Hall => "p,.1,,3.6,.35,3.1/B;p,-1.6,,1.4,.18,.45/B;b.85,-1.35,.35,.45,2;l.42,-1.42,.35,.16,.75/g".to_string(),
             Role::Yard => s.replace("h-.24,.76,.15,2.08,1.15,.8/V;=x-.24,.76,1.3,1.91,.14,.74/F;~r-.24,.76,1.3,2.18,.36,.9/F;", ""),
             Role::Works => s.replace("h-.34,.41,.15,1.65,1.3,1.05/X;r-.34,.41,1.45,1.73,.5,1.13/F;", ""),
             Role::Bay => s.replace("h,.45,.15,1.88,1.5,1.05/V;R,.45,1.65,1.875,1.05;", ""),
