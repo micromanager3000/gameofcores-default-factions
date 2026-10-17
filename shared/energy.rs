@@ -341,9 +341,73 @@ fn sell(orders: &mut Value, world: View, me: View) {
 // ---------------------------------------------------------------------------------------------------------------------
 // How plants look. Pieces are in cells from the site's centre (x east, y north, z up), as in `structures`.
 
+fn shell_piece(pieces: &mut Vec<Value>, kind: &str, x: f64, y: f64, z: f64, w: f64, h: f64, d: f64, tone: &str) {
+    let mut p = obj! { "kind" => kind, "x" => x, "y" => y, "z" => z, "w" => w, "h" => h };
+    if d > 0.0 { p.set("d", d); }
+    if !tone.is_empty() { p.set("tone", tone); }
+    pieces.push(p);
+}
+
+/// The working machinery has a common public role, but its principal housing is
+/// owned by the founder.  These pieces deliberately sit over the generic plant
+/// core rather than as unrelated corner ornaments: batteries become containers,
+/// reactors containment works, and wind and water plants get their own frames.
+fn plant_shell(pieces: &mut Vec<Value>, kind: &str, style: usize) {
+    let style = style.min(9);
+    let (body, crown, mat, trim) = match style {
+        0 => ("drum", "dome", "marble", "faction"),     // ger and standard
+        1 => ("tiers", "dome", "marble", "faction"),    // temple and lotus
+        2 => ("arch", "spire", "stone", "faction"),     // vaulted Gothic works
+        3 => ("dome", "torus", "glass", "gold"),        // laboratory glassware
+        4 => ("tiers", "spire", "wood", "faction"),     // timber pavilion and mast
+        5 => ("drum", "dome", "brick", "faction"),      // ribbed civic drum
+        6 => ("torus", "spire", "glass", "faction"),    // open portal and antenna
+        7 => ("hall", "roof", "brick", "gold"),         // slate pump-house, copper
+        8 => ("drum", "dome", "metal", "sand"),         // corrugated field tank
+        _ => ("garden", "dome", "jade", "glass"),       // planted, translucent pods
+    };
+    match kind {
+        "solar" => { // Arrays remain visible; a house-specific collecting frame stands behind them.
+            shell_piece(pieces, body, 0.0, 0.78, 0.12, 1.34, 0.52, 1.02, mat);
+            shell_piece(pieces, crown, 0.0, 0.78, 0.64, 1.12, 0.38, 0.82, trim);
+            if style == 2 || style == 6 { shell_piece(pieces, "spire", 1.02, 0.78, 0.12, 0.14, 1.28, 0., trim); }
+        }
+        "wind" => { // The rotor remains a turbine, but its base reads as camp, temple, tower, mast, or pod.
+            shell_piece(pieces, body, 0.0, 0.72, 0.12, 1.04, 0.62, 0.88, mat);
+            shell_piece(pieces, crown, 0.0, 0.72, 0.74, 0.76, 0.34, 0.64, trim);
+            if style == 4 || style == 7 { shell_piece(pieces, "spire", 1.0, 0.72, 0.12, 0.16, 1.45, 0., trim); }
+        }
+        "hydro" | "tidal" => { // A dam/barrage stays the hero, capped by its founder's gate or control house.
+            shell_piece(pieces, body, 0.0, 0.68, 0.72, 1.26, 0.64, 0.74, mat);
+            shell_piece(pieces, crown, 0.0, 0.68, 1.36, 0.94, 0.40, 0.62, trim);
+            if style == 2 || style == 4 || style == 7 { shell_piece(pieces, "spire", 0.94, 0.68, 0.72, 0.14, 1.32, 0., trim); }
+        }
+        "boiler" | "geo" => { // Heat works are enclosed as a proper house, with stacks/wells retained behind it.
+            shell_piece(pieces, body, -0.18, 0.18, 0.12, 1.72, 1.02, 1.20, mat);
+            shell_piece(pieces, crown, -0.18, 0.18, 1.14, 1.26, 0.56, 0.90, trim);
+            if style == 0 || style == 2 || style == 4 { shell_piece(pieces, "spire", 0.84, 0.34, 0.12, 0.16, 1.72, 0., trim); }
+        }
+        "reactor" => { // Containment reads differently in every house but never hides the cooling towers.
+            shell_piece(pieces, body, 0.18, -0.56, 0.12, 1.52, 1.16, 1.26, mat);
+            shell_piece(pieces, crown, 0.18, -0.56, 1.28, 1.26, 0.66, 1.02, trim);
+            if style == 6 { shell_piece(pieces, "spire", -0.72, -0.56, 0.12, 0.14, 1.72, 0., trim); shell_piece(pieces, "spire", 1.08, -0.56, 0.12, 0.14, 1.42, 0., trim); }
+        }
+        "fusion" => { // Each house wraps the common fusion ring in a distinct support or dome vocabulary.
+            shell_piece(pieces, body, 0.0, 0.76, 0.12, 1.62, 0.72, 1.30, mat);
+            shell_piece(pieces, crown, 0.0, 0.76, 0.84, 1.30, 0.54, 1.06, trim);
+            if style == 3 || style == 6 { shell_piece(pieces, "light", 0.0, 0.76, 1.38, 0.22, 0.34, 0., trim); }
+        }
+        _ => { // Battery banks become the house's actual storage vessel, not an unrelated decoration.
+            shell_piece(pieces, body, 0.0, 0.38, 0.12, 1.82, 1.02, 1.32, mat);
+            shell_piece(pieces, crown, 0.0, 0.38, 1.14, 1.42, 0.52, 1.04, trim);
+            if style == 5 || style == 7 || style == 8 { shell_piece(pieces, "stack", 0.94, 0.38, 0.12, 0.18, 1.48, 0., trim); }
+        }
+    }
+}
+
 /// A plant's appearance: its kind's machinery, more of it the bigger the plant, on the house's ground.
 pub fn look(kind: &str, cap: f64, style: usize) -> Value {
-    let base = ["stone", "wood", "marble", "glass", "metal", "brick", "dark", "jade", "sand"][style.min(8)];
+    let base = ["stone", "marble", "stone", "metal", "wood", "brick", "dark", "brick", "sand", "marble"][style.min(9)];
     let mut pieces: Vec<Value> = vec![obj! { "kind" => "platform", "x" => 0, "y" => 0, "z" => 0, "w" => 2.6, "h" => 0.12, "d" => 2.2, "tone" => base }];
     let mut add = |kind: &str, x: f64, y: f64, z: f64, w: f64, h: f64, d: f64, rot: f64, tone: &str| {
         let r = |v: f64| (v * 100.0).round() / 100.0;
@@ -416,5 +480,6 @@ pub fn look(kind: &str, cap: f64, style: usize) -> Value {
             "Battery bank"
         }
     };
+    plant_shell(&mut pieces, kind, style);
     obj! { "name" => name, "pieces" => pieces }
 }
