@@ -1221,6 +1221,7 @@ fn look2(b: f64) -> Value {
             "medic" => arr!["hospitaller", "care", "Hospitaller"],
             "piercer" => arr!["crossbowman", "crossbow", "Crossbowman"],
             "interceptor" => arr!["turcopole", "shortbow", "Turcopole"],
+            "wing" => arr!["crusader", "sword", "Sky knight"],
             "scout" => arr!["marshal", "", "Marshal"],
         },
         "arms" => obj! {
