@@ -184,22 +184,38 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
     let land: Vec<View> = world.get("provinces").iter().filter(|p| same(p.get("owner"), id) && p.get("power").truthy()).collect();
     if land.is_empty() { return; }
     let find = |pid: f64| land.iter().copied().find(|p| p.get("id").num() == pid);
-    // what the plants it has make in a day, on average, and how much of that comes and goes with the sky
-    let (mut expected, mut fickle) = (e.get("house").num_or(3.0), 0.0);
+    // Each grid island balances alone (`me.energy.islands`): a plant lights only the island it stands on, and the house
+    // generator only the capital's. Overseas towns and cut-off provinces need plants of their own.
+    let islands: Vec<View> = e.get("islands").iter().collect();
+    if islands.is_empty() { return; }
+    let home = islands.iter().position(|i| i.get("capital").truthy()).unwrap_or(0);
+    let island = |pid: f64| islands.iter().position(|i| i.get("provinces").has_num(pid));
+    let house = e.get("house").num_or(3.0);
+    // what the plants on each island make in a day, on average, and how much of that comes and goes with the sky
+    let (mut expected, mut fickle) = (vec![0.0; islands.len()], vec![0.0; islands.len()]);
+    expected[home] = house;
     for s in &mine {
         let Some(p) = find(s.get("p").num()) else { continue };
+        let Some(i) = island(s.get("p").num()) else { continue };
         for q in s.path("power.ports").iter() {
             let kind = q.get("kind").str();
             let mw = q.get("capacity").num_or(0.0) * duty(kind, p);
-            expected += mw;
-            if variable(kind) { fickle += mw; }
+            expected[i] += mw;
+            if variable(kind) { fickle[i] += mw; }
         }
     }
-    let demand = e.get("demand").num_or(0.0);
-    // the house generator carries a young realm; plants follow the draw once the mines outgrow it
-    if demand < e.get("house").num_or(3.0) * 0.8 { return; }
-    let target = demand * d.margin + 0.5;
-    if building == 1 && expected + 1.5 >= target { return; }
+    // The islands short of their draw × margin, the furthest short first. The house generator carries a young capital
+    // island, and plants follow the draw once its mines outgrow it; any other island gets a plant from its first fifth
+    // of a MW of draw.
+    let mut wants: Vec<(usize, f64)> = Vec::new();
+    for (i, isl) in islands.iter().enumerate() {
+        let draw = isl.get("demand").num_or(0.0);
+        if (i == home && draw < house * 0.8) || draw < 0.2 { continue; }
+        let gap = draw * d.margin + if i == home { 0.5 } else { 0.2 } - expected[i];
+        if gap > 0.0 { wants.push((i, gap)); }
+    }
+    wants.sort_by(|a, b| b.1.total_cmp(&a.1));
+    if building == 1 && wants.first().map_or(0.0, |w| w.1) <= 1.5 { return; }
     // The first construction second (a twelfth of the quote) comes out of the fabrication lane when the site is
     // accepted. A policy sent this second makes room for it; otherwise the plant fits what the lane has left. The
     // rest is charged over the next twelve seconds.
@@ -212,15 +228,16 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
     let kinds = world.path("energy.kinds");
     let ids: Vec<f64> = land.iter().map(|p| p.get("id").num()).collect();
     let interior = |p: View| p.get("adj").iter().all(|q| ids.contains(&q.num()));
-    let mut picks: Vec<Pick> = Vec::new();
-    if expected < target {
-        let short = target - expected;
+    // the two islands furthest short, in turn, until one has a site
+    for &(at, short) in wants.iter().take(2) {
+        let shore = islands[at].get("provinces");
+        let mut picks: Vec<Pick> = Vec::new();
         for (rank, kind) in d.kinds.iter().copied().enumerate() {
             if cycles_left() < 8000.0 { break; }
             if !open(world, me, kind) { continue; }
             let k = kinds.get(kind);
             let (lo, hi, quote) = (k.get("min").num_or(0.1), k.get("max").num_or(8.0), k.get("quote").num_or(1e12));
-            for p in land.iter().copied().take(24) {
+            for p in land.iter().copied().filter(|p| shore.has_num(p.get("id").num())).take(24) {
                 if cycles_left() < 9000.0 { break; }
                 let w = p.get("power");
                 let room = match kind {
@@ -243,25 +260,31 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
                 picks.push(Pick { p, kind, cap, cost: quote * cap, score });
             }
         }
+        if place(orders, me, sites, &units, picks, now, fab, policy) { return; }
     }
-    // batteries once the sky makes much of the power
-    if picks.is_empty() && d.store > 0.0 && fickle > 0.35 * expected && open(world, me, "battery") {
+    // batteries at the capital once the sky makes much of its island's power
+    if d.store > 0.0 && fickle[home] > 0.35 * expected[home] && open(world, me, "battery") {
+        let demand = islands[home].get("demand").num_or(0.0);
         let want = demand * d.store;
-        let have = e.get("storage").num_or(0.0);
+        let have = islands[home].get("storage").num_or(0.0);
         let quote = kinds.path("battery.quote").num_or(1e12);
         // a bank holds a minute of draw; more banks follow
         let cap = (want - have).min(demand * 60.0).min(spend / quote).min(2400.0).round();
         if have < want * 0.8 && cap >= 10.0 {
             let capital = land.iter().copied().find(|p| same(p.get("id"), me.get("capital"))).unwrap_or(land[0]);
-            picks.push(Pick { p: capital, kind: "battery", cap, cost: quote * cap, score: 0.0 });
+            place(orders, me, sites, &units, vec![Pick { p: capital, kind: "battery", cap, cost: quote * cap, score: 0.0 }], now, fab, policy);
         }
     }
+}
+
+/// Orders the best of `picks` (the four cheapest) whose province has room for its shell beside a builder.
+#[allow(clippy::too_many_arguments)]
+fn place(orders: &mut Value, me: View, sites: View, units: &[View], mut picks: Vec<Pick>, now: f64, fab: f64, policy: bool) -> bool {
     picks.sort_by(|a, b| a.score.total_cmp(&b.score));
-    // the best site with room for the shell and a builder at hand
     for pick in picks.iter().take(4) {
-        if cycles_left() < 25000.0 { return; }
+        if cycles_left() < 25000.0 { return false; }
         let r = (1.2 + 0.18 * pick.cap.min(10.0)).min(3.2);
-        let Some((x, y)) = super::structures::spot(pick.p, sites, r, &units) else { continue };
+        let Some((x, y)) = super::structures::spot(pick.p, sites, r, units) else { continue };
         let pid = pick.p.get("id").num();
         let site = obj! { "key" => format!("power-{pid:.0}-{now:.0}"), "p" => pid, "x" => x, "y" => y,
             "shell" => obj! { "radius" => r, "height" => 2.0, "integrity" => 1.0 },
@@ -272,8 +295,9 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
             let deposit = (pick.cost + 2000.0 * price(me)) / 12.0;
             orders.entry("compute").entry("cpu").entry("limits").set("fabrication", (fab + deposit).round());
         }
-        return;
+        return true;
     }
+    false
 }
 
 fn price(me: View) -> f64 { me.path("rts.costs.priceLevel").num_or(1.0).max(0.01) }

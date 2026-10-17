@@ -58,9 +58,9 @@ const GOODS: [&str; 8] = ["extraction", "seaTraversal", "mountainTraversal", "in
 /// The tier-2 techs the army fields (medics, artillery, scanners): researched in this order whoever holds them, before
 /// any world first.
 const ARMY: [&str; 3] = ["repair", "artillery", "scan"];
-// In a world with energy, the road to reactors comes before the army's tier-2 techs: rift wells, batteries, fission.
-// Fusion waits its turn in TECHS, after the army.
-const POWER: [&str; 3] = ["drilling", "storage", "fission"];
+// In a world with energy, rift wells and batteries come before the army's tier-2 techs. Fission and fusion wait their
+// turn in TECHS, after the army.
+const POWER: [&str; 2] = ["drilling", "storage"];
 
 // ---- JavaScript's arithmetic, where this program follows it ----
 

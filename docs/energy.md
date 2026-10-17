@@ -25,19 +25,26 @@ is done. Kinds it can't build yet are skipped.
 Battery store is seconds of the house's draw. Arjuna keeps its 45% reserve only while the sun is up over its capital,
 and 40% of it at night. Every other house keeps 40% of its reserve.
 
-New Atlantis researches drilling, storage and fission before its army technologies in worlds with energy. Fusion
-comes after its army technologies.
+New Atlantis researches drilling and storage before its army technologies in worlds with energy. Fission and fusion
+come after its army technologies.
 
 ## When a plant is ordered
 
 The planner looks for a plant every three seconds. It skips the second the building planner (`shared/structures.rs`)
-runs, every fifth second, and it starts only with 30,000 cycles of think left. It orders one when all of these hold:
+runs, every fifth second, and it starts only with 30,000 cycles of think left.
 
-- The house's draw (`me.energy.demand`) is at least 80% of its house generator. A young realm runs on the generator.
-- Its expected supply is below its draw × margin + 0.5 MW. Expected supply counts the generator and each plant at its
-  average output over a day.
+Each grid island in `me.energy.islands` balances alone. A plant lights only the island it stands on, and the house
+generator lights only the capital's island, so an overseas town needs a plant of its own. The planner works out each
+island's expected supply: each of its plants at its average output over a day, and the generator on the capital's
+island. An island is short when that is below its draw × margin, plus 0.5 MW on the capital's island and 0.2 MW on any
+other. The planner serves the island furthest short first, then the next one if the first has no site.
+
+It orders a plant when all of these hold:
+
+- The island draws at least 0.2 MW. The capital's island must draw at least 80% of the house generator, so a young
+  realm runs on the generator.
 - No unit is stalled.
-- Fewer than two of its plants are going up, and the second only while the grid is more than 1.5 MW short of the target.
+- Fewer than two of its plants are going up, and the second only while an island is more than 1.5 MW short.
 - Its bank holds one second of income above a floor. The floor is five seconds of income, or two while the grid meets
   less than 92% of its draw.
 
@@ -46,16 +53,17 @@ below four seconds of income, so a plant never pushes a healthy house into recov
 
 ## Which plant
 
-Each kind the house can build is sized for the shortfall, up to the room the province has for it, the kind's limit and
-4 MW (10 MW for reactors and fusion). The planner prefers several small plants over one large one. Each goes up sooner
-and a raid takes less.
+Each kind the house can build on the island is sized for its shortfall, up to the room the province has for it, the
+kind's limit and 4 MW (10 MW for reactors and fusion). The planner prefers several small plants over one large one.
+Each goes up sooner and a raid takes less.
 
 It ranks every candidate by quote ÷ average output, so the cheapest steady megawatt wins. Each step down the house's
 list of kinds adds 40%. A border province adds 30%. A boiler's cost counts three times, because it burns cargo that
 would otherwise be income. A boiler needs cargo in its town's depot.
 
-When the sky makes more than 35% of the house's power, it adds batteries at the capital until they hold its store.
-Each battery holds up to a minute of draw and at most 2,400 MW·s.
+When no plant is ordered and the sky makes more than 35% of the capital island's power, the house adds batteries at
+the capital until they hold its store of that island's draw. Each battery holds up to a minute of draw and at most
+2,400 MW·s.
 
 The best four candidates are tried in order. The first with room for its shell beside a living builder is ordered.
 The search stops when fewer than 25,000 cycles of think are left, so think never runs out and loses its orders.
