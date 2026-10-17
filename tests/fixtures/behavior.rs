@@ -218,3 +218,16 @@ fn a_full_think_runs_every_third_second_while_nothing_presses() {
     me.entry("units").set("stalled", 1);
     assert!(think_at(&mut world, &me, 4.0), "a stalled unit brings the think back every second");
 }
+
+#[test]
+fn timed_jobs_come_due_on_full_thinks_for_every_house() {
+    // a job every 8 s comes due every 9 s on a full-think second, whatever the stagger
+    for id in 0..12 {
+        let due: Vec<u32> = (1..=90).filter(|&t| common::every(t as f64, 8.0, id as f64)).collect();
+        assert_eq!(due.len(), 10, "id {id}: {due:?}");
+        assert!(due.iter().all(|t| t % 3 == 0) && due.windows(2).all(|w| w[1] - w[0] == 9), "id {id}: {due:?}");
+    }
+    // a 30 s job comes due once in 30 s for every house, and a job shorter than the spacing on every full think
+    assert!((0..12).all(|id| (1..=30).filter(|&t| common::every(t as f64, 30.0, id as f64)).count() == 1));
+    assert!((1..=9).filter(|&t| common::every(t as f64, 2.0, 0.0)).eq([3, 6, 9]));
+}

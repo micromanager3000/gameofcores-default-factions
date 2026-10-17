@@ -834,7 +834,7 @@ fn chancery(orders: &mut Value, world: View, me: View, plan: &Value, clock: &mut
     }
     // a letter to one court after another
     // on a fixed beat rather than the RAM clock: a clock write that doesn't land must not send a letter every second
-    let beat = |every: f64| (now + me.get("id").num_or(0.0) * 7.0) % every == 0.0;
+    let beat = |every: f64| common::every(now, every, me.get("id").num_or(0.0) * 7.0);
     if cycles_left() > 6000.0 && beat(60.0) {
         letters(orders, world, me, court, now, foe, attack);
     }
@@ -858,8 +858,8 @@ fn chancery(orders: &mut Value, world: View, me: View, plan: &Value, clock: &mut
         }
     }
     // propaganda on the target too once it has influence, so it may turn to us before the push lands (a standing order,
-    // worked out again every 8 seconds), and in the three border provinces likeliest to turn
-    if me.get("techs").get("influence").truthy() && (now + n(me_id)) % 8.0 == 0.0 {
+    // worked out again every 9 seconds), and in the three border provinces likeliest to turn
+    if me.get("techs").get("influence").truthy() && common::every(now, 8.0, n(me_id)) {
         orders.set("propaganda", Value::arr());
         let income = me.get("rts").get("cpu").get("income").or(me.get("compute").get("cycles").or(14000.0));
         if foe >= 0.0 && sway::reach(world, me, n(target.get("id"))) {

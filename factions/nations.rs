@@ -942,7 +942,7 @@ mod market {
             let mut p = purse(orders, me, true);
             largesse(orders, world, me, &mut p);
         }
-        if me.get("techs").get("influence").truthy() && (now + me.get("id").num()) % 8.0 == 0.0 {
+        if me.get("techs").get("influence").truthy() && common::every(now, 8.0, me.get("id").num()) {
             propaganda(orders, world, me);
         }
         if due(clock, "mi", 70.0, now) && !mood.threatened {
@@ -1247,7 +1247,7 @@ mod market {
         }
     }
 
-    /// Propaganda, a standing order worked out again every 8 seconds: in the four rival provinces on our border likeliest
+    /// Propaganda, a standing order worked out again every 9 seconds: in the four rival provinces on our border likeliest
     /// to turn, where it makes our bribes go a quarter further.
     fn propaganda(orders: &mut Value, world: View, me: View) {
         let income = me.get("rts").get("cpu").get("income").or(me.get("compute").get("cycles").or(14000.0));
