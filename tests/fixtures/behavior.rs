@@ -197,6 +197,12 @@ fn a_full_think_runs_every_third_second_while_nothing_presses() {
     };
     assert!(think_at(&mut world, &me, 3.0));
     assert!(!think_at(&mut world, &me, 4.0));
+    let mut costly = me.clone();
+    costly.entry("compute").set("thinkPeak", 20000);
+    assert!(think_at(&mut world, &costly, 4.0), "a think costing over 40% of income runs every second");
+    let mut leaving = me.clone();
+    leaving.set("ramCapital", ram_pages(&obj! {"ram"=>mem::put(244,&obj!{"r"=>true,"s"=>0},"local",None,1).unwrap()}));
+    assert!(think_at(&mut world, &leaving, 4.0), "a house leaving recovery thinks at once");
     me.entry("units").set("stalled", 1);
     assert!(think_at(&mut world, &me, 4.0), "a stalled unit brings the think back every second");
 }

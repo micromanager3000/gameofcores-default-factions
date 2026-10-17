@@ -1351,15 +1351,22 @@ use super::{air, theme};
     /// Seconds between full thinks while nothing presses. Orders, plans and the CPU policy stand between them, and the
     /// cycles a full think costs go to the army instead.
     const THINK_EVERY: f64 = 3.0;
+    /// A house rests only while its costliest recent think is under this share of income: a think after a rest can
+    /// cost more than twice as much, and it must still fit in a second's cycles.
+    const REST_PEAK: f64 = 0.4;
 
-    /// Whether this second's think can rest: CPU RTS, not a full-think second, no stalled unit and the bank above four
-    /// seconds of income. An empty answer leaves everything as it stands.
+    /// Whether this second's think can rest: CPU RTS, not a full-think second, no stalled unit, the bank above four
+    /// seconds of income, a recent think peak within [`REST_PEAK`] and no recovery to end. An empty answer leaves
+    /// everything as it stands.
     fn resting(world: View, me: View) -> bool {
         let cpu = me.path("rts.cpu");
         if !cpu.truthy() || world.get("seconds").num_or(0.0) % THINK_EVERY == 0.0 {
             return false;
         }
-        cpu.get("bank").num_or(0.0) >= cpu.get("income").num_or(0.0) * 4.0 && me.path("units.stalled").num_or(0.0) == 0.0
+        let income = cpu.get("income").num_or(0.0);
+        cpu.get("bank").num_or(0.0) >= income * 4.0 && me.path("units.stalled").num_or(0.0) == 0.0
+            && me.path("compute.thinkPeak").num_or(f64::INFINITY) <= income * REST_PEAK
+            && !mem::get(me.get("ramCapital"), RECOVERY_PAGE).get("r").truthy()
     }
 
     fn govern_units(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
@@ -1604,8 +1611,10 @@ use super::{air, theme};
         if shortage && now - since >= if over_cap { RECOVERY_WAIT } else { INSOLVENT_WAIT } {
             let (mut count, mut body, mut art) = (e.count, e.body, e.art);
             let mut disband = Vec::new();
+            // Over the cap, cut deep at once. Short of cycles, shed a few units at a time to 80% of income.
+            let (fits, most) = if over_cap { (0.55, 16) } else { (0.8, 4) };
             for &(i, _) in ranked.iter().rev() {
-                if e.demand(count, body, art) <= income * 0.8 || disband.len() >= 4 { break; }
+                if e.demand(count, body, art) <= income * fits || disband.len() >= most { break; }
                 if protected.contains(&i) || e.units[i].unit.get("hired").truthy() { continue; }
                 disband.push(e.units[i].unit.get("id").value());
                 count -= 1.0; body -= e.units[i].body; art -= e.units[i].art;

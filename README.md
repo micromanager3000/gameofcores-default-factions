@@ -38,14 +38,16 @@ They then go back in together as one wave. Defenders, aircraft and ships keep th
 
 In CPU RTS worlds, a house runs its full strategy every third second.
 In the seconds between, it returns no orders, so its plans and CPU policy stay in force.
-It still thinks every second when a unit is stalled or the bank holds less than four seconds of income.
+It still thinks every second when a unit is stalled, the bank holds less than four seconds of income or it is leaving recovery.
+It also thinks every second while its costliest recent think passes 40% of income, so a think after a rest still fits in a second.
 
 With cargo, income arrives in loads, so the army lives on the bank between deliveries.
 A house recruits only while the bank can pay the larger army's upkeep for 30 seconds.
 Research and influence slow down when the bank holds less than 60 seconds of army upkeep.
 The upkeep lane may spend at least 80% of income in a second.
 Units stalled between deliveries stand until the next load arrives.
-A house disbands units for want of cycles after 90 seconds short, or sooner when it is over its unit cap.
+A house disbands up to four units at a time for want of cycles after 90 seconds short.
+Over its unit cap, it disbands sooner and deeper.
 
 ## Export a program
 
