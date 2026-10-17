@@ -14,6 +14,9 @@ export class Sculpt {
   return this.capsule(a.map((x,i)=>(x+b[i])/2),[r*1.45,len+r*.35,r*1.45],c,m,pivot,[Math.atan2(dz,Math.hypot(dx,dy)),0,-Math.atan2(dx,dy)]);
  }
  poly(at,points,depth,c,m='',pivot=at,rot=[0,0,0]){const p=this.part('poly',at,[.1,.1,depth],c,m,pivot,rot);p.points=points;return p;}
+ // Closed longitudinal hull: rings are [x, height, half-beam].  This stays an
+ // internal retained primitive; callers cannot submit it through model normalization.
+ loft(rings,c,pivot=[0,0,0]){const p=this.part('loft',pivot,[1,1,1],c,'',pivot);p.rings=rings;return p;}
  rod(a,b,r,c,m='',pivot=a){const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],len=Math.hypot(dx,dy,dz);return this.box(a.map((x,i)=>(x+b[i])/2),[r,len,r],c,m,pivot,[Math.atan2(dz,Math.hypot(dx,dy)),0,-Math.atan2(dx,dy)]);}
  wheel(at,r,c){
   const wheel=this.part('cylinder',at,[r*2,r*2,.13],c,'roll',at,[0,0,0],.4),z=at[2]+Math.sign(at[2]||1)*.075;

@@ -11,6 +11,9 @@ use super::compat as js;
 pub struct Civic<'a> {
     pub wonder: Value,
     pub wonder_r: f64,
+    /// Multiplier for the Wonder's authored height.  Houses use this to keep their
+    /// landmark legible without letting it dominate the visitor's court.
+    pub wonder_h_scale: f64,
     pub wonder_color: Option<&'a str>,
     pub wonder_mat: Option<&'a str>,
     pub trim: Option<&'a str>,
@@ -22,6 +25,10 @@ pub struct Civic<'a> {
     pub screen_title: Option<&'a str>,
     pub banners: f64,
     pub pole_h: f64,
+    /// The bounded arrival-court language used by the hall renderer.  This is scene
+    /// data, rather than an inferred seat or display name, so borrowed house styles
+    /// keep their authored architecture.
+    pub court: Option<&'a str>,
     /// Whether the hall forecourt has its two decorative lamps.
     pub forecourt_lights: bool,
 }
@@ -31,6 +38,7 @@ impl Default for Civic<'_> {
         Civic {
             wonder: Value::Undef,
             wonder_r: 6.0,
+            wonder_h_scale: 1.0,
             wonder_color: None,
             wonder_mat: None,
             trim: None,
@@ -42,6 +50,7 @@ impl Default for Civic<'_> {
             screen_title: None,
             banners: 6.0,
             pole_h: 15.0,
+            court: None,
             forecourt_lights: true,
         }
     }
@@ -80,13 +89,14 @@ pub fn civic(info: View, o: &Civic) -> Vec<Value> {
             ("tap", Value::Bool(true)),
             ("shape", w.get("shape").clone()),
             ("tiers", w.get("tiers").clone()),
-            ("h", w.get("height").clone()),
+            ("h", Value::Num(w.get("height").num() * or(o.wonder_h_scale, 1.0))),
             ("r", Value::Num(or(o.wonder_r, 6.0))),
             ("glow", w.get("glow").clone()),
             ("spin", w.get("spin").clone()),
             ("color", color),
             ("material", Value::from(or_str(o.wonder_mat, "stone"))),
             ("trim", Value::from(o.trim)),
+            ("court", Value::from(o.court)),
             ("pri", Value::Num(9.0)),
         ]));
     }
@@ -103,6 +113,7 @@ pub fn civic(info: View, o: &Civic) -> Vec<Value> {
         ("color", Value::from(o.hall_color)),
         ("trim", Value::from(o.trim)),
         ("label", Value::from(o.hall_label)),
+        ("court", Value::from(o.court)),
         ("pri", Value::Num(8.0)),
     ]));
     // Decorative lamps yield first when a house has spent its base scene budget on

@@ -7,7 +7,9 @@ export {AIR_ROLES,AIR_TITLES,AIR_BUILDS,airRole,airDefinition} from './airframes
 function wing(s,x,y,span,c,{feathers=false,flap=feathers,swept=false,thin=false}={}){
  for(const side of [-1,1]){
   const z=side*.16,m=flap?(side<0?'walkL':'walkR'):'',pivot=[x,y,z];
-  s.poly([x,y,z],swept?[-.46,0,.45,0,-.45,side*span,-.94,side*span*.84]:[-.42,0,.42,0,.22,side*span,-.36,side*span],thin?.035:.08,c,m,pivot,[Math.PI/2,0,0]);
+  // Six points taper to a rounded-looking tip; feathered houses read as wings, not cards.
+  const outline=swept?[-.48,0,.43,0,.31,side*span*.44,-.27,side*span,-.72,side*span*.91,-.90,side*span*.62]:[-.43,0,.42,0,.30,side*span*.48,.04,side*span,-.26,side*span*1.04,-.47,side*span*.62];
+  s.poly([x,y,z],outline,thin?.035:.08,c,m,pivot,[Math.PI/2,0,0]);
   s.parts.at(-1).amplitude=flap?.22:0;
   // A slim rounded leading edge catches the light and keeps every house's aircraft
   // from reading as a flat card. It is cheaper than a second high-detail wing mesh.
@@ -90,10 +92,11 @@ function nullSociety(s,role){
 function nations(s,role){
  if(role==='scout'){gondola(s,WOOD,.60);balloon(s,{c:IVORY,length:1.19,beam:.96,y:1.20});s.rod([.29,.41,0],[.65,.44,0],.08,GOLD);s.orb([.69,.44,0],[.06,.21,.21],DARK);return;}
  if(role==='striker'){gondola(s,'#694334',1.73);balloon(s,{c:IVORY,length:2.50,beam:.93,y:1.49});for(const z of [-.66,.66])rotor(s,-.28,.75,z,WOOD,.48);for(const x of [-.46,.13,.61])s.box([x,.57,0],[.34,.26,.37],WOOD);for(const z of [-.22,.22])s.box([.06,.68,z],[1.57,.035,.025],GOLD);return;}
- s.box([0,.68,0],[1.33,.17,.25],WOOD);wing(s,-.10,.80,1.18,IVORY,{feathers:false,thin:true});tail(s,-.77,.73,IVORY,.43);cockpit(s,.24,.87);for(const z of [-.68,.68]){rotor(s,-.27,1.02,z,GOLD,.37);s.rod([-.27,.69,z],[-.27,.99,z],.035,GOLD);}s.box([.64,.70,0],[.70,.055,.07],GOLD,'recoil');
+ // A tapered brass-and-canvas fuselage replaces the former rectangular plank.
+ s.capsule([-.03,.69,0],[1.47,.29,.36],WOOD);s.taper([-.63,.69,0],[.67,.71,0],.15,WOOD);wing(s,-.10,.80,1.18,IVORY,{feathers:false,thin:true});tail(s,-.77,.73,IVORY,.43);cockpit(s,.24,.87);for(const z of [-.68,.68]){rotor(s,-.27,1.02,z,GOLD,.37);s.rod([-.27,.69,z],[-.27,.99,z],.035,GOLD);}s.taper([.35,.70,0],[.98,.70,0],.035,GOLD,'recoil');
 }
 function emu(s,role){
- if(role==='striker'){s.box([0,.68,0],[1.59,.31,.35],'#8c8a5b');wing(s,-.09,.81,1.32,'#c7b57e',{thin:true});wing(s,-.09,1.19,1.32,IVORY,{thin:true});tail(s,-.94,.76,WOOD,.43);for(const z of [-1.02,1.02])s.rod([-.10,.82,z],[-.10,1.18,z],.035,WOOD);s.orb([.60,.81,0],[.28,.23,.26],DARK);rotor(s,.56,1.08,0,WOOD,.41);for(const z of [-.44,.44])s.box([-.26,.39,z],[.65,.28,.26],'#b69c5c');return;}
+ if(role==='striker'){s.capsule([-.08,.69,0],[1.72,.43,.48],'#8c8a5b');s.taper([-.69,.69,0],[.72,.76,0],.20,'#8c8a5b');wing(s,-.09,.81,1.32,'#c7b57e',{thin:true});wing(s,-.09,1.19,1.32,IVORY,{thin:true});tail(s,-.94,.76,WOOD,.43);for(const z of [-1.02,1.02])s.rod([-.10,.82,z],[-.10,1.18,z],.035,WOOD);s.orb([.60,.81,0],[.28,.23,.26],DARK);rotor(s,.56,1.08,0,WOOD,.41);for(const z of [-.44,.44])s.capsule([-.26,.39,z],[.65,.28,.26],'#b69c5c');return;}
  s.orb([-.13,.67,0],[.77,.60,.55],'#8a7d61');s.rod([.14,.85,0],[.29,1.21,0],.15,'#8a7d61');s.orb([.36,1.28,0],[.30,.27,.25],DARK);s.box([.57,1.25,0],[.22,.06,.13],GOLD);s.box([.47,1.36,0],[.10,.07,.30],IRON);
  for(const z of [-.18,.18]){s.rod([0,.45,z],[.15,.25,z],.055,WOOD);s.box([.24,.23,z],[.31,.045,.13],DARK);}
  if(role==='scout'){wing(s,-.14,.84,1.03,IVORY,{feathers:true});s.box([-.33,.87,0],[.30,.29,.38],P);}
@@ -108,7 +111,22 @@ function garden(s,role){
  if(role==='striker'){gondola(s,'#718966',1.54);for(const z of [-.38,.38]){s.rod([-.34,.57,z],[-.34,1.19,z],.05,WOOD);s.orb([-.34,1.21,z],[.34,.31,.34],'#d59a9e');bomb(s,.46,.23,z,'#799267');}}
 }
 const BUILDERS=[kublai,arjuna,templar,atlantis,fleet,manifesto,nullSociety,nations,emu,garden];
+// Raised rigging gives each house a distinct planform from the top-down RTS view.
+// It supplements, rather than replaces, the role-specific wings and payloads above.
+function housePlanform(s,seat,role){
+ const y=role==='striker'?.91:.82;
+ if(seat===0){for(const z of [-.34,.34])s.taper([-.42,y,z],[.12,y+.36,z],.025,'#493e34','sway',[-.42,y,z]);}
+ else if(seat===1){for(const z of [-.47,.47])s.poly([-.30,y,z],[-.31,0,.31,0,0,.26],.035,GOLD);}
+ else if(seat===2){s.poly([-.42,y+.13,0],[-.42,0,.42,0,0,.38],.38,RED);cross(s,-.42,y+.15,.20);}
+ else if(seat===3){for(const z of [-.36,.36])s.part('cylinder',[-.25,y,z],[.21,.21,.04],GOLD,'spin',[-.25,y,z],[Math.PI/2,0,0]);}
+ else if(seat===4){for(const z of [-.44,.44])s.box([-.20,y+.12,z],[.63,.035,.05],'#d5b478');}
+ else if(seat===5){for(const z of [-.43,.43])s.box([-.36,y,z],[.47,.13,.18],IRON);}
+ else if(seat===6){for(const z of [-.54,.54])s.rod([-.29,y,0],[-.54,y+.23,z],.035,LIGHT);}
+ else if(seat===7){s.part('cylinder',[-.33,y+.13,0],[.30,.30,.045],GOLD,'',[-.33,y+.13,0],[Math.PI/2,0,0]);}
+ else if(seat===8){for(const z of [-.48,0,.48])s.poly([-.28,y,z],[-.17,0,.17,0,0,.28],.025,'#c7b57e');}
+ else{for(const z of [-.37,.37])s.orb([-.18,y,z],[.34,.07,.26],'#d3a7a4','sway',[-.18,y,0]);}
+}
 export function airSculpt(seat,role='fighter'){
  if(!BUILDERS[seat]||!AIR_ROLES.includes(role))return null;
- const s=new Sculpt();BUILDERS[seat](s,role);return {parts:s.parts};
+ const s=new Sculpt();BUILDERS[seat](s,role);housePlanform(s,seat,role);return {parts:s.parts};
 }

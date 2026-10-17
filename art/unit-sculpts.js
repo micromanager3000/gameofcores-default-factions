@@ -4,7 +4,7 @@ import { navalSculpt } from './naval-sculpts.js';
 export { navalSculpt } from './naval-sculpts.js';
 // House-authored RTS miniatures. Generated once per look/role, retained by GPUUnits.
 // +x is forward, +y is up, z separates the left/right limbs. No textures or per-frame JS rigs.
-const P='primary',S='secondary',A='accent',IRON='#788b95',DARK='#26333a',WOOD='#785239',GOLD='#dab866',IVORY='#e6dcc2',LIGHT='#a3fff0';
+const P='primary',S='secondary',A='accent',IRON='#788b95',DARK='#26333a',WOOD='#785239',GOLD='#dab866',IVORY='#e6dcc2',LIGHT='#a3fff0',RED='#b93b3c';
 export const HOUSE_SCULPTS=[
  ['archer','keshig','horseman','artisan','falconer','shaman','trebuchet','camel'],
  ['chariot','archer','servant','elephant','mace','sage','giant','healer'],
@@ -29,12 +29,15 @@ function human(s,{coat=P,skin='#d6a17e',legs=DARK,hat='cap',trim=S,armor=false,r
   s.capsule([.06,.20,z],[.16,.29,.17],legs,knee,pivot);
   s.poly([.15,.075,z],[-.18,-.06,.20,-.06,.30,.045,.08,.10,-.22,.06],.23,DARK,knee,pivot);
  }
- s.capsule([lean,.92,0],[.46,.66,.43],coat,'',[lean,.92,0]);
+ // Shoulder and waist are separate rounded masses: a tapered body reads as a person
+ // from above, where the old single rectangular-looking torso did not.
+ s.capsule([lean,.99,0],[.52,.38,.46],coat,'',[lean,.92,0]);
+ s.capsule([lean,.73,0],[.36,.34,.34],coat,'',[lean,.92,0]);
  s.poly([lean+.12,.88,0],[-.12,-.20,.23,-.12,.28,.14,.14,.25,-.18,.18],.45,coat);
  if(robe)s.poly([0,.19,0],[-.33,0,.30,0,.22,.64,-.22,.64],.51,coat);
  s.box([lean,.80,0],[.47,.052,.51],trim);
  if(armor){s.poly([lean+.03,.89,0],[-.16,0,.16,0,.22,.32,.14,.39,-.14,.39,-.22,.32],.49,coat);for(const z of [-.30,.30]){s.orb([lean,1.15,z],[.29,.22,.26],IRON);s.box([lean+.05,1.16,z],[.20,.07,.12],coat);}}
- s.orb([lean+.03,1.40,0],[.30,.34,.29],skin);
+ s.capsule([lean+.03,1.40,0],[.29,.34,.28],skin);
  // A nose and a dark brow make the facing readable without a face texture.
  s.box([lean+.193,1.40,0],[.075,.09,.11],skin);
  s.box([lean+.174,1.46,0],[.035,.035,.24],DARK);
@@ -49,8 +52,8 @@ function human(s,{coat=P,skin='#d6a17e',legs=DARK,hat='cap',trim=S,armor=false,r
 function headwear(s,hat,x=0,trim=S){
  if(hat==='none')return;
  if(hat==='hood'){s.orb([x,1.46,-.04],[.39,.44,.38],P);s.box([x+.20,1.40,0],[.04,.20,.23],DARK);}
- else if(hat==='greathelm'){s.box([x+.01,1.46,0],[.38,.44,.36],IRON);s.box([x+.208,1.51,0],[.035,.045,.30],DARK);s.box([x+.215,1.42,0],[.035,.18,.035],GOLD);}
- else if(hat==='conical'){s.poly([x,1.53,0],[-.24,0,.24,0,.04,.31,-.05,.31],.39,IRON);s.box([x,1.52,0],[.46,.065,.43],trim);}
+ else if(hat==='greathelm'){s.capsule([x+.01,1.48,0],[.40,.42,.37],IRON);s.poly([x+.16,1.49,0],[-.06,-.14,.06,-.14,.09,.14,-.09,.14],.39,DARK);s.box([x+.215,1.42,0],[.035,.18,.035],GOLD);}
+ else if(hat==='conical'){s.capsule([x,1.53,0],[.36,.18,.35],IRON);s.poly([x,1.58,0],[-.25,0,.25,0,.03,.37,-.05,.37],.39,IRON);s.box([x,1.52,0],[.46,.065,.43],trim);}
  else if(hat==='turban'){s.orb([x,1.58,0],[.43,.25,.41],IVORY);s.box([x+.01,1.61,0],[.39,.055,.43],trim);s.poly([x-.12,1.62,0],[-.10,0,.12,0,0,.22],.10,GOLD);}
  else if(hat==='tricorn'){s.poly([x,1.57,0],[-.32,0,.32,0,.10,.20,-.20,.20],.52,DARK);s.box([x,1.56,0],[.66,.045,.57],trim);}
  else if(hat==='fur'){s.orb([x,1.56,0],[.43,.20,.43],'#493e34');s.poly([x,1.62,0],[-.18,0,.18,0,0,.23],.29,P);}
@@ -248,11 +251,38 @@ function garden(s,body){
  else {s.orb([.35,1.03,.35],[.16,.15,.16],'#d68c8c','sway',[.25,.9,.35]);s.rod([.25,.8,.35],[.35,1.03,.35],.025,'#526f4e');s.box([-.25,1.03,.30],[.09,.44,.41],IVORY);}
 }
 function vessel(s,style,role='hull'){s.parts.push(...navalSculpt(style,role).parts);}
+// A house mark is deliberately structural, not a colour decal.  It sits above the
+// common role body so a monochrome army still separates into ten cultures at a glance.
+function houseSilhouette(s,seat){
+ const back=-.31;
+ if(seat===0){ // Horse-tail standard and curved composite bow case.
+  s.rod([back,.82,.27],[back,1.83,.27],.034,WOOD);for(const y of [1.48,1.61,1.74])s.taper([back,y,.27],[back-.20,y+.20,.27],.026,'#493e34','sway',[back,1.83,.27]);
+ }else if(seat===1){ // Temple crown over a lotus collar.
+  for(const z of [-.23,0,.23])s.poly([-.08,1.67,z],[-.12,0,.12,0,0,.26],.06,GOLD);for(const z of [-.29,.29])s.poly([-.10,.91,z],[-.18,0,.18,0,0,.19],.035,'#dfb76d');
+ }else if(seat===2){ // Gothic backplate and a tall cross finial.
+  s.poly([back,.98,.30],[-.20,0,.20,0,.15,.55,-.15,.55],.07,IVORY);s.box([back,1.63,.30],[.045,.42,.025],RED);s.box([back,1.75,.30],[.25,.045,.028],RED);
+ }else if(seat===3){ // Brass instrument frame: visibly Renaissance even on workers.
+  s.part('cylinder',[back,.98,.30],[.42,.42,.055],GOLD,'spin',[back,.98,.30],[Math.PI/2,0,0]);s.orb([back,1.02,.30],[.10,.10,.10],'#9cccd3');
+ }else if(seat===4){ // Ming back banner with a curved roof cap.
+  s.rod([back,.72,.29],[back,1.71,.29],.03,WOOD);s.poly([back,1.55,.29],[0,0,.34,.07,.26,.32,0,.32],.03,'#a34c36','sway',[back,1.71,.29]);s.box([back,1.72,.29],[.38,.045,.08],GOLD);
+ }else if(seat===5){ // Industrial radiator and red star mast.
+  for(const z of [-.08,.08])s.box([back,.96,.30+z],[.31,.46,.025],IRON);s.poly([back,1.55,.30],[0,.16,.04,.04,.15,.04,.06,-.03,.09,-.14,0,-.07,-.09,-.14,-.06,-.03,-.15,.04,-.04,.04],.025,P);
+ }else if(seat===6){ // Open luminous crystal framework, never a solid backpack.
+  for(const z of [-.19,.19]){s.rod([back,.73,z],[back,1.55,z],.025,IRON);s.rod([back,.73,z],[.12,1.18,0],.022,LIGHT);}s.poly([back,1.55,0],[-.18,0,.18,0,0,.34],.035,P);
+ }else if(seat===7){ // Highlander plaid roll and a merchant's compass disk.
+  s.orb([back,.93,.29],[.44,.24,.16],'#496254');s.box([back,.93,.29],[.47,.045,.025],'#b85e4b');s.part('cylinder',[back,1.35,.30],[.27,.27,.035],GOLD,'',[back,1.35,.30],[Math.PI/2,0,0]);
+ }else if(seat===8){ // Emu feather fan and exposed workshop exhaust.
+  s.rod([back,.78,.29],[back,1.43,.29],.045,WOOD);for(const z of [-.14,0,.14])s.poly([back,1.43,.29+z],[-.13,0,.13,0,0,.35],.025,'#c7b57e','sway',[back,.78,.29]);
+ }else{ // Botanical glass petals: a rounded organic outline replaces a square pack.
+  for(const z of [-.26,0,.26])s.orb([back,.99,z],[.22,.08,.28],z?'#d3a7a4':IVORY,'sway',[back,.83,0]);s.rod([back,.78,0],[back,1.20,0],.025,'#587450');
+ }
+}
 export function houseSculpt(id,flags=0,airRole='fighter'){
  if(!hasSculpt(id))return null;
  const [a,body]=id.split(':'),seat=Number(a),s=new Sculpt();
  if(flags&1){const model=airSculpt(seat,airRole);if(flags&2)model.parts.push({shape:'box',at:[-.33,.53,-.36],size:[.29,.30,.24],pivot:[-.33,.53,-.36],motion:'',color:'#b89458',on:[]});return model;}
  [kublai,arjuna,templar,atlantis,fleet,manifesto,nullSociety,nations,(s,b)=>b==='truck'?cart(s,{truck:true,culture:8}):emu(s,{forager:b==='forager',gunner:b==='gunner'}),garden][seat](s,body);
+ houseSilhouette(s,seat);
  if(flags&2)s.box([-.33,.83,-.36],[.29,.30,.24],'#b89458');
  return {parts:s.parts,sculpt:id,muzzle:s.muzzle};
 }
