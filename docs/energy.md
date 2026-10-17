@@ -15,15 +15,15 @@ is done. Kinds it can't build yet are skipped.
 
 | Faction | Plant kinds, best liked first | Margin | Battery store | Reserve kept | Darkens outlying land first | Sells power |
 | --- | --- | ---: | ---: | ---: | --- | --- |
-| Kublai Khan's Alt | hydro, boiler, wind, geo, solar | 1.15 | none | 10% | yes | no |
-| Arjuna's Halting Problem | solar, wind, tidal | 1.3 | 150 s | 45% | yes | no |
-| Knights Templated | wind, hydro, solar, tidal | 1.25 | 90 s | 25% | yes | no |
-| New Atlantis | fusion, reactor, geo, hydro, solar | 1.2 | 60 s | 20% | yes | no |
-| Quiet Fleet | tidal, boiler, wind, solar | 1.2 | 60 s | 20% | yes | no |
-| The Kernel Manifesto | hydro, boiler, wind, geo, solar | 1.35 | none | none | no | no |
-| Null Pointer Society | solar, wind, geo | 1.05 | 100 s | 30% | yes | no |
-| Compute of Nations | wind, hydro, solar, tidal, reactor | 1.4 | 120 s | 20% | yes | yes |
-| Other seats | solar, wind, hydro, boiler, geo, reactor | 1.2 | 60 s | 20% | yes | yes |
+| Kublai Khan's Alt | hydro, boiler, wind, geo, solar | 1.1 | none | 10% | yes | no |
+| Arjuna's Halting Problem | solar, wind, tidal | 1.2 | 150 s | 45% | yes | no |
+| Knights Templated | wind, hydro, solar, tidal | 1.15 | 90 s | 25% | yes | no |
+| New Atlantis | fusion, reactor, geo, hydro, solar | 1.1 | 60 s | 20% | yes | no |
+| Quiet Fleet | tidal, boiler, wind, solar | 1.1 | 60 s | 20% | yes | no |
+| The Kernel Manifesto | hydro, boiler, wind, geo, solar | 1.2 | none | none | no | no |
+| Null Pointer Society | solar, wind, geo | 1.0 | 100 s | 30% | yes | no |
+| Compute of Nations | wind, hydro, solar, tidal, reactor | 1.25 | 120 s | 20% | yes | yes |
+| Other seats | solar, wind, hydro, boiler, geo, reactor | 1.1 | 60 s | 20% | yes | yes |
 
 Battery store is seconds of the house's draw. Arjuna keeps its 45% reserve only while the sun is up over its capital,
 and 40% of it at night. Every other house keeps 40% of its reserve.
@@ -40,7 +40,7 @@ with 30,000 cycles of think left.
 Each grid island in `me.energy.islands` balances alone. A plant lights only the island it stands on, and the house
 generator lights only the capital's island, so an overseas town needs a plant of its own. The planner works out each
 island's expected supply: each of its plants at its average output over a day, and the generator on the capital's
-island. An island is short when that is below its draw × margin, plus 0.5 MW on the capital's island and 0.2 MW on any
+island. An island is short when that is below its draw × margin, plus 0.3 MW on the capital's island and 0.2 MW on any
 other. The planner serves the island furthest short first, then the next one if the first has no site.
 
 It orders a plant when all of these hold:
@@ -50,7 +50,8 @@ It orders a plant when all of these hold:
 - No unit is stalled.
 - Fewer than two of its plants are going up, and the second only while an island is more than 1.5 MW short.
 - Its bank holds one second of income above a floor. The floor is five seconds of income, or four and a half while the
-  grid meets less than 92% of its draw.
+  grid meets less than 92% of its draw. In worlds with cargo the floor is at least 30 seconds of the whole upkeep bill,
+  since the army lives on the bank between loads.
 
 The plant may cost 70% of the bank above that floor. `common::govern` drops to its recovery policy when the bank falls
 below four seconds of income, so a plant never pushes a healthy house into recovery.
@@ -80,7 +81,8 @@ any unit's. Every second that the house sends a compute policy, the planner rais
 cost:
 
 - fabrication, by the construction rate of each plant going up;
-- upkeep, by each plant's quote ÷ 600 a second, counting a plant going up by the share of it that is built.
+- upkeep, by each plant's `energyCost` ÷ `plantMaintenancePeriod` (1,800 s) and the rest of its quote ÷ 600 a second,
+  counting a plant going up by the share of it that is built.
 
 A limit given as a share of income becomes that share of last second's income plus the plants' cost. The house's own
 limits stay for its units, so a grid never stalls the army that guards it.
@@ -105,5 +107,6 @@ a second for each MW.
 75%, the plants that would change hands with the province and the province's room for hydro, tidal and geothermal
 plants.
 
-Upkeep for buildings comes out of the upkeep lane before any unit. `common::unit_upkeep` subtracts it, so recruiting
-and recovery see what the army alone costs.
+Upkeep for buildings comes out of the upkeep lane before any unit, so a recruit has to fit the army's share of income
+after what buildings and plants take (`common::building_upkeep`). `common::unit_upkeep` subtracts it, so recovery sees
+what the army alone costs.

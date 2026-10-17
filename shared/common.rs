@@ -1246,16 +1246,24 @@ use super::{air, theme};
     }
 
     /// What the house's own buildings take from the upkeep lane each second, in cycles: a building's build cost
-    /// (`buildCost`, before prices) at today's price level over `rts.structureCosts.maintenancePeriod` seconds, a site's
-    /// in proportion to the work done on it. The lane pays them before any unit.
+    /// (`buildCost`, before prices) at today's price level over `rts.structureCosts.maintenancePeriod` seconds, and a
+    /// plant's energy ports (`energyCost`) over `plantMaintenancePeriod`, a site's in proportion to the work done on it.
+    /// The lane pays them before any unit.
     pub fn building_upkeep(me: View) -> f64 {
-        let period = me.path("rts.structureCosts.maintenancePeriod").num_or(600.0).max(1.0);
         let id = me.get("id").num_or(-1.0);
-        let cost: f64 = me.path("rts.structures").iter()
+        me.path("rts.structures").iter()
             .filter(|s| s.get("owner").num_or(-2.0) == id && s.get("state").str() != "ruin" && s.get("hp").num_or(0.0) > 0.0)
-            .map(|s| s.get("buildCost").num_or(0.0) * s.get("progress").num_or(1.0).max(1.0 / 12.0))
-            .sum();
-        cost * price_level(me) / period
+            .map(|s| upkeep_of(me, s))
+            .sum()
+    }
+
+    /// What one of the house's sites pays a second to stand, in cycles (see [`building_upkeep`]).
+    pub fn upkeep_of(me: View, s: View) -> f64 {
+        let costs = me.path("rts.structureCosts");
+        let period = costs.get("maintenancePeriod").num_or(600.0).max(1.0);
+        let plants = costs.get("plantMaintenancePeriod").num_or(period).max(1.0);
+        let (all, energy) = (s.get("buildCost").num_or(0.0), s.get("energyCost").num_or(0.0));
+        ((all - energy).max(0.0) / period + energy.max(0.0) / plants) * s.get("progress").num_or(1.0).max(1.0 / 12.0) * price_level(me)
     }
 
     /// Last second's upkeep for the house's units alone: what the upkeep lane spent less what its buildings took.
@@ -1615,12 +1623,14 @@ use super::{air, theme};
         let mut body = e.body + (count - e.units.len() as f64) * mean;
         let mut art = e.art + (count - e.count) * (e.art / e.count.max(1.0));
         let mut keep = Vec::new();
+        // The upkeep lane pays the house's buildings and plants before any unit, so they come out of the army's share.
+        let built = building_upkeep(me);
         for sp in orders.get("spawn").items() {
             let b = body_upkeep_value(me, sp.get("build"), sp.get("modules").len() as f64);
             let a = (e.art / (e.units.len() as f64).max(1.0)).max(me.path("costs.draw").entries().map(|(_, v)| v.num_or(0.0)).fold(0.0, f64::max));
             // Once the army's upkeep passes half of income, a recruit also needs the bank to carry the whole army
             // through a gap between cargo loads.
-            let demand = e.demand(count + 1.0, body + b, art + a);
+            let demand = e.demand(count + 1.0, body + b, art + a) + built;
             let carried = !patient(world) || demand <= income * 0.5 || bank >= demand * UPKEEP_BUFFER * 0.5;
             if demand <= income * share && carried {
                 count += 1.0; body += b; art += a;

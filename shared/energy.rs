@@ -30,22 +30,22 @@ pub fn doctrine(seat: usize) -> Doctrine {
     let d = |kinds, margin, store, reserve, shed, sell| Doctrine { kinds, margin, store, reserve, shed, sell };
     match seat {
         // Kublai: dams where the steppe meets the range, boilers in conquered towns
-        0 => d(&["hydro", "boiler", "wind", "geo", "solar"], 1.15, 0.0, 0.1, true, false),
+        0 => d(&["hydro", "boiler", "wind", "geo", "solar"], 1.1, 0.0, 0.1, true, false),
         // Arjuna: solar fields and batteries, a reserve before every dusk
-        1 => d(&["solar", "wind", "tidal"], 1.3, 150.0, 0.45, true, false),
+        1 => d(&["solar", "wind", "tidal"], 1.2, 150.0, 0.45, true, false),
         // Templars: wind and water mills beside the chapter houses
-        2 => d(&["wind", "hydro", "solar", "tidal"], 1.25, 90.0, 0.25, true, false),
+        2 => d(&["wind", "hydro", "solar", "tidal"], 1.15, 90.0, 0.25, true, false),
         // New Atlantis: geothermal, then reactors, then the race to fusion
-        3 => d(&["fusion", "reactor", "geo", "hydro", "solar"], 1.2, 60.0, 0.2, true, false),
+        3 => d(&["fusion", "reactor", "geo", "hydro", "solar"], 1.1, 60.0, 0.2, true, false),
         // Quiet Fleet: tidal barrages at its ports, boilers its freighters feed
-        4 => d(&["tidal", "boiler", "wind", "solar"], 1.2, 60.0, 0.2, true, false),
+        4 => d(&["tidal", "boiler", "wind", "solar"], 1.1, 60.0, 0.2, true, false),
         // Kernel Manifesto: dams and boilers everywhere, and every province lit alike
-        5 => d(&["hydro", "boiler", "wind", "geo", "solar"], 1.35, 0.0, 0.0, false, false),
+        5 => d(&["hydro", "boiler", "wind", "geo", "solar"], 1.2, 0.0, 0.0, false, false),
         // Null Pointer Society: a lean grid on batteries
-        6 => d(&["solar", "wind", "geo"], 1.05, 100.0, 0.3, true, false),
+        6 => d(&["solar", "wind", "geo"], 1.0, 100.0, 0.3, true, false),
         // Compute of Nations: spare capacity, batteries, and power for sale
-        7 => d(&["wind", "hydro", "solar", "tidal", "reactor"], 1.4, 120.0, 0.2, true, true),
-        _ => d(&["solar", "wind", "hydro", "boiler", "geo", "reactor"], 1.2, 60.0, 0.2, true, true),
+        7 => d(&["wind", "hydro", "solar", "tidal", "reactor"], 1.25, 120.0, 0.2, true, true),
+        _ => d(&["solar", "wind", "hydro", "boiler", "geo", "reactor"], 1.1, 60.0, 0.2, true, true),
     }
 }
 
@@ -138,8 +138,7 @@ fn fund(orders: &mut Value, me: View) {
         .filter(|s| s.get("owner").num_or(-2.0) == id && s.get("power").truthy() && s.get("state").str() != "ruin" && s.get("hp").num_or(0.0) > 0.0)
         .collect();
     let going_up = plants.iter().filter(|s| s.get("state").str() == "building").map(|s| s.get("buildCost").num_or(0.0)).sum::<f64>() * price(me) / 12.0;
-    let period = me.path("rts.structureCosts.maintenancePeriod").num_or(600.0).max(1.0);
-    let upkeep = plants.iter().map(|s| s.get("buildCost").num_or(0.0) * s.get("progress").num_or(1.0).max(1.0 / 12.0)).sum::<f64>() * price(me) / period;
+    let upkeep = plants.iter().map(|&s| super::common::upkeep_of(me, s)).sum::<f64>();
     for (lane, rate) in [("fabrication", going_up), ("upkeep", upkeep)] {
         let limit = orders.get("compute").get("cpu").get("limits").get(lane).num_or(0.0);
         if limit <= 0.0 || rate <= 0.0 { continue; }
@@ -180,9 +179,11 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
     let bank = me.path("rts.cpu.bank").num_or(0.0);
     // Plants are paid from savings above the floor an army keeps: common::govern drops to its recovery policy, which
     // disbands units, below four seconds of income. The floor comes down to just above that while the grid runs short,
-    // since a dim province mines less.
+    // since a dim province mines less. In cargo worlds the army lives on the bank between loads, so the floor also
+    // keeps half a minute of the whole upkeep bill, as recruits do.
     let short = e.get("powered").num_or(1.0) < 0.92;
-    let floor = income * if short { 4.5 } else { 5.0 };
+    let gap = if world.get("logistics").truthy() { me.path("rts.cpu.last.upkeep").num_or(0.0) * 30.0 } else { 0.0 };
+    let floor = (income * if short { 4.5 } else { 5.0 }).max(gap);
     if me.path("units.stalled").num_or(0.0) > 0.0 || bank < floor + income { return; }
     let sites = me.path("rts.structures");
     let mine: Vec<View> = sites.iter().filter(|s| same(s.get("owner"), id) && s.get("state").str() != "ruin").collect();
@@ -219,7 +220,7 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
     for (i, isl) in islands.iter().enumerate() {
         let draw = isl.get("demand").num_or(0.0);
         if (i == home && draw < house * 0.8) || draw < 0.2 { continue; }
-        let gap = draw * d.margin + if i == home { 0.5 } else { 0.2 } - expected[i];
+        let gap = draw * d.margin + if i == home { 0.3 } else { 0.2 } - expected[i];
         if gap > 0.0 { wants.push((i, gap)); }
     }
     wants.sort_by(|a, b| b.1.total_cmp(&a.1));
