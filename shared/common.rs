@@ -1365,26 +1365,16 @@ use super::{air, theme};
     /// Seconds between full thinks while nothing presses. Orders, plans and the CPU policy stand between them, and the
     /// cycles a full think costs go to the army instead.
     const THINK_EVERY: f64 = 3.0;
-    /// A house rests only while its costliest recent think is under this share of income: a think after a rest can
-    /// cost more than twice as much, and it must still fit in a second's cycles.
-    const REST_PEAK: f64 = 0.4;
-    /// Nor while that think came this close to its think limit. A think that runs out returns nothing, so only a think
-    /// that finishes can raise the limit; thinking every second lets one finish.
-    const REST_LIMIT: f64 = 0.9;
 
     /// Whether this second's think can rest: CPU RTS, not a full-think second, no stalled unit, the bank above four
-    /// seconds of income, a recent think peak within [`REST_PEAK`] and [`REST_LIMIT`], and no recovery to end. An empty
-    /// answer leaves everything as it stands.
+    /// seconds of income, and not in recovery (a recovering house thinks every second, so it leaves as soon as it can).
+    /// An empty answer leaves everything as it stands.
     fn resting(world: View, me: View) -> bool {
         let cpu = me.path("rts.cpu");
         if !cpu.truthy() || world.get("seconds").num_or(0.0) % THINK_EVERY == 0.0 {
             return false;
         }
-        let income = cpu.get("income").num_or(0.0);
-        let limit = cpu.path("limits.think").num_or(f64::INFINITY);
-        let limit = if limit <= 1.0 { limit * income } else { limit };
-        cpu.get("bank").num_or(0.0) >= income * 4.0 && me.path("units.stalled").num_or(0.0) == 0.0
-            && me.path("compute.thinkPeak").num_or(f64::INFINITY) <= (income * REST_PEAK).min(limit * REST_LIMIT)
+        cpu.get("bank").num_or(0.0) >= cpu.get("income").num_or(0.0) * 4.0 && me.path("units.stalled").num_or(0.0) == 0.0
             && !mem::get(me.get("ramCapital"), RECOVERY_PAGE).get("r").truthy()
     }
 

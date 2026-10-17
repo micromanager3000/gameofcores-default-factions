@@ -30,24 +30,28 @@ Their presentation also follows their own seat.
 
 ## Armies
 
-An army abroad compares the hit points of fighting units in its target province.
-Workers, cargo carriers, scouts and ships don't count toward either side.
-When rivals there outweigh the army 1.6 to 1, it falls back to its stage province.
-At the stage, reinforcements wait until they and the units still in the target outweigh the rivals 1.15 to 1.
-They then go back in together as one wave. Defenders, aircraft and ships keep their own orders.
+Every house fights in waves, with the shared code in `shared/common.rs` (`front`, `govern` and the recovery below them).
+
+An army abroad weighs the hit points of fighting units in its target province: its own and its allies' against everyone else's.
+Workers, cargo carriers, scouts and ships don't count.
+When the rivals there outweigh it 1.6 to 1, its hurt units fall back to the stage province, and the rest fight on.
+While that fight is lost, units at the stage hold there instead of walking in one at a time.
+They go in together once they and the units still in the target outweigh the rivals 1.15 to 1.
+A first attack goes in on the plan. Defenders, aircraft and ships keep their own orders.
 
 In CPU RTS worlds, a house runs its full strategy every third second.
-In the seconds between, it returns no orders, so its plans and CPU policy stay in force.
-It still thinks every second when a unit is stalled, the bank holds less than four seconds of income or it is leaving recovery.
-It also thinks every second while its costliest recent think passes 40% of income, so a think after a rest still fits in a second.
+In the seconds between, it returns no orders, so its unit orders, plan and CPU policy stand.
+It thinks every second while a unit is stalled, while the bank holds under four seconds of income, and while it recovers.
+In the simulations, thinking fell from about a third of the houses' spend to a fifth, and the army got the difference.
 
-With cargo, income arrives in loads, so the army lives on the bank between deliveries.
-A house recruits only while the bank can pay the larger army's upkeep for 30 seconds.
-Research and influence slow down when the bank holds less than 60 seconds of army upkeep.
-The upkeep lane may spend at least 80% of income in a second.
-Units stalled between deliveries stand until the next load arrives.
-A house disbands up to four units at a time for want of cycles after 90 seconds short.
-Over its unit cap, it disbands sooner and deeper.
+With cargo, income arrives in loads, and the army lives on the bank between deliveries.
+Units stalled between loads stand at no cost until the next one.
+They send a house into recovery only once its bank falls under two seconds of income.
+Once the army's upkeep passes half of income, a recruit waits until the bank can pay the larger army for 30 seconds.
+Research and influence slow down while the bank holds under 60 seconds of the army's upkeep.
+The upkeep lane may always spend at least 80% of income a second.
+A house disbands units for want of cycles only after 90 seconds short, a few at a time, until upkeep fits in 80% of income.
+Over its unit cap, or in a world without cargo, it cuts sooner and deeper, to 55% of income.
 
 ## Export a program
 
