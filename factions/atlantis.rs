@@ -3,8 +3,8 @@
 // Research takes a share of income the army can live with: 30% while the faction is small, 40% once its income passes
 // 150,000 a second, 50% while the bank holds cycles the army isn't spending, 20% while the bank is thin or invaders
 // press. The research order serves the army first (Extraction, Armor, Dash, then Repair, Artillery and Scan whoever
-// holds them), then Compute boost, Flight, Gate, Enhanced stealth and Air weapons, with a ready tier-2 tech no one
-// holds taken on the way as a world first. The Merchants of Light sell and lease the techs of the economy, the map and
+// holds them), then Flight and Air weapons before optional world firsts and nuclear research.
+// The Merchants of Light sell and lease the techs of the economy, the map and
 // the mind to the factions under half New Atlantis's share, allies first, never the runaway leader; the army's techs
 // stay home. The army, bodies, look and capital are the Bulwark Doctrine's.
 //
@@ -40,10 +40,8 @@ fn scout_body() -> Value {
 }
 
 // The research order (atlantis_ext::choose_research): the seven first-tier techs, 12 small puzzles each, Extraction
-// and the army's Armor and Dash first; the tier-2 techs the army fields ([`ARMY`]) whoever holds them; Compute boost
-// (25% more cycles a core); then Flight, Gate, Enhanced stealth and Air weapons. A ready tier-2 tech that no faction
-// holds yet (Mountain traversal, Influence, Capture, Cloak, Faith) jumps the queue once the army's techs are in: a
-// world first for 60 puzzles.
+// and the army's Armor and Dash first; the tier-2 techs the army fields ([`ARMY`]) whoever holds them; then the
+// Flight and Air weapons path ([`SKY`]). Optional world firsts and nuclear research follow the research wing.
 const TECHS: [&str; 25] = [
     "extraction", "armor", "dash", "ranged", "drilling", "storage", "pierce", "antiAir", "seaTraversal", "repair",
     "artillery", "fission", "scan", "mountainTraversal", "computeBoost", "fusion", "influence", "capture", "cloak",
@@ -58,6 +56,8 @@ const GOODS: [&str; 8] = ["extraction", "seaTraversal", "mountainTraversal", "in
 /// The tier-2 techs the army fields (medics, artillery, scanners): researched in this order whoever holds them, before
 /// any world first.
 const ARMY: [&str; 3] = ["repair", "artillery", "scan"];
+// A research wing needs both a crossing license and armed aircraft before optional world-first projects.
+const SKY: [&str; 3] = ["mountainTraversal", "flight", "airWeapons"];
 // In a world with energy, rift wells and batteries come before the army's tier-2 techs. Fission and fusion wait their
 // turn in TECHS, after the army.
 const POWER: [&str; 2] = ["drilling", "storage"];
@@ -1404,7 +1404,7 @@ mod atlantis_ext {
     use gameofcores::*;
 
     use super::common;
-    use super::{due, text, Clock, ARMY, GOODS, POWER, TECHS};
+    use super::{due, text, Clock, ARMY, GOODS, POWER, SKY, TECHS};
 
     /// `Number(x)` for a value from the game: null is 0.
     fn n(v: View) -> f64 {
@@ -1448,8 +1448,8 @@ mod atlantis_ext {
     }
 
     /// Sets `orders.research` when the tech to study changes. A tier-1 or tier-2 tech under way goes on (12 or 60
-    /// puzzles). Otherwise: the first ready tier-1 tech in the list; else the first ready tech of [`ARMY`]; else the
-    /// first ready tier-2 tech no faction holds (a world first, ahead of a tier-3 tech under way, which keeps the
+    /// puzzles). Otherwise: tier-1 essentials, [`POWER`], [`ARMY`], then the [`SKY`] path take priority.
+    /// Next comes a ready tier-2 tech no faction holds (a world first, ahead of a tier-3 tech under way, which keeps the
     /// puzzles it has solved); else the tech under way while it can go on; else the first tech in the list you can
     /// start, a listed tech you can't standing for its first missing prerequisite.
     pub fn choose_research(orders: &mut Value, world: View, me: View) {
@@ -1473,6 +1473,8 @@ mod atlantis_ext {
             t.to_string()
         } else if let Some(t) = ARMY.iter().copied().find(|t| ready(all, mine, t)) {
             t.to_string()
+        } else if let Some(t) = SKY.iter().copied().map(|t| first(all, mine, t)).find(|t| ready(all, mine, t)) {
+            t
         } else if let Some(t) = TECHS.iter().copied().find(|t| tier(t) == 2.0 && ready(all, mine, t) && !taken(world, me_id, t)) {
             t.to_string()
         } else if going {

@@ -4,9 +4,8 @@ The default factions plan a power grid in CPU RTS worlds with energy enabled (`w
 The planner is `shared/energy.rs`. Every house program calls it each second through `common::govern`. In a world
 without energy it returns at once.
 
-The default program runs on its house generator alone. `tools/source.mjs` gives it `shared/energy_plain.rs`, which plans
-nothing, in place of the planner, since a program pays for its length in memory: the planner is about 220 pages of the
-4,096 a program's code may fill.
+The default program uses the same planner. `tools/source.mjs` includes `shared/energy.rs` in every default export, so an
+unclaimed seat can build local generation, set a battery reserve and trade power after it unlocks transmission.
 The engine's rules for plants, grids and batteries are in the game's `docs/rts/energy.md`.
 
 ## Doctrines
@@ -24,7 +23,7 @@ is done. Kinds it can't build yet are skipped.
 | The Kernel Manifesto | hydro, boiler, wind, geo, solar | 1.35 | none | none | no | no |
 | Null Pointer Society | solar, wind, geo | 1.05 | 100 s | 30% | yes | no |
 | Compute of Nations | wind, hydro, solar, tidal, reactor | 1.4 | 120 s | 20% | yes | yes |
-| Other seats | solar, wind, hydro, boiler, geo, reactor | 1.2 | 60 s | 20% | yes | no |
+| Other seats | solar, wind, hydro, boiler, geo, reactor | 1.2 | 60 s | 20% | yes | yes |
 
 Battery store is seconds of the house's draw. Arjuna keeps its 45% reserve only while the sun is up over its capital,
 and 40% of it at night. Every other house keeps 40% of its reserve.
@@ -94,9 +93,11 @@ Every twelve seconds the house sends `grid` orders:
   shortfall. The Kernel Manifesto sends no list, so all its provinces dim alike.
 - `reserve` is the house's reserve share of its battery storage.
 
-Compute of Nations offers spare power once a minute after `transmission` research. It offers to the bordering faction
-whose grid meets the least of its draw, when that grid is below 90%. The offer is up to 6 MW for 180 seconds, at
-0.12 ◆ a second for each MW. It keeps a tenth of its own draw spare.
+Compute of Nations and unclaimed default seats offer spare power once a minute after `transmission` research. They offer
+to the bordering faction whose grid meets the least of its draw, when that grid is below 90%. A deal uses the first grid
+link the engine finds, so the planner only offers that island's own generation after keeping 15% of its local draw.
+Imported power, batteries and boiler fuel are never offered onward. The offer is up to 6 MW for 180 seconds, at 0.125 ◆
+a second for each MW.
 
 ## War
 

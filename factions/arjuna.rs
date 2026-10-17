@@ -31,10 +31,10 @@ const GHOST: Build = &[("hp", 1.0), ("speed", 3.0), ("strength", 1.0), ("carry",
 const WING: Build = &[("hp", 2.0), ("speed", 2.0), ("strength", 3.0), ("carry", 0.0), ("vision", 0.0), ("wings", 1.0)];
 const WING_SHOT: Build = &[("hp", 2.0), ("speed", 2.0), ("strength", 1.0), ("carry", 0.0), ("vision", 0.0), ("wings", 1.0), ("range", 1.0)];
 
-// Establish mining and a mobile archer screen, then pursue Flight and its crossings.
-// Ground upgrades follow Flight; Air weapons still requires Artillery.
+// Establish mining and a mobile archer screen, then pursue the Flight path.
+// Ground upgrades follow Flight, Artillery and Air weapons.
 const TECHS: [&str; 23] = [
-    "extraction", "dash", "ranged", "flight", "armor", "antiAir", "storage", "pierce", "artillery", "airWeapons",
+    "extraction", "dash", "ranged", "flight", "airWeapons", "armor", "antiAir", "storage", "pierce", "artillery",
     "computeBoost", "turbines", "scan", "repair", "capture", "influence", "cloak", "stealth", "seaTraversal",
     "mountainTraversal", "transmission", "cooling", "gate",
 ];
@@ -323,13 +323,15 @@ fn think(world: View, me: View) -> Value {
 // Keep emergency recovery closed when upkeep is unpaid or the bank cannot cover two seconds of income.
 fn flight_progress(orders: &mut Value, world: View, me: View) {
     if cycles_left() < 4000.0 || me.get("seat").num_or(-1.0) == 8.0
-        || !world.get("logistics").truthy() || me.path("techs.flight").truthy()
+        || !world.get("logistics").truthy()
         || me.path("units.total").num_or(0.0) < 4.0 || me.path("units.stalled").num_or(0.0) > 0.0 { return; }
     let income = me.path("rts.cpu.income").num_or(0.0);
     if income <= 0.0 || me.path("rts.cpu.bank").num_or(0.0) < income * 2.0
         || common::unit_upkeep(me) > income * 0.5
-        || orders.get("compute").get("cpu").get("limits").get("research").num_or(0.0) > 0.0 { return; }
-    for tech in ["extraction", "dash", "ranged", "seaTraversal", "mountainTraversal", "flight"] {
+        // A research already under way keeps its solved puzzle. Once it finishes, the next sky tech may replace the
+        // cheaper ground upgrade that `common::budget` selected because its offer exceeds the current CPU capacity.
+        || me.path("research.tech").truthy() { return; }
+    for tech in ["extraction", "dash", "ranged", "seaTraversal", "mountainTraversal", "flight", "artillery", "airWeapons"] {
         let spec = world.get("techs").get(tech);
         if me.get("techs").get(tech).truthy() || !spec.truthy() { continue; }
         if !spec.get("requires").iter().all(|t| me.get("techs").get(t.str()).truthy()) { return; }
@@ -1102,6 +1104,8 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         let modules = r.get("modules");
         let ty = u.get("type");
         let flier = is_str(ty, "wing");
+        let fighter = flier && !u.get("range").truthy();
+        let anti_air = !flier && modules.has_str("antiAir");
         let (mut best, mut score, mut melee, mut air): (Option<View>, f64, Option<View>, Option<View>) = (None, 99.0, None, None);
         // a vimana hovers where it was sent (its target's town), so prey farther off is flown at: the best of it
         let (mut chase, mut chase_score): (Option<View>, f64) = (None, 99.0);
@@ -1124,7 +1128,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
             // can shoot back
             let s = n(e.get("hp")) / jmax(1.0, n(e.get("hpMax")))
                 - (if e.get("range").truthy() { if flier { 0.5 } else { 0.12 } } else { 0.0 })
-                - (if e_air { if flier { 0.45 } else { 0.08 } } else { 0.0 })
+                - (if e_air { if fighter || anti_air { 2.0 } else if flier { 0.45 } else { 0.08 } } else { 0.0 })
                 + d * 0.015
                 - (if flier && (is_str(e.get("doing"), "gather") || is_str(e.get("type"), "miner")) { 0.6 } else { 0.0 })
                 - (if flier && is_str(e.get("doing"), "capture") { 0.4 } else { 0.0 });

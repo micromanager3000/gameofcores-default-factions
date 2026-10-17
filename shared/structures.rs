@@ -59,7 +59,9 @@ fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: Vie
     let mut attacks = Value::arr();
     for &u in units {
         if attacks.len() >= 8 || cycles_left() < 4500.0 { break; }
-        if u.get("air").truthy() || u.get("stalled").truthy()
+        // Ranged aircraft attack buildings; scouts and interceptors keep their other orders.
+        let bomber = u.get("air").truthy() && u.path("build.range").num_or(0.0) > 0.0;
+        if (u.get("air").truthy() && !bomber) || u.get("stalled").truthy()
             || matches!(u.get("type").str(), "miner" | "hauler" | "freighter" | "scout")
             || matches!(u.get("doing").str(), "gather" | "study") { continue; }
         let reach = if u.path("build.range").num_or(0.0) > 0.0 { 3.0 + u.path("build.range").num() } else { 1.5 };

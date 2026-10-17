@@ -45,7 +45,7 @@ pub fn doctrine(seat: usize) -> Doctrine {
         6 => d(&["solar", "wind", "geo"], 1.05, 100.0, 0.3, true, false),
         // Compute of Nations: spare capacity, batteries, and power for sale
         7 => d(&["wind", "hydro", "solar", "tidal", "reactor"], 1.4, 120.0, 0.2, true, true),
-        _ => d(&["solar", "wind", "hydro", "boiler", "geo", "reactor"], 1.2, 60.0, 0.2, true, false),
+        _ => d(&["solar", "wind", "hydro", "boiler", "geo", "reactor"], 1.2, 60.0, 0.2, true, true),
     }
 }
 
@@ -311,29 +311,48 @@ fn place(orders: &mut Value, me: View, sites: View, units: &[View], mut picks: V
 fn price(me: View) -> f64 { me.path("rts.costs.priceLevel").num_or(1.0).max(0.01) }
 fn seat_style(me: View) -> usize { me.get("seat").num_or(9.0).max(0.0) as usize }
 
-/// Offers spare power to the neighbour that's shortest of it, for ◆ a second.
+/// Offers a locally surplus island's power to the neighbour its first grid link reaches, for ◆ a second.
+/// The engine sends every deal through its first valid border link, so this follows that same order instead of treating
+/// a surplus on one island as power another island can sell.
 fn sell(orders: &mut Value, world: View, me: View) {
     let e = me.get("energy");
     if !me.get("techs").get("transmission").truthy() { return; }
-    let spare = e.get("supply").num_or(0.0) - e.get("demand").num_or(0.0) * 1.1 - e.path("deals").iter().filter(|x| x.get("give").truthy()).map(|x| x.get("mw").num_or(0.0)).sum::<f64>();
-    if spare < 1.5 { return; }
     let id = me.get("id").num();
-    // neighbours: factions whose land borders ours
-    let mut near: Vec<f64> = Vec::new();
+    let islands: Vec<View> = e.get("islands").iter().collect();
     let by = realm::index(world);
+    let mut links: Vec<(f64, usize)> = Vec::new();
+    // Keep the first border for each neighbour: `deal_link` uses the first owned province and neighbour in this order.
     for p in world.get("provinces").iter().filter(|p| p.get("owner").num_or(-1.0) == id) {
+        let Some(at) = islands.iter().position(|i| i.get("provinces").has_num(p.get("id").num())) else { continue };
         for q in p.get("adj").iter() {
-            let o = by.at(q).get("owner").num_or(-1.0);
-            if o >= 0.0 && o != id && !near.contains(&o) { near.push(o); }
+            let buyer = by.at(q).get("owner").num_or(-1.0);
+            if buyer >= 0.0 && buyer != id && !links.iter().any(|(other, _)| *other == buyer) {
+                links.push((buyer, at));
+            }
         }
     }
-    let buyer = world.get("factions").iter()
-        .filter(|f| f.get("alive").truthy() && near.contains(&f.get("id").num()) && f.get("powered").num_or(1.0) < 0.9)
-        .min_by(|a, b| a.get("powered").num_or(1.0).total_cmp(&b.get("powered").num_or(1.0)));
-    let Some(buyer) = buyer else { return };
+    let buyer = world.get("factions").iter().filter_map(|f| {
+        let buyer = f.get("id").num();
+        let at = links.iter().find(|(other, _)| *other == buyer).map(|(_, at)| *at)?;
+        if !f.get("alive").truthy() || f.get("powered").num_or(1.0) >= 0.9
+            || e.path("deals").iter().any(|d| d.get("give").truthy() && d.get("with").num_or(-1.0) == buyer) { return None; }
+        // A grid's reported supply includes imports, battery discharge and boiler fuel. Deals can only export
+        // the island's plant output and its house generator, so omit a mixed plant too when its exact split is
+        // unavailable. Reserve every active export globally: that is conservative across disconnected islands.
+        let native: f64 = e.get("plants").iter()
+            .filter(|p| islands[at].get("provinces").has_num(p.get("p").num()))
+            .filter(|p| p.get("ports").iter().all(|q| !matches!(q.get("kind").str(), "battery" | "boiler")))
+            .map(|p| p.get("mw").num_or(0.0)).sum::<f64>()
+            + if islands[at].get("capital").truthy() { e.get("house").num_or(3.0) } else { 0.0 };
+        let committed: f64 = e.path("deals").iter().filter(|d| d.get("give").truthy()).map(|d| d.get("mw").num_or(0.0)).sum();
+        let spare = native - islands[at].get("demand").num_or(0.0) * 1.15 - committed;
+        (spare >= 1.5).then_some((f, spare))
+    }).min_by(|a, b| a.0.get("powered").num_or(1.0).total_cmp(&b.0.get("powered").num_or(1.0)));
+    let Some((buyer, spare)) = buyer else { return };
     let mw = (spare * 0.6).min(6.0).floor().max(1.0);
     let give = obj! { "power" => obj! { "mw" => mw, "seconds" => 180 } };
-    let ask = obj! { "coinPerSecond" => (mw * 0.12 * 100.0).round() / 100.0, "seconds" => 180 };
+    // `common::fair` values a MW at one eighth of a ◆ per second, so this remains a fair default offer.
+    let ask = obj! { "coinPerSecond" => mw / 8.0, "seconds" => 180 };
     diplomacy::send(orders, buyer.get("id").num(), "power for sale", obj! { "give" => give, "ask" => ask });
 }
 

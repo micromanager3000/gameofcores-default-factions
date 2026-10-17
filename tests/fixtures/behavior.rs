@@ -44,18 +44,18 @@ fn maintain(world: &mut Value, me: &mut Value, units: &Value, now: f64) -> Value
 fn empty_ship_retires_after_two_minutes_without_progress() {
     let (mut world, mut me, units) = fixture();
     assert!(maintain(&mut world,&mut me,&units,1.0).get("disband").is_empty());
-    let orders = maintain(&mut world,&mut me,&units,121.0);
+    let orders = maintain(&mut world,&mut me,&units,123.0);
     assert_eq!(orders.get("disband"), &arr![107]);
-    assert!(mem::get(views(&[me.get("ramCapital").clone()])[0],245).get("until").num() > 121.0);
+    assert!(mem::get(views(&[me.get("ramCapital").clone()])[0],245).get("until").num() > 123.0);
 }
 #[test]
 fn movement_resets_the_idle_timer() {
     let (mut world, mut me, mut units) = fixture();
     maintain(&mut world,&mut me,&units,1.0);
     item(&mut units,0).entry("pos").set("x",1.0);
-    assert!(maintain(&mut world,&mut me,&units,61.0).get("disband").is_empty());
-    assert!(maintain(&mut world,&mut me,&units,121.0).get("disband").is_empty());
-    assert_eq!(maintain(&mut world,&mut me,&units,181.0).get("disband"),&arr![107]);
+    assert!(maintain(&mut world,&mut me,&units,63.0).get("disband").is_empty());
+    assert!(maintain(&mut world,&mut me,&units,123.0).get("disband").is_empty());
+    assert_eq!(maintain(&mut world,&mut me,&units,183.0).get("disband"),&arr![107]);
 }
 #[test]
 fn loaded_hired_and_passenger_ships_survive_idle_cleanup() {
@@ -68,7 +68,7 @@ fn loaded_hired_and_passenger_ships_survive_idle_cleanup() {
             "hired" => u.set("hired",obj! {"from"=>2}),
             _ => u.entry("rts").entry("sea").entry("deck").set("riders",arr![12]),
         }
-        assert!(maintain(&mut world,&mut me,&units,121.0).get("disband").is_empty(),"{kind}");
+        assert!(maintain(&mut world,&mut me,&units,123.0).get("disband").is_empty(),"{kind}");
     }
 }
 #[test]
@@ -207,14 +207,15 @@ fn a_full_think_runs_every_third_second_while_nothing_presses() {
     };
     assert!(think_at(&mut world, &me, 3.0));
     assert!(!think_at(&mut world, &me, 4.0));
-    // under four seconds of income in the bank, the cheap recovery answers in place of the strategy, every second
+    // A newly short bank enters recovery without waiting for a scheduled review.
     let mut short = me.clone();
     short.entry("rts").entry("cpu").set("bank", 120000);
     let args = views(&[world.clone(), short.clone()]);
-    assert!(!common::govern(args[0], args[1], 0.4, || obj! {}).is_empty(), "a short bank answers every second");
+    assert!(!common::govern(args[0], args[1], 0.4, || obj! {}).is_empty(), "a newly short bank answers immediately");
     let mut recovering = me.clone();
     recovering.set("ramCapital", ram_pages(&obj! {"ram"=>mem::put(244,&obj!{"r"=>true,"s"=>0},"local",None,1).unwrap()}));
-    assert!(think_at(&mut world, &recovering, 4.0), "a recovering house thinks every second");
+    assert!(!think_at(&mut world, &recovering, 4.0), "standing recovery leaves income for hauling");
+    assert!(think_at(&mut world, &recovering, 6.0), "recovery is reviewed on the next full think");
     me.entry("units").set("stalled", 1);
     assert!(think_at(&mut world, &me, 4.0), "a stalled unit brings the think back every second");
 }

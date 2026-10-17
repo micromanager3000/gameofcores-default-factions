@@ -127,15 +127,31 @@ use super::{air, theme};
         let plan = plan::for_units(me, units, world);
         let goal = ["defend", "target", "attack"].iter().map(|k|plan.get(k)).find(|v|v.num().is_finite()&&v.num()>=0.0);
         let Some(goal) = goal else { return };
+        // One bounded scan serves the whole flight. Interceptors clear enemy aircraft over the objective.
+        let intercept = world.get("units").iter().take_while(|_| cycles_left() > 5000.0)
+            .filter(|v| v.get("air").truthy() && v.get("at").num_or(v.path("pos.p").num_or(-1.0)) == goal.num()
+                && realm::is_rival(world, me, v.get("owner").num_or(-1.0)))
+            .min_by(|a,b| {
+                let health = |u: View| u.get("hp").num_or(1.0) / u.get("hpMax").num_or(1.0).max(1.0);
+                health(*a).total_cmp(&health(*b))
+            }).map(|v| v.get("id").num());
         for u in units.iter() {
             if cycles_left() < 1800.0 { break; }
             let a=u.path("rts.air");
             let heat=a.get("heat").num_or(0.0);
             if heat>=45.0 || (heat>0.0&&!a.get("aloft").truthy()) { continue; }
-            let verb=if u.path("build.vision").num_or(0.0)>=2.0 {"move"} else {"fight"};
-            if u.get("doing").str()==verb&&u.get("target").num_or(-1.0)==goal.num() { continue; }
-            if let Some(mut o)=orders::to(u,verb,goal.num(),world,me,()) {
-                o.set("alert",6);o.set("power",obj!{"drive"=>600,"weapon"=>420});order(o);
+            let scout=u.path("build.vision").num_or(0.0)>=2.0;
+            let bomber=!scout&&u.path("build.range").num_or(0.0)>0.0;
+            let focus=if !scout&&!bomber {intercept}else{None};
+            let verb=if scout {"move"} else {"fight"};
+            let standing=u.get("doing").str()==verb&&u.get("target").num_or(-1.0)==goal.num();
+            let focus_unchanged=match focus { Some(id)=>u.get("focus").num_or(-1.0)==id, None=>!u.get("focus").is_num() };
+            if standing && focus_unchanged { continue; }
+            let next=orders::to(u,verb,goal.num(),world,me,())
+                .or_else(||standing.then(||obj!{"id"=>u.get("id"),"do"=>verb,"target"=>goal.num()}));
+            if let Some(mut o)=next {
+                if let Some(id)=focus {o.set("focus",id);}
+                o.set("alert",6);o.set("power",obj!{"drive"=>if bomber {420}else{600},"weapon"=>if scout {0}else{420}});order(o);
             }
         }
     }
@@ -332,8 +348,8 @@ use super::{air, theme};
     }
 
     /// Escorts keep with the house's freighters, laden ones first, or off its home dock; the second of each pair sails as
-    /// a privateer off the nearest rival dock. Each closes with a raider within a water of it, then a laden rival
-    /// freighter, and names it as `focus`, so it strikes without a reflex.
+    /// a privateer off the nearest rival dock. Convoy guards intercept nearby raiders that threaten their convoy.
+    /// Privateers also chase laden rival freighters. Both name a `focus`, so they strike without a reflex.
     pub fn guard_shipping(units: View, world: View, me: View) {
         if cycles_left() < 4000.0 || !world.get("logistics").truthy() { return; }
         let id = me.get("id").num();
@@ -366,10 +382,14 @@ use super::{air, theme};
             let here = at_sea.get("water").num_or(-1.0);
             if !at_sea.get("ship").truthy() || here < 0.0 { continue; }
             let near = waters.get(here).get("adj");
+            let privateer = k % 2 == 1;
+            let anchor = if convoy.is_empty() { home } else { convoy[k / 2 % convoy.len()] };
+            let anchor_near = waters.get(anchor).get("adj");
             let mut best: Option<(f64, View)> = None;
             for c in &contacts {
                 let w = c.get("water").num_or(-1.0);
                 let hops = if w == here { 0.0 } else if near.has_num(w) { 1.0 } else { continue };
+                if !privateer && (!raider(*c) || (w != anchor && !anchor_near.has_num(w))) { continue; }
                 let rank = if raider(*c) { hops } else if c.path("cargo.load").num_or(0.0) >= 2.0 { 2.0 + hops } else { continue };
                 let rank = rank + c.get("hp").num_or(5.0) * 0.1;
                 if best.as_ref().is_none_or(|b| rank < b.0) { best = Some((rank, *c)); }
@@ -385,7 +405,7 @@ use super::{air, theme};
                     send = true;
                 }
             } else {
-                let goal = if k % 2 == 1 && prey.1 >= 0.0 { prey.1 } else if convoy.is_empty() { home } else { convoy[k / 2 % convoy.len()] };
+                let goal = if privateer && prey.1 >= 0.0 { prey.1 } else { anchor };
                 let going = if course.is_arr() { course.at(course.len().saturating_sub(1)).num() == goal } else { here == goal };
                 if goal >= 0.0 && (course.get("chase").is_num() || !going) && sea::route(world, here, goal).is_some() {
                     o.set("sail", goal);
@@ -898,7 +918,9 @@ use super::{air, theme};
         let mut near: Vec<(f64, f64)> = Vec::new();
         for u in world.get("units").iter().filter(|u| u.get("owner").num() == me_id) {
             let doing = u.get("doing").str();
-            if doing == "gather" || doing == "study" || u.get("type").str() == "miner" {
+            if matches!(doing, "gather" | "study")
+                || matches!(u.get("type").str(), "miner" | "hauler" | "freighter" | "scout")
+                || u.path("rts.sea.ship").truthy() || u.path("build.wings").num_or(0.0) > 0.0 {
                 continue;
             }
             let at = u.get("at").num();
@@ -1488,16 +1510,16 @@ use super::{air, theme};
     /// cycles a full think costs go to the army instead.
     const THINK_EVERY: f64 = 3.0;
 
-    /// Whether this second's think can rest: CPU RTS, not a full-think second, no stalled unit, the bank above four
-    /// seconds of income, and not in recovery (a recovering house thinks every second, so it leaves as soon as it can).
-    /// An empty answer leaves everything as it stands.
+    /// Keep the three-second cadence once a recovery policy is standing, too. Repeating recovery every second can
+    /// spend the income its miners and haulers need to restart. A newly short bank still enters recovery immediately.
+    /// An empty answer preserves standing orders and budgets; unit callbacks and reflexes continue between reviews.
     fn resting(world: View, me: View) -> bool {
         let cpu = me.path("rts.cpu");
         if !cpu.truthy() || world.get("seconds").num_or(0.0) % THINK_EVERY == 0.0 {
             return false;
         }
-        cpu.get("bank").num_or(0.0) >= cpu.get("income").num_or(0.0) * 4.0 && me.path("units.stalled").num_or(0.0) == 0.0
-            && !mem::get(me.get("ramCapital"), RECOVERY_PAGE).get("r").truthy()
+        (cpu.get("bank").num_or(0.0) >= cpu.get("income").num_or(0.0) * 4.0 && me.path("units.stalled").num_or(0.0) == 0.0)
+            || mem::get(me.get("ramCapital"), RECOVERY_PAGE).get("r").truthy()
     }
 
     /// Whether a job that runs every `period` seconds, staggered by `offset` (often the faction's id), is due at second
