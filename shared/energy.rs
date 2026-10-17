@@ -127,19 +127,25 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     if d.sell && now % 60.0 == 7.0 && cycles_left() > 10000.0 { sell(orders, world, me); }
 }
 
-/// A plant going up is charged a twelfth of its build cost a second through the fabrication lane, which recruits share.
-/// A compute policy sent this second gets that much more room, so the house's own limit stays for its units.
+/// A plant going up is charged a twelfth of its build cost a second through the fabrication lane, which recruits share,
+/// and a standing plant its upkeep through the upkeep lane, before any unit. A compute policy sent this second gets
+/// that much more room in each, so the house's own limits stay for its units.
 fn fund(orders: &mut Value, me: View) {
-    let fab = orders.get("compute").get("cpu").get("limits").get("fabrication").num_or(0.0);
-    if fab <= 0.0 { return; }
     let id = me.get("id").num_or(-1.0);
-    let rate = me.path("rts.structures").iter()
-        .filter(|s| s.get("owner").num_or(-2.0) == id && s.get("state").str() == "building" && s.get("power").truthy())
-        .map(|s| s.get("buildCost").num_or(0.0)).sum::<f64>() * price(me) / 12.0;
-    if rate <= 0.0 { return; }
-    // a limit of 1 or less is a share of income
-    let base = if fab <= 1.0 { fab * me.path("rts.cpu.income").num_or(0.0) } else { fab };
-    orders.entry("compute").entry("cpu").entry("limits").set("fabrication", (base + rate).round());
+    let income = me.path("rts.cpu.income").num_or(0.0);
+    let plants: Vec<View> = me.path("rts.structures").iter()
+        .filter(|s| s.get("owner").num_or(-2.0) == id && s.get("power").truthy() && s.get("state").str() != "ruin" && s.get("hp").num_or(0.0) > 0.0)
+        .collect();
+    let going_up = plants.iter().filter(|s| s.get("state").str() == "building").map(|s| s.get("buildCost").num_or(0.0)).sum::<f64>() * price(me) / 12.0;
+    let period = me.path("rts.structureCosts.maintenancePeriod").num_or(600.0).max(1.0);
+    let upkeep = plants.iter().map(|s| s.get("buildCost").num_or(0.0) * s.get("progress").num_or(1.0).max(1.0 / 12.0)).sum::<f64>() * price(me) / period;
+    for (lane, rate) in [("fabrication", going_up), ("upkeep", upkeep)] {
+        let limit = orders.get("compute").get("cpu").get("limits").get(lane).num_or(0.0);
+        if limit <= 0.0 || rate <= 0.0 { continue; }
+        // a limit of 1 or less is a share of income
+        let base = if limit <= 1.0 { limit * income } else { limit };
+        orders.entry("compute").entry("cpu").entry("limits").set(lane, (base + rate).round());
+    }
 }
 
 /// The land to darken first, and the reserve the batteries keep.
