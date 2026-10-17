@@ -1065,6 +1065,15 @@ fn line(units: View, world: View, me: View) {
         // those the plan sends to defend (common::defends), the rest on the attack
         let defend = common::defends(&p, u);
         let (verb, target) = if defend >= 0.0 { ("fight", defend) } else { ("capture", attack) };
+        // a beaten army falls back to the stage, and reinforcements wait there for a wave (common::front)
+        if verb == "capture" && target == attack {
+            if let Some(o) = common::front(u, world, me, &p) {
+                if let Some(o) = o {
+                    order(o);
+                }
+                continue;
+            }
+        }
         if target.is_nan() || target < 0.0 || (u.get("doing").str() == verb && u.get("target").num() == target) {
             continue;
         }
@@ -1090,6 +1099,12 @@ fn tactical_order(u: View, world: View, me: View, role: &str, budget: &RouteBudg
     let attack = vnum(p.get("attack"));
     let target = if defend >= 0.0 { defend } else if attack >= 0.0 { attack } else { num(me.get("capital")) };
     if !budget.route(u, target, world, me) { return None; }
+    // a beaten army falls back to the stage, and reinforcements wait there for a wave (common::front)
+    if defend < 0.0 && attack >= 0.0 {
+        if let Some(o) = common::front(u, world, me, &p) {
+            return o;
+        }
+    }
     let o = if defend >= 0.0 {
         orders::to(u, "fight", defend, world, me, ())
     } else if attack >= 0.0 {

@@ -153,3 +153,68 @@ fn ground_carriers_collect_cargo_from_an_alternate_receiving_dock() {
     let orders:Vec<Value>=abi::TEST_ORDERS.with(|o|o.take()).iter().map(|s|Value::parse(s)).collect();
     assert!(orders.iter().any(|o|o.get("cargo").get("load").get("p").num()==1.0),"{orders:?}");
 }
+
+/// Unit 1 in the target (5), hurt unless `max` is its hp, unit 2 at the stage (4) on its way there, and a rival
+/// soldier and miner in the target.
+fn front_case(target_hp: f64, stage_hp: f64, rival_hp: f64) -> (Option<Option<Value>>, Option<Option<Value>>) {
+    front_case_max(target_hp, target_hp + 1.0, stage_hp, rival_hp)
+}
+fn front_case_max(target_hp: f64, max: f64, stage_hp: f64, rival_hp: f64) -> (Option<Option<Value>>, Option<Option<Value>>) {
+    let (mut world, mut me, _) = fixture();
+    world.set("provinces", Value::parse(r#"[{"id":0,"owner":1,"adj":[4]},{"id":4,"owner":1,"adj":[0,5]},{"id":5,"owner":2,"adj":[4]}]"#));
+    world.set("units", Value::parse(&format!(r#"[
+        {{"id":1,"owner":1,"type":"line","at":5,"to":-1,"doing":"capture","target":5,"hp":{target_hp},"hpMax":{max}}},
+        {{"id":2,"owner":1,"type":"line","at":4,"to":5,"doing":"capture","target":5,"hp":{stage_hp}}},
+        {{"id":3,"owner":2,"type":"line","at":5,"to":-1,"doing":"fight","target":5,"hp":{rival_hp}}},
+        {{"id":4,"owner":2,"type":"miner","at":5,"to":-1,"doing":"gather","target":5,"hp":50}}]"#)));
+    me.set("ramProvince", obj! {"0"=>arr![obj!{}],"4"=>arr![obj!{}]});
+    let args = views(&[world, me]);
+    let plan = obj! {"attack"=>5,"stage"=>4};
+    let units: Vec<View> = args[0].get("units").iter().collect();
+    (common::front(units[0], args[0], args[1], &plan), common::front(units[1], args[0], args[1], &plan))
+}
+#[test]
+fn an_outweighed_army_falls_back_and_goes_back_in_as_one_wave() {
+    let to_stage = |o: &Option<Option<Value>>| o.as_ref().and_then(|o| o.as_ref()).is_some_and(|o| o.get("do").str() == "fight" && o.get("target").num() == 4.0);
+    // 3 hp against 20: the hurt unit in the target falls back, the one at the stage (10 + 3 < 1.15 × 20) waits there
+    let (ahead, stage) = front_case(3.0, 10.0, 20.0);
+    assert!(to_stage(&ahead), "{ahead:?}");
+    assert!(to_stage(&stage), "{stage:?}");
+    // a unit that hasn't been hurt yet fights on
+    let (ahead, _) = front_case_max(3.0, 3.0, 10.0, 20.0);
+    assert!(ahead.is_none(), "{ahead:?}");
+    // with none of yours in the target, a first attack goes in on the plan
+    let (_, stage) = front_case(0.0, 10.0, 20.0);
+    assert!(stage.is_none(), "{stage:?}");
+    // a wave at the stage that outweighs the rivals goes in on the plan
+    let (_, stage) = front_case(3.0, 30.0, 20.0);
+    assert!(stage.is_none(), "{stage:?}");
+    // an even fight stands: 15 × 1.6 outweighs 20, and workers don't count
+    let (ahead, stage) = front_case(15.0, 10.0, 20.0);
+    assert!(ahead.is_none() && stage.is_none(), "{ahead:?} {stage:?}");
+}
+#[test]
+fn a_full_think_runs_every_third_second_while_nothing_presses() {
+    let (mut world, mut me, units) = fixture();
+    me.entry("rts").entry("cpu").set("bank", 400000);
+    world.set("units", units);
+    let think_at = |world: &mut Value, me: &Value, now: f64| {
+        world.set("seconds", now);
+        let args = views(&[world.clone(), me.clone()]);
+        let mut ran = false;
+        common::govern(args[0], args[1], 0.4, || { ran = true; obj! {} });
+        ran
+    };
+    assert!(think_at(&mut world, &me, 3.0));
+    assert!(!think_at(&mut world, &me, 4.0));
+    // under four seconds of income in the bank, the cheap recovery answers in place of the strategy, every second
+    let mut short = me.clone();
+    short.entry("rts").entry("cpu").set("bank", 120000);
+    let args = views(&[world.clone(), short.clone()]);
+    assert!(!common::govern(args[0], args[1], 0.4, || obj! {}).is_empty(), "a short bank answers every second");
+    let mut recovering = me.clone();
+    recovering.set("ramCapital", ram_pages(&obj! {"ram"=>mem::put(244,&obj!{"r"=>true,"s"=>0},"local",None,1).unwrap()}));
+    assert!(think_at(&mut world, &recovering, 4.0), "a recovering house thinks every second");
+    me.entry("units").set("stalled", 1);
+    assert!(think_at(&mut world, &me, 4.0), "a stalled unit brings the think back every second");
+}

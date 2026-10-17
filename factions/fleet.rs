@@ -1061,6 +1061,15 @@ fn march(u: View, pl: &Value, world: View, me: View, cloak: bool) {
         let conduct=u.get("conduct");
         let safe=realm::is_ally(me,owner) || (conduct.get("seconds").num_or(0.0)>0.0 && conduct.get("from").num_or(-2.0)==owner);
         let verb = if num(&defend) >= 0.0 || safe || u.get("air").truthy() || u.path("build.wings").truthy() { "fight" } else { "capture" };
+        // a beaten army falls back to the stage, and reinforcements wait there for a wave (common::front)
+        if verb == "capture" {
+            if let Some(o) = common::front(u, world, me, pl) {
+                if let Some(o) = o {
+                    order(o);
+                }
+                return;
+            }
+        }
         // A route is expensive code.  The engine already retains an accepted
         // order, so recalculate only when the strategic destination changes.
         let doing = u.get("doing").str();
