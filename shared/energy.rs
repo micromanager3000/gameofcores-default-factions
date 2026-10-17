@@ -424,18 +424,18 @@ pub fn look(kind: &str, cap: f64, style: usize) -> Value {
                 let q = i as f64;
                 let (x, y, rot) = match style.min(9) {
                     // Gers and lotus courts collect light in a spoke pattern.
-                    0 => { let a = q * 0.785; (a.cos() * 1.02, a.sin() * .72, q * 45.0) }
-                    1 => { let a = q * 0.785 + .392; (a.cos() * .92, a.sin() * .78, q * 45.0 + 22.5) }
+                    0 => { let a = q * 0.785; (a.cos() * 1.02, a.sin() * 0.72, q * 45.0) }
+                    1 => { let a = q * 0.785 + 0.392; (a.cos() * 0.92, a.sin() * 0.78, q * 45.0 + 22.5) }
                     // Cloister pairs, laboratory ring, and sail-like harbour strips.
-                    2 => (((i % 2) as f64 - .5) * 1.3, (i / 2) as f64 * .42 - .62, 0.0),
-                    3 => { let a = q * 0.785; (a.cos() * .98, a.sin() * .68, q * 45.0) }
-                    4 => (-1.05 + (i % 4) as f64 * .68, -.64 + (i / 4) as f64 * .98, -24.0),
+                    2 => (((i % 2) as f64 - 0.5) * 1.3, (i / 2) as f64 * 0.42 - 0.62, 0.0),
+                    3 => { let a = q * 0.785; (a.cos() * 0.98, a.sin() * 0.68, q * 45.0) }
+                    4 => (-1.05 + (i % 4) as f64 * 0.68, -0.64 + (i / 4) as f64 * 0.98, -24.0),
                     // The industrial rank stays deliberately regular.
-                    5 => (-.9 + (i % 4) as f64 * .6, -.55 + (i / 4) as f64 * .9, 0.0),
-                    6 => { let a = q * 0.785; (a.cos() * 1.08, a.sin() * .82, q * 45.0) },
-                    7 => (-1.05 + (i % 4) as f64 * .68, -.50 + (i / 4) as f64 * 1.02, 18.0),
-                    8 => (-.98 + (i % 4) as f64 * .66 + if i / 4 == 0 { .16 } else { -.16 }, -.55 + (i / 4) as f64 * .92, -8.0),
-                    _ => { let a = q * 0.785; (a.cos() * .94, a.sin() * .72, q * 45.0) },
+                    5 => (-0.9 + (i % 4) as f64 * 0.6, -0.55 + (i / 4) as f64 * 0.9, 0.0),
+                    6 => { let a = q * 0.785; (a.cos() * 1.08, a.sin() * 0.82, q * 45.0) },
+                    7 => (-1.05 + (i % 4) as f64 * 0.68, -0.50 + (i / 4) as f64 * 1.02, 18.0),
+                    8 => (-0.98 + (i % 4) as f64 * 0.66 + if i / 4 == 0 { 0.16 } else { -0.16 }, -0.55 + (i / 4) as f64 * 0.92, -8.0),
+                    _ => { let a = q * 0.785; (a.cos() * 0.94, a.sin() * 0.72, q * 45.0) },
                 };
                 add("panel", x, y, 0.12, 0.52, 0.12, 0.7, rot, "");
             }

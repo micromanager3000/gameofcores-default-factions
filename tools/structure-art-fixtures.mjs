@@ -2,9 +2,9 @@
 // It compiles a temporary Kublai source because that program carries the full energy module;
 // the injected `artfixture` exposes only already-public appearance values.
 import {execFileSync} from 'node:child_process';
-import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {dirname, join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {source} from './source.mjs';
@@ -37,11 +37,12 @@ function call(wasm, arg) {
   return JSON.parse(decode.decode(new Uint8Array(x.memory.buffer, x.cores_out_ptr(), x.cores_out_len())));
 }
 export function generateStructureArtFixture(destination = new URL('fixtures/structure-art-authored.json', new URL('./', import.meta.url))) {
+  destination = destination instanceof URL ? fileURLToPath(destination) : destination;
   const dir = mkdtempSync(join(tmpdir(), 'goc-structure-fixture-')), rs = join(dir, 'fixture.rs'), wasm = join(dir, 'fixture.wasm');
   try {
     const authored = fixtureSource(); writeFileSync(rs, authored); execFileSync(cores, ['compile', rs, wasm], {cwd: root.pathname, stdio: 'pipe'}); const bytes = readFileSync(wasm), appearances = {energy:{}, roles:{}};
     for (let style = 0; style < 10; style++) { appearances.energy[style] = Object.fromEntries(energy.map(kind => [kind, call(bytes, {style, kind, capacity:8})])); appearances.roles[style] = Object.fromEntries(roles.map((role, i) => [role, call(bytes, {style, role:i})])); }
-    const value = {version:1, sourceHash:createHash('sha256').update(authored).digest('hex'), factions, energy, roles, appearances}; writeFileSync(destination, JSON.stringify(value)); return value;
-  } finally { rmSync(dir, {recursive:true, force:true}); }
+    const value = {version:1, sourceHash:createHash('sha256').update(authored).digest('hex'), factions, energy, roles, appearances}; mkdirSync(dirname(destination), {recursive:true}); writeFileSync(destination, JSON.stringify(value)); return value;
+  } finally { if (!process.env.KEEP_STRUCTURE_FIXTURE) rmSync(dir, {recursive:true, force:true}); }
 }
 if (import.meta.url === new URL(process.argv[1], 'file:').href) generateStructureArtFixture();
