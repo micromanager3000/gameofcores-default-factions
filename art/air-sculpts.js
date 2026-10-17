@@ -124,7 +124,7 @@ function housePlanform(s,seat,role){
  else if(seat===6){for(const z of [-.54,.54])s.rod([-.29,y,0],[-.54,y+.23,z],.035,LIGHT);}
  else if(seat===7){s.part('cylinder',[-.33,y+.13,0],[.30,.30,.045],GOLD,'',[-.33,y+.13,0],[Math.PI/2,0,0]);}
  else if(seat===8){for(const z of [-.48,0,.48])s.poly([-.28,y,z],[-.17,0,.17,0,0,.28],.025,'#c7b57e');}
- else{for(const z of [-.37,.37])s.orb([-.18,y,z],[.34,.07,.26],'#d3a7a4','sway',[-.18,y,0]);}
+ else{} // Garden aircraft already use petal rotors as their complete organic planform.
 }
 export function airSculpt(seat,role='fighter'){
  if(!BUILDERS[seat]||!AIR_ROLES.includes(role))return null;

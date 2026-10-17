@@ -37,7 +37,9 @@ function hull(s,{length=1.15,beam=.38,c=WOOD,deck=DECK,profile='round'}={}){
   frame:[[-1,.16,.18],[-.70,.10,.68],[.24,.12,.82],[.86,.20,.55],[1,.37,.10]],
   open:[[-1,.24,.20],[-.67,.14,.72],[.20,.15,.92],[.82,.27,.66],[1,.48,.18]],
  }[profile]||null;
- const rings=shape.map(([x,y,z])=>[x*length,y,z*beam]);
+ // The top of every elliptical cross-section meets the deck underside. `y` adds
+ // sheer at the bow and stern, so the deck never reads as a floating flat plate.
+ const rings=shape.map(([x,y,z])=>{const half=z*beam,top=.552+Math.max(0,y-.15);return [x*length,top-half*.62,half];});
  // A single closed loft supplies keel, bilge, flare and sheer without stacked slabs.
  s.loft(rings,c);const deckPts=rings.slice(1,-1).flatMap(([x,,z])=>[x,-z]).concat(rings.slice(1,-1).reverse().flatMap(([x,,z])=>[x,z]));
  plate(s,deckPts,.57,.035,deck);

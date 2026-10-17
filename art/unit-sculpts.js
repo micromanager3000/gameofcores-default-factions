@@ -258,7 +258,7 @@ function houseSilhouette(s,seat){
  if(seat===0){ // Horse-tail standard and curved composite bow case.
   s.rod([back,.82,.27],[back,1.83,.27],.034,WOOD);for(const y of [1.48,1.61,1.74])s.taper([back,y,.27],[back-.20,y+.20,.27],.026,'#493e34','sway',[back,1.83,.27]);
  }else if(seat===1){ // Temple crown over a lotus collar.
-  for(const z of [-.23,0,.23])s.poly([-.08,1.67,z],[-.12,0,.12,0,0,.26],.06,GOLD);for(const z of [-.29,.29])s.poly([-.10,.91,z],[-.18,0,.18,0,0,.19],.035,'#dfb76d');
+  for(const z of [-.23,0,.23])s.poly([-.08,1.67,z],[-.12,0,.12,0,0,.26],.06,GOLD);
  }else if(seat===2){ // Gothic backplate and a tall cross finial.
   s.poly([back,.98,.30],[-.20,0,.20,0,.15,.55,-.15,.55],.07,IVORY);s.box([back,1.63,.30],[.045,.42,.025],RED);s.box([back,1.75,.30],[.25,.045,.028],RED);
  }else if(seat===3){ // Brass instrument frame: visibly Renaissance even on workers.
