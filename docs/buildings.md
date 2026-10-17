@@ -70,7 +70,7 @@ They supplement workers without retiring them. Saturated mines receive no extrac
 Repair bays prioritize damaged buildings, then damaged units within six cells.
 Funded bays offer nearby injured allies bounded repair grants. Nations charges 0.25 ◆ per HP; other houses donate repairs.
 Recipients accept explicit grants priced at no more than 0.25 ◆ per HP.
-Standing jobs refresh every five seconds and expire after 45 seconds without renewal.
+Standing jobs refresh every six seconds and expire after 45 seconds without renewal.
 Recovery clears their paid allocations. The planner reserves headroom for returning orders and writing RAM.
 Nearby combat units attack hostile buildings when no enemy army needs their weapon cooldown.
 

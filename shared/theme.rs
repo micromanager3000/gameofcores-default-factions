@@ -192,6 +192,11 @@ impl Theme {
             l.entry("names").set(unit, name);
             types.set(unit, none());
         }
+        // Escorts sail as warships too; their ground preview wears the house's guard body.
+        let guard = l.get("units").get("guard").clone();
+        l.entry("units").set("escort", guard);
+        l.entry("names").set("escort", "Escort");
+        types.set("escort", none());
         l.set("combat", obj! { "default" => weapon_art(self.style, self.number), "types" => types });
         let primary = match st.primary {
             Some(p) if self.own => Value::from(p),

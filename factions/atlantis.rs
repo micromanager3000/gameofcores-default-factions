@@ -15,9 +15,9 @@ use std::rc::Rc;
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
-use shared::common::{hauler, freighter};
+use shared::common::{hauler, freighter, escort};
 
-program!(think, hauler, freighter, miner, line, bulwark, artillery, medic, interceptor, piercer, scout, aeronaut, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, line, bulwark, artillery, medic, interceptor, piercer, scout, aeronaut, reflex, research, duel, challenge, look, build3d, live3d);
 
 // The bodies: points in hp, speed, strength, carry and vision, and for some in range.
 fn miner_body() -> Value {
@@ -44,10 +44,10 @@ fn scout_body() -> Value {
 // (25% more cycles a core); then Flight, Gate, Enhanced stealth and Air weapons. A ready tier-2 tech that no faction
 // holds yet (Mountain traversal, Influence, Capture, Cloak, Faith) jumps the queue once the army's techs are in: a
 // world first for 60 puzzles.
-const TECHS: [&str; 20] = [
-    "extraction", "armor", "dash", "ranged", "pierce", "antiAir", "seaTraversal",
-    "repair", "artillery", "scan", "mountainTraversal", "computeBoost", "influence", "capture", "cloak", "faith",
-    "flight", "gate", "stealth", "airWeapons",
+const TECHS: [&str; 25] = [
+    "extraction", "armor", "dash", "ranged", "drilling", "storage", "pierce", "antiAir", "seaTraversal", "repair",
+    "artillery", "fission", "scan", "mountainTraversal", "computeBoost", "fusion", "influence", "capture", "cloak",
+    "faith", "turbines", "flight", "gate", "stealth", "airWeapons",
 ];
 
 /// What the Merchants of Light trade: the techs of the economy, the map and the mind. The army's techs (Armor, Dash,
@@ -58,6 +58,9 @@ const GOODS: [&str; 8] = ["extraction", "seaTraversal", "mountainTraversal", "in
 /// The tier-2 techs the army fields (medics, artillery, scanners): researched in this order whoever holds them, before
 /// any world first.
 const ARMY: [&str; 3] = ["repair", "artillery", "scan"];
+// In a world with energy, rift wells and batteries come before the army's tier-2 techs. Fission and fusion wait their
+// turn in TECHS, after the army.
+const POWER: [&str; 2] = ["drilling", "storage"];
 
 // ---- JavaScript's arithmetic, where this program follows it ----
 
@@ -1401,7 +1404,7 @@ mod atlantis_ext {
     use gameofcores::*;
 
     use super::common;
-    use super::{due, text, Clock, ARMY, GOODS, TECHS};
+    use super::{due, text, Clock, ARMY, GOODS, POWER, TECHS};
 
     /// `Number(x)` for a value from the game: null is 0.
     fn n(v: View) -> f64 {
@@ -1466,6 +1469,8 @@ mod atlantis_ext {
             now.clone()
         } else if let Some(t) = TECHS.iter().copied().find(|t| tier(t) <= 1.0 && ready(all, mine, t)) {
             t.to_string()
+        } else if let Some(t) = POWER.iter().copied().find(|t| world.get("energy").truthy() && ready(all, mine, t)) {
+            t.to_string()
         } else if let Some(t) = ARMY.iter().copied().find(|t| ready(all, mine, t)) {
             t.to_string()
         } else if let Some(t) = TECHS.iter().copied().find(|t| tier(t) == 2.0 && ready(all, mine, t) && !taken(world, me_id, t)) {
@@ -1504,7 +1509,7 @@ mod atlantis_ext {
         let now = me.path("research.tech").str();
         let offer = if now.is_empty() { 110_000.0 } else { all.get(now).get("offer").num_or(110_000.0) };
         let saved = me.path("research.bank").num_or(0.0);
-        let tier1 = TECHS[..7].iter().any(|t| !mine.get(t).truthy());
+        let tier1 = TECHS.iter().any(|t| all.get(t).get("tier").num_or(9.0) <= 1.0 && !mine.get(t).truthy());
         let fill = if pressure >= 2.0 || (!tier1 && bank < income * 2.0) {
             income * 0.2
         } else if bank > income * 10.0 && saved < offer * 1.4 {

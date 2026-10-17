@@ -16,9 +16,9 @@
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
-use shared::common::{hauler, freighter};
+use shared::common::{hauler, freighter, escort};
 
-program!(think, hauler, freighter, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, reflex, research, duel, challenge, look, build3d, live3d);
 
 // The bodies: points in hp, speed, strength, carry and vision, and for some in range and wings.
 fn miner_body() -> Value {
@@ -53,9 +53,10 @@ fn kite_shot_body() -> Value {
 
 // What the faction wants, in order: researched when nobody sells it, bought when somebody does. Compute boost comes
 // after defensive capabilities; faith is left to the priests.
-const TECHS: [&str; 19] = [
-    "extraction", "seaTraversal", "armor", "ranged", "repair", "influence", "capture", "dash", "cloak", "antiAir", "scan", "pierce", "artillery",
-    "computeBoost", "mountainTraversal", "flight", "airWeapons", "stealth", "gate",
+const TECHS: [&str; 24] = [
+    "extraction", "seaTraversal", "turbines", "armor", "ranged", "transmission", "repair", "influence", "capture",
+    "dash", "cloak", "antiAir", "scan", "pierce", "artillery", "storage", "drilling", "fission", "computeBoost",
+    "mountainTraversal", "flight", "airWeapons", "stealth", "gate",
 ];
 
 // ---- JavaScript's arithmetic, where this program follows it ----

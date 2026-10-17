@@ -64,8 +64,10 @@ node tools/source.mjs kublai /tmp/kublai.rs
 The export contains the selected program and all shared modules in one Rust source file.
 Exports fit the game's 512 KiB source limit. Players can copy and change the exported source.
 The program compiles against the public game SDK. All faction helpers count toward source RAM.
-The game provides 3,072 free RAM pages to every faction, covering the newly included preset source.
+The game provides 3,360 free RAM pages to every faction, covering the included preset source and the grid planner.
 Compiled instructions are metered normally.
+Shared code fenced `// @house` … `// @end` goes into the house programs only. The default program leaves out the sea
+escorts this way, and carries `shared/energy_plain.rs` as its `energy` module in place of the power grid planner.
 Both the Rust package and the Node exporter produce the same source; `npm test` checks every program.
 
 Every house supports physical CPU cargo when `world.logistics` is present.
@@ -73,7 +75,13 @@ Miners unload locally, ground carriers connect depots, and freighters carry carg
 Carriers leave exhausted depots with partial loads and prioritize useful delivery trips.
 Quiet Fleet recovers visible wreck cargo and returns it through the capital's dock.
 It retires an empty corsair when no worthwhile target or nearby wreck remains.
+Every other house that ships cargo by sea keeps one armed escort with its freighters, and a second once it runs two
+freighters or a raider shows at sea. The second sails as a privateer off the nearest rival dock.
 The same programs retain their earlier mining policy in saved worlds without logistics.
+
+Every house plans a power grid when `world.energy` is present. It orders plants and batteries for its own doctrine,
+sets which provinces go dark first in a shortfall, and keeps a battery reserve. Compute of Nations sells spare power to
+a short neighbour. [The grid planner](docs/energy.md) gives each doctrine and rule.
 
 Export a structure example with `node tools/source.mjs foundry /tmp/foundry.rs`.
 The names `lantern` and `raiders` select the other two programs.
