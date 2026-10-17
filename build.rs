@@ -1,13 +1,35 @@
 use std::{env, fs, path::PathBuf};
+/// Shared code fenced `// @house` … `// @end` goes into the house programs and the code fenced `// @plain` … `// @end`
+/// into the default program, which runs plain: a program pays for its length in memory. (tools/source.mjs does the same.)
+fn fence(text: &str, keep: &str) -> String {
+    let mut drop = false;
+    let mut out: Vec<&str> = Vec::new();
+    for line in text.split('\n') {
+        let t = line.trim_start();
+        if t.starts_with("// @house") || t.starts_with("// @plain") {
+            drop = !t.starts_with(&format!("// @{keep}"));
+            if !drop { out.push(line); }
+        } else if t.starts_with("// @end") {
+            if !drop { out.push(line); }
+            drop = false;
+        } else if !drop {
+            out.push(line);
+        }
+    }
+    out.join("\n")
+}
 fn main() {
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
     let mut shared = String::from("\n#[allow(dead_code, unused_imports)]\nmod shared {\n");
+    let mut plain = shared.clone();
     let mut example_shared = shared.clone();
     for name in ["air", "capital", "common", "compat", "energy", "structures", "theme", "unit_art"] {
         let path = format!("shared/{name}.rs");
         println!("cargo:rerun-if-changed={path}");
-        let module = format!("pub mod {name} {{\n{}\n}}\n", fs::read_to_string(path).expect("shared source"));
+        let text = fs::read_to_string(path).expect("shared source");
+        let module = format!("pub mod {name} {{\n{}\n}}\n", fence(&text, "house"));
         shared.push_str(&module);
+        plain.push_str(&format!("pub mod {name} {{\n{}\n}}\n", fence(&text, "plain")));
         if name != "common" && name != "structures" && name != "energy" {
             example_shared.push_str(&module);
         }
@@ -25,7 +47,8 @@ fn main() {
         println!("cargo:rerun-if-changed={path}");
         let own = if name == "default" { arts.join(", ") } else { arts[seat].clone() };
         let art = format!("pub fn art(style: usize) -> String {{ let a = [{own}]; a[style.min(a.len() - 1)].to_string() }}\n}}\n");
-        let source = fs::read_to_string(path).expect("faction source") + &shared + &art;
+        let shared = if name == "default" { &plain } else { &shared };
+        let source = fs::read_to_string(path).expect("faction source") + shared + &art;
         fs::write(out.join(format!("{name}.rs")), source).expect("assembled source");
         constants.push_str(&format!("({name:?}, include_str!(concat!(env!(\"OUT_DIR\"), \"/{name}.rs\"))),\n"));
     }

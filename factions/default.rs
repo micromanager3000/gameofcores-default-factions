@@ -2,16 +2,18 @@
 // deliberately plain: mine CPU, keep a guard in the capital's ring, take the best neighbouring land it can hold, scout
 // a little, field longbows once it has ranged fire and a spy once it can cloak, and answer research and duel puzzles
 // with its own solver. The founding seats wear their house style (shared faction code: look, anthem, 3D capital and, where
-// it names them, unit names); every other seat a plain one.
+// it names them, unit names); every other seat a plain one. In a world with energy it runs on its house generator alone,
+// and it ships cargo without escorts: the house programs' grid planner (shared/energy.rs) and escorts are left out of
+// it, since a program pays for its length in memory.
 //
 // It's written on the SDK in the gameofcores crate (docs part sdk). Its strategy is the `common` module at the end,
 // which the house programs share: picking targets, mustering, spawning, splitting cycles, deals and pacts, and the
 // puzzle solver. Copy any of it.
 use gameofcores::*;
 use shared::{air, capital, common, theme};
-use shared::common::{hauler, freighter, escort};
+use shared::common::{hauler, freighter};
 
-program!(think, hauler, freighter, escort, miner, guard, longbow, spy, scout, reflex, research, duel, look, build3d, live3d);
+program!(think, hauler, freighter, miner, guard, longbow, spy, scout, reflex, research, duel, look, build3d, live3d);
 
 // What to research, in order: a CPU RTS world's ids, then a classic world's (archery is ranged there, espionage is
 // cloak). Ids the world lacks are skipped.

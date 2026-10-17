@@ -325,6 +325,7 @@ use super::{air, theme};
         }
     }
 
+    // @house: escorts and privateers sail with the house programs; the default program ships unescorted
     /// A raider at sea: an armed hull, or a hull that carries nothing.
     fn raider(c: View) -> bool {
         c.get("ship").truthy() && (c.path("build.range").num_or(0.0) > 0.0 || c.path("build.carry").num_or(0.0) == 0.0)
@@ -422,6 +423,7 @@ use super::{air, theme};
         if army::check(&body, &modules, me).is_some() { return; }
         orders.entry("spawn").push(obj! { "type" => "escort", "build" => body, "modules" => modules });
     }
+    // @end
 
     const FREIGHT_PAGE: u32 = 245;
     const FREIGHT_IDLE_SECONDS: f64 = 120.0;
@@ -1355,7 +1357,9 @@ use super::{air, theme};
     pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
         let mut orders = govern_units(world, me, share, strategy);
         maintain_freighters(&mut orders, world, me);
+        // @house
         maintain_escorts(&mut orders, world, me);
+        // @end
         super::structures::apply(&mut orders, world, me);
         super::energy::apply(&mut orders, world, me);
         orders
@@ -2419,4 +2423,6 @@ use super::{air, theme};
 
 pub fn hauler(units: View, world: View, me: View) { haul_cargo(units, world, me); }
 pub fn freighter(units: View, world: View, me: View) { freight(units, world, me); }
+// @house
 pub fn escort(units: View, world: View, me: View) { guard_shipping(units, world, me); }
+// @end

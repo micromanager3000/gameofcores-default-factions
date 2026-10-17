@@ -39,6 +39,8 @@ Exports fit the game's 512 KiB source limit. Players can copy and change the exp
 The program compiles against the public game SDK. All faction helpers count toward source RAM.
 The game provides 3,072 free RAM pages to every faction, covering the newly included preset source.
 Compiled instructions are metered normally.
+Shared code fenced `// @house` … `// @end` goes into the house programs only, and code fenced `// @plain` … `// @end`
+into the default program only. The default program leaves out the power grid planner and sea escorts this way.
 Both the Rust package and the Node exporter produce the same source; `npm test` checks every program.
 
 Every house supports physical CPU cargo when `world.logistics` is present.
