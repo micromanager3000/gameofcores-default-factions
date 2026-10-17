@@ -1610,6 +1610,15 @@ fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
         let defend = Value::Num(common::defends(&pl, u));
         let goal = if num(&defend) >= 0.0 { &defend } else { pl.get("target") };
         let verb = if num(&defend) >= 0.0 || u.get("air").truthy() || u.path("build.wings").truthy() { "fight" } else { "capture" };
+        // a beaten army falls back to the stage, and reinforcements wait there for a wave (common::front)
+        if verb == "capture" {
+            if let Some(o) = common::front(u, world, me, &pl) {
+                if let Some(o) = o {
+                    order(o);
+                }
+                continue;
+            }
+        }
         // A route is expensive code.  The engine already retains an accepted
         // order, so recalculate only when the strategic destination changes.
         let doing = u.get("doing").str();

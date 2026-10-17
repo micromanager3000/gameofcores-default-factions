@@ -23,6 +23,10 @@ fn miner_body() -> Value {
 fn line_body() -> Value {
     obj! { "hp" => 3, "speed" => 2, "strength" => 3, "carry" => 0, "vision" => 1 }
 }
+// A rifleman: the line's body with a ranged weapon, for the rank behind the bayonets.
+fn rifle_body() -> Value {
+    obj! { "hp" => 2, "speed" => 2, "strength" => 3, "carry" => 0, "vision" => 1, "range" => 1 }
+}
 fn spark_body() -> Value {
     obj! { "hp" => 3, "speed" => 3, "strength" => 0, "carry" => 0, "vision" => 1 }
 }
@@ -31,8 +35,8 @@ fn scout_body() -> Value {
 }
 
 // Extraction for the economy, influence for the papers (persuasion 60% stronger, morale +8), capture for the Red Army,
-// then the crossings when the land runs out and Compute boost when there are cycles to spare.
-const TECHS: [&str; 5] = ["extraction", "influence", "capture", "mountainTraversal", "seaTraversal"];
+// rifles and armor for its ranks, then the crossings when the land runs out.
+const TECHS: [&str; 7] = ["extraction", "influence", "capture", "ranged", "armor", "mountainTraversal", "seaTraversal"];
 
 // The Manifesto, ported to compute: a line at a time for the memo (at most 90 characters with what it is doing).
 const QUOTES: [&str; 12] = [
@@ -661,6 +665,25 @@ fn strategy(world: View, me: View) -> Value {
         |t, k| unit_name(me, t, k),
         &common::Recruit { reserve: 0.0, limits: &limits, builds: &builds, upkeep: 0.45 },
     );
+    // The Red Army fights in ranks once research allows: every third recruit a rifleman, every third armored.
+    let techs = me.get("techs");
+    let (rifles, armor) = (techs.get("ranged").truthy(), techs.get("armor").truthy());
+    if rifles || armor {
+        let mut nth = me.path("units.byType.line").num_or(0.0);
+        let spawns: Vec<Value> = orders.get("spawn").items().iter().map(|sp| {
+            let mut sp = sp.clone();
+            if sp.get("type").str() == "line" {
+                nth += 1.0;
+                match nth as u64 % 3 {
+                    1 if rifles => sp.set("build", rifle_body()),
+                    2 if armor => sp.set("modules", vec!["armor"]),
+                    _ => {}
+                }
+            }
+            sp
+        }).collect();
+        orders.set("spawn", spawns);
+    }
 
     // Compute chooses research/type schedules; shared-CPU policy below replaces
     // the old split and makes every execution lane trade against one bank.
@@ -848,6 +871,15 @@ fn line(units: View, world: View, me: View) {
                 (verb, target) = ("persuade", num(&sway[(u.get("id").num().abs() as usize) % sway.len()]));
             }
         }
+        // a beaten army falls back to the stage, and reinforcements wait there for a wave (common::front)
+        if verb == "capture" && target == attack {
+            if let Some(o) = common::front(u, world, me, &p) {
+                if let Some(o) = o {
+                    order(o);
+                }
+                continue;
+            }
+        }
         if target.is_nan() || target < 0.0 || (u.get("doing").str() == verb && u.get("target").num() == target) {
             continue;
         }
@@ -999,6 +1031,8 @@ fn reflex(units: View, near: View) -> Value {
                     o.set("hit", t.get("id"));
                     left -= shot_cost;
                 }
+                // riflemen keep their distance from bayonets (common::space_ranged); the rest hold
+                common::space_ranged(u, ns, &mut o);
                 if o.get("step").is_undef() {
                     o.set("hold", true);
                 }
