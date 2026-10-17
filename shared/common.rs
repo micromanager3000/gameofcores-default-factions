@@ -1224,16 +1224,24 @@ use super::{air, theme};
     }
 
     /// What the house's own buildings take from the upkeep lane each second, in cycles: a building's build cost
-    /// (`buildCost`, before prices) at today's price level over `rts.structureCosts.maintenancePeriod` seconds, a site's
-    /// in proportion to the work done on it. The lane pays them before any unit.
+    /// (`buildCost`, before prices) at today's price level over `rts.structureCosts.maintenancePeriod` seconds, and a
+    /// plant's energy ports (`energyCost`) over `plantMaintenancePeriod`, a site's in proportion to the work done on it.
+    /// The lane pays them before any unit.
     pub fn building_upkeep(me: View) -> f64 {
-        let period = me.path("rts.structureCosts.maintenancePeriod").num_or(600.0).max(1.0);
         let id = me.get("id").num_or(-1.0);
-        let cost: f64 = me.path("rts.structures").iter()
+        me.path("rts.structures").iter()
             .filter(|s| s.get("owner").num_or(-2.0) == id && s.get("state").str() != "ruin" && s.get("hp").num_or(0.0) > 0.0)
-            .map(|s| s.get("buildCost").num_or(0.0) * s.get("progress").num_or(1.0).max(1.0 / 12.0))
-            .sum();
-        cost * price_level(me) / period
+            .map(|s| upkeep_of(me, s))
+            .sum()
+    }
+
+    /// What one of the house's sites pays a second to stand, in cycles (see [`building_upkeep`]).
+    pub fn upkeep_of(me: View, s: View) -> f64 {
+        let costs = me.path("rts.structureCosts");
+        let period = costs.get("maintenancePeriod").num_or(600.0).max(1.0);
+        let plants = costs.get("plantMaintenancePeriod").num_or(period).max(1.0);
+        let (all, energy) = (s.get("buildCost").num_or(0.0), s.get("energyCost").num_or(0.0));
+        ((all - energy) / period + energy / plants) * s.get("progress").num_or(1.0).max(1.0 / 12.0) * price_level(me)
     }
 
     /// Last second's upkeep for the house's units alone: what the upkeep lane spent less what its buildings took.

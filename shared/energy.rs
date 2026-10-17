@@ -138,8 +138,7 @@ fn fund(orders: &mut Value, me: View) {
         .filter(|s| s.get("owner").num_or(-2.0) == id && s.get("power").truthy() && s.get("state").str() != "ruin" && s.get("hp").num_or(0.0) > 0.0)
         .collect();
     let going_up = plants.iter().filter(|s| s.get("state").str() == "building").map(|s| s.get("buildCost").num_or(0.0)).sum::<f64>() * price(me) / 12.0;
-    let period = me.path("rts.structureCosts.maintenancePeriod").num_or(600.0).max(1.0);
-    let upkeep = plants.iter().map(|s| s.get("buildCost").num_or(0.0) * s.get("progress").num_or(1.0).max(1.0 / 12.0)).sum::<f64>() * price(me) / period;
+    let upkeep = plants.iter().map(|&s| super::common::upkeep_of(me, s)).sum::<f64>();
     for (lane, rate) in [("fabrication", going_up), ("upkeep", upkeep)] {
         let limit = orders.get("compute").get("cpu").get("limits").get(lane).num_or(0.0);
         if limit <= 0.0 || rate <= 0.0 { continue; }
