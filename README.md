@@ -42,6 +42,8 @@ A first attack goes in on the plan. Defenders, aircraft and ships keep their own
 In CPU RTS worlds, a house runs its full strategy every third second.
 In the seconds between, it returns no orders, so its unit orders, plan and CPU policy stand.
 It thinks every second while a unit is stalled, while the bank holds under four seconds of income, and while it recovers.
+Jobs on a timer, such as propaganda, preaching and letters, run on those full-think seconds (`common::every`).
+A job keyed to any other second would run only when the two line up.
 In the simulations, thinking fell from about a third of the houses' spend to a fifth, and the army got the difference.
 
 With cargo, income arrives in loads, and the army lives on the bank between deliveries.

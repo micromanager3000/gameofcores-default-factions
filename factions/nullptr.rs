@@ -484,12 +484,12 @@ fn strategy(world: View, me: View) -> Value {
     }
 
     // One exploit after eight units, a second after sixteen, while the treasury can pay for espionage.
-    // Eight seconds between recruits gives each spy time to leave fabrication.
+    // Nine seconds between recruits gives each spy time to leave fabrication.
     let marks = world.get("factions").iter().filter(|f| realm::is_rival(world, me, n(f.get("id"))) && n(f.get("capital")) >= 0.0).count();
     let now = world.get("seconds").or(0.0).floor();
     let bank = n(me.get("bank"));
     let want_spies = if total >= 16.0 && bank >= 350.0 { 2.0 } else if total >= 8.0 && bank>=150.0 { 1.0 } else { 0.0 };
-    if has("cloak") && marks > 0 && now % 8.0 == 0.0 && jmax(ghosts, spies.count as f64) < want_spies {
+    if has("cloak") && marks > 0 && common::every(now, 8.0, 0.0) && jmax(ghosts, spies.count as f64) < want_spies {
         spawn(&mut orders, "ghost", if has("stealth") { GHOST_DEEP } else { GHOST }, mods(me, "ghost"));
     }
     if screens < jmax(3.0, ((skirms + guns + 1.0) * 0.4).floor()) {
@@ -668,8 +668,8 @@ fn warlord(orders: &mut Value, world: View, me: View, plan: &Value, clock: &mut 
         sway::bribe(orders, n(target.get("id")), 150.0);
     }
     // propaganda on the target too once it has influence, so it may turn to us before the push lands (a standing order,
-    // worked out again every 8 seconds)
-    if me.get("techs").get("influence").truthy() && (now + n(me_id)) % 8.0 == 0.0 {
+    // worked out again every 9 seconds)
+    if me.get("techs").get("influence").truthy() && common::every(now, 8.0, n(me_id)) {
         orders.set("propaganda", Value::arr());
         if target.truthy() && n(owner) >= 0.0 && realm::is_rival(world, me, n(owner)) && sway::reach(world, me, n(target.get("id"))) {
             let income = me.get("rts").get("cpu").get("income").or(me.get("compute").get("cycles").or(14000.0));

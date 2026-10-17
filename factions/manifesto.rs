@@ -222,7 +222,7 @@ fn marks(world: View, me: View, last: &Value) -> Vec<Mark> {
 /// loyalty can fall by (`PROPAGANDA_CAP`), then the next, and free land a modest sum each, since favour there builds
 /// up on little and a province with 150 favour petitions at once. A standing order, worked out again every 6 seconds.
 fn revolution(orders: &mut Value, me: View, ms: &[Mark], now: f64) {
-    if !me.get("techs").get("influence").truthy() || (now + me.get("id").num()) % 6.0 != 0.0 {
+    if !me.get("techs").get("influence").truthy() || !common::every(now, 6.0, me.get("id").num()) {
         return;
     }
     let c = me.get("rts").get("cpu");
@@ -741,7 +741,7 @@ fn strategy(world: View, me: View) -> Value {
     // (common::court), the first to say yes is the ally. A pact of 1939: once the Red Army is the biggest force on the
     // map (a fifth of the cores, 60 units, ten minutes in) the pact is torn up with its 30 s notice and the partner's
     // land becomes the next to be agitated; the Manifesto does not sign another.
-    if no_pacts && broke.is_undef() && now >= 90.0 && now % 4.0 == 0.0 {
+    if no_pacts && broke.is_undef() && now >= 90.0 && common::every(now, 4.0, 0.0) {
         for f in contacts(world, me).into_iter().take(2) {
             let id = f.get("id").num();
             if common::court(&mut orders, world, me, id, |o| diplomacy::propose(o, me, vec![id], (), "Proletarians of all provinces, unite!"), &common::Court::default()) {

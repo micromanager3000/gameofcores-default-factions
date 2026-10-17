@@ -579,8 +579,8 @@ fn warlord(orders: &mut Value, world: View, me: View, plan: &Value, clock: &mut 
         sway::bribe(orders, n(target.get("id")), 150.0);
     }
     // propaganda on the target too once it has influence, so it may turn to us before the push lands (a standing order,
-    // worked out again every 8 seconds)
-    if me.get("techs").get("influence").truthy() && (now + n(me_id)) % 8.0 == 0.0 {
+    // worked out again every 9 seconds)
+    if me.get("techs").get("influence").truthy() && common::every(now, 8.0, n(me_id)) {
         orders.set("propaganda", Value::arr());
         if target.truthy() && n(owner) >= 0.0 && realm::is_rival(world, me, n(owner)) && sway::reach(world, me, n(target.get("id"))) {
             let income = me.get("rts").get("cpu").get("income").or(me.get("compute").get("cycles").or(14000.0));

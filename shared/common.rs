@@ -1500,6 +1500,15 @@ use super::{air, theme};
             && !mem::get(me.get("ramCapital"), RECOVERY_PAGE).get("r").truthy()
     }
 
+    /// Whether a job that runs every `period` seconds, staggered by `offset` (often the faction's id), is due at second
+    /// `now`. A resting house thinks in full only every [`THINK_EVERY`] seconds, and a job keyed to any other second
+    /// would wait for the two to line up. So it runs on full-think seconds: every `period` rounded to a multiple of
+    /// [`THINK_EVERY`], and on every full think for a period that short.
+    pub fn every(now: f64, period: f64, offset: f64) -> bool {
+        let beats = (period / THINK_EVERY).round().max(1.0);
+        now % THINK_EVERY == 0.0 && ((now / THINK_EVERY).floor() + offset).rem_euclid(beats) == 0.0
+    }
+
     fn govern_units(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
         if !me.path("rts.cpu").truthy() { return strategy(); }
         if world.get("logistics").truthy() {
