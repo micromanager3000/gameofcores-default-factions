@@ -37,7 +37,7 @@ node tools/source.mjs kublai /tmp/kublai.rs
 The export contains the selected program and all shared modules in one Rust source file.
 Exports fit the game's 512 KiB source limit. Players can copy and change the exported source.
 The program compiles against the public game SDK. All faction helpers count toward source RAM.
-The game provides 3,072 free RAM pages to every faction, covering the newly included preset source.
+The game provides 3,360 free RAM pages to every faction, covering the included preset source and the grid planner.
 Compiled instructions are metered normally.
 Shared code fenced `// @house` … `// @end` goes into the house programs only. The default program leaves out the sea
 escorts this way, and carries `shared/energy_plain.rs` as its `energy` module in place of the power grid planner.
