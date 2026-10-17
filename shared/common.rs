@@ -2113,8 +2113,7 @@ use super::{air, theme};
 
     /// The default rule for deal `m` in your inbox: yes when what you'd get is worth at least what you'd give
     /// ([`value`], with your land at [`price`]), and only when your bank holds every ◆ you'd give (all of a stream) and
-    /// the units you'd get fit under your unit limit. It gives power only from what its grid makes beyond its own
-    /// draw (`energy::spare`). A tech you hold, or that isn't in `techs` (what you research), is
+    /// the units you'd get fit under your unit limit. A tech you hold, or that isn't in `techs` (what you research), is
     /// worth nothing to you, and so are passage, sight and relay rights you hold from the same faction for more than
     /// another minute: it buys none of them twice. It sells no passage to a faction whose units stand in your land, unless it renews passage
     /// that faction has from you (passage ends the moment its holder attacks). It takes no mine lease in a province
@@ -2133,10 +2132,6 @@ use super::{air, theme};
                 && me.get("contracts").iter().any(|c| c.get("with").num() == from && !c.get("ended").truthy() && c.get("get").get(right).truthy() && c.get("endsIn").or(0.0) > 60.0)
         };
         if held("passage") || held("sight") || held("relay") {
-            return false;
-        }
-        // power only from what your grid makes beyond its own draw
-        if ask.path("power.mw").num_or(0.0) > super::energy::spare(me) {
             return false;
         }
         let hire = give.get("hire");
