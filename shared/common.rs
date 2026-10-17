@@ -325,6 +325,104 @@ use super::{air, theme};
         }
     }
 
+    /// A raider at sea: an armed hull, or a hull that carries nothing.
+    fn raider(c: View) -> bool {
+        c.get("ship").truthy() && (c.path("build.range").num_or(0.0) > 0.0 || c.path("build.carry").num_or(0.0) == 0.0)
+    }
+
+    /// Escorts keep with the house's freighters, laden ones first, or off its home dock; the second of each pair sails as
+    /// a privateer off the nearest rival dock. Each closes with a raider within a water of it, then a laden rival
+    /// freighter, and names it as `focus`, so it strikes without a reflex.
+    pub fn guard_shipping(units: View, world: View, me: View) {
+        if cycles_left() < 4000.0 || !world.get("logistics").truthy() { return; }
+        let id = me.get("id").num();
+        let waters = sea::index(world);
+        let home = receiving_dock(world, me)
+            .and_then(|p| world.path("logistics.docks").iter().find(|d| d.get("p").num() == p))
+            .map_or(-1.0, |d| d.get("water").num_or(-1.0));
+        let mut convoy: Vec<f64> = Vec::new();
+        for u in world.get("units").iter() {
+            if cycles_left() < 3000.0 { break; }
+            if u.get("owner").num() != id || u.get("type").str() != "freighter" { continue; }
+            let w = u.path("rts.sea.water").num_or(-1.0);
+            if w < 0.0 || convoy.contains(&w) { continue; }
+            if logistics::cargo(u) > 0.0 { convoy.insert(0, w); } else { convoy.push(w); }
+        }
+        let contacts: Vec<View> = me.path("rts.sea.contacts").iter().filter(|c| c.get("ship").truthy()).collect();
+        // the rival dock nearest home by sea, where laden rival freighters come and go
+        let mut prey = (usize::MAX, -1.0);
+        if units.len() >= 2 && home >= 0.0 {
+            for d in world.path("logistics.docks").iter() {
+                if cycles_left() < 5000.0 { break; }
+                let w = d.get("water").num_or(-1.0);
+                if w < 0.0 || !realm::is_rival(world, me, realm::index(world).get(d.get("p").num()).get("owner").num_or(-1.0)) { continue; }
+                if let Some(r) = sea::route(world, home, w) { if r.len() < prey.0 { prey = (r.len(), w); } }
+            }
+        }
+        for (k, u) in units.iter().enumerate() {
+            if cycles_left() < 2500.0 { break; }
+            let at_sea = u.path("rts.sea");
+            let here = at_sea.get("water").num_or(-1.0);
+            if !at_sea.get("ship").truthy() || here < 0.0 { continue; }
+            let near = waters.get(here).get("adj");
+            let mut best: Option<(f64, View)> = None;
+            for c in &contacts {
+                let w = c.get("water").num_or(-1.0);
+                let hops = if w == here { 0.0 } else if near.has_num(w) { 1.0 } else { continue };
+                let rank = if raider(*c) { hops } else if c.path("cargo.load").num_or(0.0) >= 2.0 { 2.0 + hops } else { continue };
+                let rank = rank + c.get("hp").num_or(5.0) * 0.1;
+                if best.as_ref().is_none_or(|b| rank < b.0) { best = Some((rank, *c)); }
+            }
+            let course = at_sea.get("course");
+            let mut o = obj! { "id" => u.get("id") };
+            let mut send = false;
+            if let Some((_, t)) = best {
+                let tid = t.get("id").num();
+                if course.get("chase").num_or(-1.0) != tid || u.get("focus").num_or(-1.0) != tid {
+                    o.set("sail", obj! { "chase" => tid, "keep" => 3 });
+                    o.set("focus", tid);
+                    send = true;
+                }
+            } else {
+                let goal = if k % 2 == 1 && prey.1 >= 0.0 { prey.1 } else if convoy.is_empty() { home } else { convoy[k / 2 % convoy.len()] };
+                let going = if course.is_arr() { course.at(course.len().saturating_sub(1)).num() == goal } else { here == goal };
+                if goal >= 0.0 && (course.get("chase").is_num() || !going) && sea::route(world, here, goal).is_some() {
+                    o.set("sail", goal);
+                    send = true;
+                }
+            }
+            if send {
+                o.set("power", obj! { "drive" => 240, "weapon" => 300 });
+                order(o);
+            }
+        }
+    }
+
+    /// An armed escort for a house that ships cargo by sea, and a second once it ships more or a raider shows. The
+    /// Quiet Fleet (seat 4) sails its own navy.
+    fn maintain_escorts(orders: &mut Value, world: View, me: View) {
+        if !world.get("logistics").truthy() || cycles_left() < 5000.0 || me.get("seat").num_or(-1.0) == 4.0 { return; }
+        let techs = me.get("techs");
+        if !techs.get("seaTraversal").truthy() || !techs.get("ranged").truthy() || me.path("rts.sea.ports").is_empty() { return; }
+        let have = me.path("units.byType");
+        let freighters = have.get("freighter").num_or(0.0);
+        if freighters < 1.0 || me.path("units.queued").num_or(0.0) > 0.0 || me.path("units.stalled").num_or(0.0) > 0.0 { return; }
+        // a look every 5 seconds in the first 30 of each 90, so a house that keeps losing them doesn't sink its bank in
+        // hulls, and one short second doesn't cost a launch
+        let now = world.get("seconds").num_or(0.0);
+        if now % 90.0 >= 30.0 || now % 5.0 != 3.0 { return; }
+        let raiders = me.path("rts.sea.contacts").iter().any(raider);
+        let want = if raiders || freighters >= 2.0 { 2.0 } else { 1.0 };
+        let income = me.path("rts.cpu.income").num_or(0.0);
+        if have.get("escort").num_or(0.0) >= want || me.path("rts.cpu.bank").num_or(0.0) < fabrication(me, 2.0) + income * 3.0 { return; }
+        if orders.get("spawn").items().len() >= 3 || orders.get("spawn").items().iter().any(|s| s.get("type").str() == "escort") { return; }
+        let armor = me.path("rts.licenses").iter().any(|l| l.str() == "armor");
+        let modules = if armor { arr!["hull", "armor"] } else { arr!["hull"] };
+        let body = obj! { "hp" => 3, "speed" => 2, "strength" => 2, "carry" => 0, "vision" => 1, "range" => 1 };
+        if army::check(&body, &modules, me).is_some() { return; }
+        orders.entry("spawn").push(obj! { "type" => "escort", "build" => body, "modules" => modules });
+    }
+
     const FREIGHT_PAGE: u32 = 245;
     const FREIGHT_IDLE_SECONDS: f64 = 120.0;
 
@@ -1026,6 +1124,24 @@ use super::{air, theme};
         }
     }
 
+    /// What the house's own buildings take from the upkeep lane each second, in cycles: a building's build cost
+    /// (`buildCost`, before prices) at today's price level over `rts.structureCosts.maintenancePeriod` seconds, a site's
+    /// in proportion to the work done on it. The lane pays them before any unit.
+    pub fn building_upkeep(me: View) -> f64 {
+        let period = me.path("rts.structureCosts.maintenancePeriod").num_or(600.0).max(1.0);
+        let id = me.get("id").num_or(-1.0);
+        let cost: f64 = me.path("rts.structures").iter()
+            .filter(|s| s.get("owner").num_or(-2.0) == id && s.get("state").str() != "ruin" && s.get("hp").num_or(0.0) > 0.0)
+            .map(|s| s.get("buildCost").num_or(0.0) * s.get("progress").num_or(1.0).max(1.0 / 12.0))
+            .sum();
+        cost * price_level(me) / period
+    }
+
+    /// Last second's upkeep for the house's units alone: what the upkeep lane spent less what its buildings took.
+    pub fn unit_upkeep(me: View) -> f64 {
+        (me.path("rts.cpu.last.upkeep").num_or(0.0) - building_upkeep(me)).max(0.0)
+    }
+
     /// What fabricating a body with `modules` modules costs, in cycles (`me.rts.costs.fabrication`).
     pub fn fabrication(me: View, modules: f64) -> f64 {
         let f = me.path("rts.costs.fabrication");
@@ -1070,7 +1186,7 @@ use super::{air, theme};
         let total = n(u.get("total"));
         let upkeep = n(me.get("costs").get("upkeep"));
         let last = me.path("rts.cpu.last.upkeep");
-        let each = if last.truthy() && total != 0.0 { upkeep.max(n(last) / total / u.get("upkeepRate").or(1.0)) } else { upkeep };
+        let each = if last.truthy() && total != 0.0 { upkeep.max(unit_upkeep(me) / total / u.get("upkeepRate").or(1.0)) } else { upkeep };
         let budget = n(me.get("compute").get("cycles")) * share;
         let flat = (budget / each).floor();
         let cap = n(u.get("cap"));
@@ -1206,7 +1322,7 @@ use super::{air, theme};
         }
         e.count = e.units.len() as f64;
         let paid = (me.path("units.total").num_or(0.0) - me.path("units.stalled").num_or(0.0)).max(1.0);
-        let observed = me.path("rts.cpu.last.upkeep").num_or(0.0) / paid;
+        let observed = unit_upkeep(me) / paid;
         let rate = (e.units.len() as f64 / cap).max(1.0);
         let mean = if e.units.is_empty() { 0.0 } else { e.body * rate / e.units.len() as f64 + art };
         let extra = (observed - mean).max(0.0);
@@ -1223,7 +1339,7 @@ use super::{air, theme};
         let art = me.path("costs.draw").entries().map(|(_, v)| v.num_or(0.0)).fold(0.0, f64::max);
         // Last second's paid upkeep includes the actual bodies, modules and artwork. Its average is a starting
         // estimate, not a claim that unpaid units cost zero. Re-evaluate after every bounded retirement batch.
-        let body = (me.path("rts.cpu.last.upkeep").num_or(0.0) / paid / rate)
+        let body = (unit_upkeep(me) / paid / rate)
             .max(me.path("costs.upkeep").num_or(100.0));
         // Rotate a bounded window even at the faction limit; an emergency never has to rank 512 bodies at once.
         let start = ((world.get("seconds").num_or(0.0) as usize / 2) * 96) % (count as usize).max(1);
@@ -1239,6 +1355,7 @@ use super::{air, theme};
     pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
         let mut orders = govern_units(world, me, share, strategy);
         maintain_freighters(&mut orders, world, me);
+        maintain_escorts(&mut orders, world, me);
         super::structures::apply(&mut orders, world, me);
         super::energy::apply(&mut orders, world, me);
         orders
@@ -1257,7 +1374,7 @@ use super::{air, theme};
             if starting || me.path("rts.cpu.bank").num_or(0.0)<income*4.0 || cycles_left()<12000.0 {
                 let mut out=recovery_policy(me);
                 let have=me.path("units.byType");
-                if me.path("rts.cpu.last.upkeep").num_or(0.0)>income*0.65 && me.path("rts.cpu.bank").num_or(0.0)<income*4.0 {
+                if unit_upkeep(me)>income*0.65 && me.path("rts.cpu.bank").num_or(0.0)<income*4.0 {
                     let mut retire=Vec::new();
                     for u in world.get("units").iter().filter(|u|u.get("owner").num()==me.get("id").num()) {
                         if cycles_left()<2500.0 || retire.len()>=2 {break;}
@@ -1290,7 +1407,7 @@ use super::{air, theme};
         let bank = me.path("rts.cpu.bank").num_or(0.0);
         // With no stalled units, last second's paid bill is the whole army's actual upkeep. Keep this
         // entry check cheap; a detailed body scan belongs after the planner, only when it proposes a recruit.
-        let shortage = me.path("rts.cpu.last.upkeep").num_or(0.0) > income * 0.7 && bank < income * 8.0;
+        let shortage = unit_upkeep(me) > income * 0.7 && bank < income * 8.0;
         let was = mem::get(me.get("ramCapital"), RECOVERY_PAGE);
         // Stay in recovery until upkeep fits and a little headroom has returned, rather than switching the old
         // spending back on the first second in which upkeep happened to fit.
@@ -2302,3 +2419,4 @@ use super::{air, theme};
 
 pub fn hauler(units: View, world: View, me: View) { haul_cargo(units, world, me); }
 pub fn freighter(units: View, world: View, me: View) { freight(units, world, me); }
+pub fn escort(units: View, world: View, me: View) { guard_shipping(units, world, me); }

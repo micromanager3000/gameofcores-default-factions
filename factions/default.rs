@@ -9,9 +9,9 @@
 // puzzle solver. Copy any of it.
 use gameofcores::*;
 use shared::{air, capital, common, theme};
-use shared::common::{hauler, freighter};
+use shared::common::{hauler, freighter, escort};
 
-program!(think, hauler, freighter, miner, guard, longbow, spy, scout, reflex, research, duel, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, guard, longbow, spy, scout, reflex, research, duel, look, build3d, live3d);
 
 // What to research, in order: a CPU RTS world's ids, then a classic world's (archery is ranged there, espionage is
 // cloak). Ids the world lacks are skipped.

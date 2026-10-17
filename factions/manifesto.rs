@@ -11,9 +11,9 @@
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
-use shared::common::{hauler, freighter};
+use shared::common::{hauler, freighter, escort};
 
-program!(think, hauler, freighter, miner, line, spark, scout, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, line, spark, scout, reflex, research, duel, challenge, look, build3d, live3d);
 
 // The bodies: points in hp, speed, strength, carry and vision. A stat at or under its standard of 2 costs no upkeep over
 // the base, so the army is cheap and the agitators cheaper: persuasion does not read the body at all.

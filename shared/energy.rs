@@ -44,7 +44,7 @@ pub fn doctrine(seat: usize) -> Doctrine {
         // Null Pointer Society: a lean grid on batteries
         6 => d(&["solar", "wind", "geo"], 1.05, 150.0, 0.3, true, false),
         // Compute of Nations: spare capacity, batteries, and power for sale
-        7 => d(&["wind", "hydro", "solar", "tidal", "reactor"], 1.6, 120.0, 0.2, true, true),
+        7 => d(&["wind", "hydro", "solar", "tidal", "reactor"], 1.4, 120.0, 0.2, true, true),
         _ => d(&["solar", "wind", "hydro", "boiler", "geo", "reactor"], 1.2, 60.0, 0.2, true, false),
     }
 }
@@ -112,16 +112,34 @@ pub fn prize(world: View, me: View, q: View) -> f64 {
 /// One plant the planner could order next.
 struct Pick { p: View, kind: &'static str, cap: f64, cost: f64, score: f64 }
 
-/// The grid for a second: settings every five seconds, a plant now and then, power for sale once a minute.
+/// The grid for a second: settings every five seconds, a look for a plant to build every three, power for sale once a
+/// minute. None of it runs in the second `structures` plans its buildings (every fifth), so the two never share a call.
 pub fn apply(orders: &mut Value, world: View, me: View) {
     let e = me.get("energy");
     if !e.truthy() || !world.get("energy").truthy() || cycles_left() < 7000.0 { return; }
     let now = world.get("seconds").num_or(0.0);
     let seat = me.get("seat").num_or(9.0).max(0.0) as usize;
     let d = doctrine(seat);
-    if now % 5.0 == 1.0 { settings(orders, world, me, &d); }
-    if now % 10.0 == 3.0 && cycles_left() > 9000.0 { build(orders, world, me, &d, now); }
-    if d.sell && now % 60.0 == 7.0 && cycles_left() > 8000.0 { sell(orders, world, me); }
+    fund(orders, me);
+    if now % 5.0 == 0.0 { return; }
+    if now % 5.0 == 2.0 && cycles_left() > 10000.0 { settings(orders, world, me, &d); }
+    if now % 3.0 == 1.0 && cycles_left() > 30000.0 { build(orders, world, me, &d, now); }
+    if d.sell && now % 60.0 == 7.0 && cycles_left() > 10000.0 { sell(orders, world, me); }
+}
+
+/// A plant going up is charged a twelfth of its build cost a second through the fabrication lane, which recruits share.
+/// A compute policy sent this second gets that much more room, so the house's own limit stays for its units.
+fn fund(orders: &mut Value, me: View) {
+    let fab = orders.get("compute").get("cpu").get("limits").get("fabrication").num_or(0.0);
+    if fab <= 0.0 { return; }
+    let id = me.get("id").num_or(-1.0);
+    let rate = me.path("rts.structures").iter()
+        .filter(|s| s.get("owner").num_or(-2.0) == id && s.get("state").str() == "building" && s.get("power").truthy())
+        .map(|s| s.get("buildCost").num_or(0.0)).sum::<f64>() * price(me) / 12.0;
+    if rate <= 0.0 { return; }
+    // a limit of 1 or less is a share of income
+    let base = if fab <= 1.0 { fab * me.path("rts.cpu.income").num_or(0.0) } else { fab };
+    orders.entry("compute").entry("cpu").entry("limits").set("fabrication", (base + rate).round());
 }
 
 /// The land to darken first, and the reserve the batteries keep.
@@ -153,16 +171,21 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
     let id = me.get("id");
     let income = me.path("rts.cpu.income").num_or(0.0);
     let bank = me.path("rts.cpu.bank").num_or(0.0);
-    if me.path("units.stalled").num_or(0.0) > 0.0 || bank < income * 2.0 { return; }
+    // Plants are paid from savings above the floor an army keeps (common::govern drops to its recovery policy below
+    // four seconds of income). The floor comes down while the grid runs short, since a dim province mines less.
+    let short = e.get("powered").num_or(1.0) < 0.92;
+    let floor = income * if short { 2.0 } else { 5.0 };
+    if me.path("units.stalled").num_or(0.0) > 0.0 || bank < floor + income { return; }
     let sites = me.path("rts.structures");
     let mine: Vec<View> = sites.iter().filter(|s| same(s.get("owner"), id) && s.get("state").str() != "ruin").collect();
-    // one plant at a time: a house waits for the one it's building
-    if mine.iter().any(|s| s.get("state").str() == "building" && s.get("power").truthy()) { return; }
+    // two plants at a time at most, and the second only while the grid is well short
+    let building = mine.iter().filter(|s| s.get("state").str() == "building" && s.get("power").truthy()).count();
+    if building >= 2 { return; }
     let land: Vec<View> = world.get("provinces").iter().filter(|p| same(p.get("owner"), id) && p.get("power").truthy()).collect();
     if land.is_empty() { return; }
     let find = |pid: f64| land.iter().copied().find(|p| p.get("id").num() == pid);
     // what the plants it has make in a day, on average, and how much of that comes and goes with the sky
-    let (mut expected, mut fickle) = (e.get("house").num_or(2.0), 0.0);
+    let (mut expected, mut fickle) = (e.get("house").num_or(3.0), 0.0);
     for s in &mine {
         let Some(p) = find(s.get("p").num()) else { continue };
         for q in s.path("power.ports").iter() {
@@ -172,13 +195,24 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
             if variable(kind) { fickle += mw; }
         }
     }
-    expected += e.get("bought").num_or(0.0);
     let demand = e.get("demand").num_or(0.0);
-    let target = demand * d.margin + 1.0;
+    // the house generator carries a young realm; plants follow the draw once the mines outgrow it
+    if demand < e.get("house").num_or(3.0) * 0.8 { return; }
+    let target = demand * d.margin + 0.5;
+    if building == 1 && expected + 1.5 >= target { return; }
+    // The first construction second (a twelfth of the quote) comes out of the fabrication lane when the site is
+    // accepted. A policy sent this second makes room for it; otherwise the plant fits what the lane has left. The
+    // rest is charged over the next twelve seconds.
+    let fab = orders.get("compute").get("cpu").get("limits").get("fabrication").num_or(0.0);
+    let policy = fab > 1.0;
+    let spare = (bank - floor) * 0.7;
+    let lane = if policy { spare } else { me.path("rts.cpu.available.fabrication").num_or(0.0) * 0.6 * 12.0 };
+    let spend = lane.min(spare);
     let units: Vec<View> = world.get("units").iter().filter(|u| same(u.get("owner"), id) && u.get("hp").num_or(0.0) > 0.0).collect();
     let kinds = world.path("energy.kinds");
-    let interior = |p: View| !p.get("adj").iter().any(|q| !land.iter().any(|o| same(o.get("id"), q)));
-    let mut best: Option<Pick> = None;
+    let ids: Vec<f64> = land.iter().map(|p| p.get("id").num()).collect();
+    let interior = |p: View| p.get("adj").iter().all(|q| ids.contains(&q.num()));
+    let mut picks: Vec<Pick> = Vec::new();
     if expected < target {
         let short = target - expected;
         for (rank, kind) in d.kinds.iter().copied().enumerate() {
@@ -187,6 +221,7 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
             let k = kinds.get(kind);
             let (lo, hi, quote) = (k.get("min").num_or(0.1), k.get("max").num_or(8.0), k.get("quote").num_or(1e12));
             for p in land.iter().copied().take(24) {
+                if cycles_left() < 9000.0 { break; }
                 let w = p.get("power");
                 let room = match kind {
                     "hydro" | "tidal" | "geo" | "reactor" => w.get(kind).num_or(0.0),
@@ -196,39 +231,49 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
                 if room < lo || duty <= 0.05 { continue; }
                 // boilers burn the cargo a mining town stores
                 if kind == "boiler" && !me.path("rts.logistics.depots").iter().any(|t| same(t.get("p"), p.get("id")) && t.get("cycles").num_or(0.0) > 0.0) { continue; }
-                let cap = (short / duty).clamp(lo, room.min(hi)).max(lo);
-                let cap = (cap * 10.0).ceil() / 10.0;
-                let cost = quote * cap;
+                // several small plants rather than one big one: each goes up faster, and a raid takes less
+                let most = if matches!(kind, "reactor" | "fusion") { 10.0 } else { 4.0 };
+                let cap = (short / duty).min(room.min(hi).min(most)).min(spend / quote);
+                let cap = (cap * 10.0).floor() / 10.0;
+                if cap < lo { continue; }
                 // cheapest MW for the house's taste, safer behind the border
-                let score = quote / duty * (1.0 + 0.25 * rank as f64) * if interior(p) { 1.0 } else { 1.3 };
-                if best.as_ref().is_none_or(|b| score < b.score) { best = Some(Pick { p, kind, cap, cost, score }); }
+                // (a boiler's fuel is cargo that would have been income: it counts thrice its build price)
+                let fuel = if kind == "boiler" { 3.0 } else { 1.0 };
+                let score = quote * fuel / duty * (1.0 + 0.4 * rank as f64) * if interior(p) { 1.0 } else { 1.3 };
+                picks.push(Pick { p, kind, cap, cost: quote * cap, score });
             }
         }
     }
     // batteries once the sky makes much of the power
-    if best.is_none() && d.store > 0.0 && fickle > 0.35 * expected && open(world, me, "battery") {
+    if picks.is_empty() && d.store > 0.0 && fickle > 0.35 * expected && open(world, me, "battery") {
         let want = demand * d.store;
-        let mut have = e.get("storage").num_or(0.0);
-        for s in mine.iter().filter(|s| s.get("state").str() == "building") {
-            for q in s.path("power.ports").iter().filter(|q| q.get("kind").str() == "battery") { have += q.get("capacity").num_or(0.0); }
-        }
-        if have < want * 0.8 {
-            let cap = (want - have).clamp(10.0, 2400.0).round();
-            let quote = kinds.path("battery.quote").num_or(1e12);
+        let have = e.get("storage").num_or(0.0);
+        let quote = kinds.path("battery.quote").num_or(1e12);
+        // a bank holds a minute of draw; more banks follow
+        let cap = (want - have).min(demand * 60.0).min(spend / quote).min(2400.0).round();
+        if have < want * 0.8 && cap >= 10.0 {
             let capital = land.iter().copied().find(|p| same(p.get("id"), me.get("capital"))).unwrap_or(land[0]);
-            best = Some(Pick { p: capital, kind: "battery", cap, cost: quote * cap, score: 0.0 });
+            picks.push(Pick { p: capital, kind: "battery", cap, cost: quote * cap, score: 0.0 });
         }
     }
-    let Some(pick) = best else { return };
-    if bank < income * 2.0 + pick.cost * 1.5 { return; }
-    let r = (1.2 + 0.18 * pick.cap.min(10.0)).min(3.2);
-    let Some((x, y)) = super::structures::spot(pick.p, sites, r, &units) else { return };
-    let pid = pick.p.get("id").num();
-    let site = obj! { "key" => format!("power-{pid:.0}-{now:.0}"), "p" => pid, "x" => x, "y" => y,
-        "shell" => obj! { "radius" => r, "height" => 2.0, "integrity" => 1.0 },
-        "ports" => arr![obj! { "kind" => pick.kind, "capacity" => pick.cap }],
-        "appearance" => look(pick.kind, pick.cap, seat_style(me)), "budget" => pick.cost * 1.2 + 4000.0 * price(me) };
-    orders.entry("structures").push(site);
+    picks.sort_by(|a, b| a.score.total_cmp(&b.score));
+    // the best site with room for the shell and a builder at hand
+    for pick in picks.iter().take(4) {
+        if cycles_left() < 25000.0 { return; }
+        let r = (1.2 + 0.18 * pick.cap.min(10.0)).min(3.2);
+        let Some((x, y)) = super::structures::spot(pick.p, sites, r, &units) else { continue };
+        let pid = pick.p.get("id").num();
+        let site = obj! { "key" => format!("power-{pid:.0}-{now:.0}"), "p" => pid, "x" => x, "y" => y,
+            "shell" => obj! { "radius" => r, "height" => 2.0, "integrity" => 1.0 },
+            "ports" => arr![obj! { "kind" => pick.kind, "capacity" => pick.cap }],
+            "appearance" => look(pick.kind, pick.cap, seat_style(me)), "budget" => pick.cost * 1.2 + 4000.0 * price(me) };
+        orders.entry("structures").push(site);
+        if policy {
+            let deposit = (pick.cost + 2000.0 * price(me)) / 12.0;
+            orders.entry("compute").entry("cpu").entry("limits").set("fabrication", (fab + deposit).round());
+        }
+        return;
+    }
 }
 
 fn price(me: View) -> f64 { me.path("rts.costs.priceLevel").num_or(1.0).max(0.01) }
@@ -280,7 +325,7 @@ pub fn look(kind: &str, cap: f64, style: usize) -> Value {
         "solar" => {
             for i in 0..n(0.8, 8) {
                 let (row, col) = ((i / 4) as f64, (i % 4) as f64);
-                add("panel", -0.9 + col * 0.6, -0.55 + row * 0.9, 0.12, 0.52, 0.06, 0.7, 0.0, "");
+                add("panel", -0.9 + col * 0.6, -0.55 + row * 0.9, 0.12, 0.52, 0.12, 0.7, 0.0, "");
             }
             add("accent", 1.0, 0.95, 0.12, 0.3, 0.3, 0.3, 0.0, "faction");
             "Solar field"

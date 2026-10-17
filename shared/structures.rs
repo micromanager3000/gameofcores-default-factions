@@ -279,7 +279,8 @@ fn plan(orders: &mut Value, world: View, me: View, style: usize, own: &[View], u
     }
     wants.sort_by(|a, b| b.value.total_cmp(&a.value));
     for w in wants.into_iter().take(4) {
-        if cycles_left() < 4000.0 { break; }
+        // A site search reads the ground round the town before its own checks: leave it room to finish.
+        if cycles_left() < 20000.0 { break; }
         // Keep unit fabrication and several seconds of income ahead of each new site.
         if bank < income * 2.0 + w.quote * 3.0 { continue; }
         let Some((x, y)) = spot(w.p, sites, w.r, units) else { continue; };

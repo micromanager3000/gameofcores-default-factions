@@ -13,9 +13,9 @@ use std::rc::Rc;
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
-use shared::common::{hauler, freighter};
+use shared::common::{hauler, freighter, escort};
 
-program!(think, hauler, freighter, miner, screen, skirm, runner, lancer, repairer, sentry, gun, wing, ghost, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, screen, skirm, runner, lancer, repairer, sentry, gun, wing, ghost, reflex, research, duel, challenge, look, build3d, live3d);
 
 // Builds: (stat, points), in the order the game shows them.
 type Build = &'static [(&'static str, f64)];

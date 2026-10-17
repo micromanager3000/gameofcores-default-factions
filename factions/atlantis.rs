@@ -15,9 +15,9 @@ use std::rc::Rc;
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
-use shared::common::{hauler, freighter};
+use shared::common::{hauler, freighter, escort};
 
-program!(think, hauler, freighter, miner, line, bulwark, artillery, medic, interceptor, piercer, scout, aeronaut, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, line, bulwark, artillery, medic, interceptor, piercer, scout, aeronaut, reflex, research, duel, challenge, look, build3d, live3d);
 
 // The bodies: points in hp, speed, strength, carry and vision, and for some in range.
 fn miner_body() -> Value {
@@ -58,6 +58,8 @@ const GOODS: [&str; 8] = ["extraction", "seaTraversal", "mountainTraversal", "in
 /// The tier-2 techs the army fields (medics, artillery, scanners): researched in this order whoever holds them, before
 /// any world first.
 const ARMY: [&str; 3] = ["repair", "artillery", "scan"];
+// In a world with energy, the road to fusion comes before the army's tier-2 techs: rift wells, batteries, reactors.
+const POWER: [&str; 4] = ["drilling", "storage", "fission", "fusion"];
 
 // ---- JavaScript's arithmetic, where this program follows it ----
 
@@ -1385,7 +1387,7 @@ mod atlantis_ext {
     use gameofcores::*;
 
     use super::common;
-    use super::{due, text, Clock, ARMY, GOODS, TECHS};
+    use super::{due, text, Clock, ARMY, GOODS, POWER, TECHS};
 
     /// `Number(x)` for a value from the game: null is 0.
     fn n(v: View) -> f64 {
@@ -1449,6 +1451,8 @@ mod atlantis_ext {
         let pick = if going && tier(&now) <= 2.0 {
             now.clone()
         } else if let Some(t) = TECHS.iter().copied().find(|t| tier(t) <= 1.0 && ready(all, mine, t)) {
+            t.to_string()
+        } else if let Some(t) = POWER.iter().copied().find(|t| world.get("energy").truthy() && ready(all, mine, t)) {
             t.to_string()
         } else if let Some(t) = ARMY.iter().copied().find(|t| ready(all, mine, t)) {
             t.to_string()

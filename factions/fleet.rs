@@ -14,9 +14,9 @@
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
-use shared::common::{hauler, freighter};
+use shared::common::{hauler, freighter, escort};
 
-program!(think, hauler, freighter, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, warjunk, picket, corsair, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, warjunk, picket, corsair, reflex, research, duel, challenge, look, build3d, live3d);
 
 // The bodies: points in hp, speed, strength, carry and vision, and for some in range and wings.
 fn miner_body() -> Value {
@@ -52,7 +52,7 @@ fn kite_shot_body() -> Value {
 // The junks: every build is 10 points, and range costs 2 a step. Each carries the hull and one more module.
 // Warjunks carry a small hold for recovered cargo. Pickets hold crossings; corsairs carry more loot.
 fn warjunk_body() -> Value {
-    obj! { "hp" => 3, "speed" => 2, "strength" => 2, "carry" => 1, "vision" => 0, "range" => 1 }
+    obj! { "hp" => 3, "speed" => 2, "strength" => 2, "carry" => 0, "vision" => 1, "range" => 1 }
 }
 fn picket_body(guns: bool) -> Value {
     if guns {
@@ -62,7 +62,7 @@ fn picket_body(guns: bool) -> Value {
     }
 }
 fn corsair_body(cargo: bool) -> Value {
-    if cargo { return obj! { "hp"=>2,"speed"=>2,"strength"=>2,"carry"=>2,"vision"=>0,"range"=>1 }; }
+    if cargo { return obj! { "hp"=>2,"speed"=>2,"strength"=>2,"carry"=>1,"vision"=>1,"range"=>1 }; }
     obj! { "hp" => 2, "speed" => 4, "strength" => 2, "carry" => 0, "vision" => 0, "range" => 1 }
 }
 
@@ -580,8 +580,9 @@ fn conserve(world: View, me: View) -> Value {
 
 fn think(world: View, me: View) -> Value {
     let mut out=common::govern(world, me, 0.4, || strategy(world, me));
-    // Retire an empty corsair when neither a paying target nor a reachable wreck remains.
-    if world.get("logistics").truthy() && me.path("units.byType.corsair").num_or(0.0)>0.0 && cycles_left()>5000.0 {
+    // Retire an empty corsair when neither a paying target, a reachable wreck nor hunting water remains.
+    let hunting = !mem::get(me.get("ramCapital"), 0).get("nv").get("rw").is_empty();
+    if !hunting && world.get("logistics").truthy() && me.path("units.byType.corsair").num_or(0.0)>0.0 && cycles_left()>5000.0 {
         for u in world.get("units").iter() {
             if cycles_left()<3500.0 {break;}
             if u.get("owner").num()!=me.get("id").num() || u.get("type").str()!="corsair" {continue;}
@@ -652,6 +653,7 @@ fn strategy(world: View, me: View) -> Value {
             landing_name: String::new(),
             fleet: last.get("fw").num_or(-1.0),
             blockade: last.get("bx").len(),
+            raid: last.get("rw").len(),
         };
         if last.truthy() {
             plan.set("nv", last);
@@ -1279,6 +1281,8 @@ struct Naval {
     landing_name: String,
     fleet: f64,
     blockade: usize,
+    /// Waters the corsairs hunt in.
+    raid: usize,
 }
 
 fn naval_plan(world: View, me: View, plan: &mut Value, target_id: f64, defend: f64, rowing: &[(f64, f64)]) -> Naval {
@@ -1399,6 +1403,17 @@ fn naval_plan(world: View, me: View, plan: &mut Value, target_id: f64, defend: f
             rw.push(w);
         }
     }
+    // rival shipping: the waters off rival docks, where their freighters load and unload, nearest home first
+    let mut lanes: Vec<(usize, f64)> = Vec::new();
+    for d in world.path("logistics.docks").iter() {
+        if cycles_left() < 24000.0 || hw < 0.0 { break; }
+        let w = d.get("water").num_or(-1.0);
+        let owner = by_id.get(d.get("p").num()).get("owner").num_or(-1.0);
+        if w < 0.0 || rw.contains(&w) || !realm::is_rival(world, me, owner) { continue; }
+        if let Some(r) = sea::route(world, hw, w) { lanes.push((r.len(), w)); }
+    }
+    lanes.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
+    for (_, w) in lanes.into_iter().take(2) { if rw.len() < 4 { rw.push(w); } }
     for x in &bx {
         let w = x.at(2).num();
         if !rw.contains(&w) && rw.len() < 4 {
@@ -1425,7 +1440,7 @@ fn naval_plan(world: View, me: View, plan: &mut Value, target_id: f64, defend: f
             "rw" => rw.iter().map(|&w| Value::Num(w)).collect::<Vec<Value>>(),
         },
     );
-    Naval { stations: st.len(), landing: lt, landing_name: name, fleet: fw, blockade: bx.len() }
+    Naval { stations: st.len(), landing: lt, landing_name: name, fleet: fw, blockade: bx.len(), raid: rw.len() }
 }
 
 /// What the newest prize says: a rival's shared plan, read from the code pages of a ship we sank (me.rts.sea.prizes).
@@ -1497,11 +1512,11 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
     let income = me.get("rts").get("cpu").get("income").or(0.0);
     // Income bounds affordable hulls; an actual crossing, escort or target must justify each one.
     let fleet_max = max(3.0, (income / 20000.0).floor()).min(12.0);
-    // (the land army first: at least three soldiers ashore and one more for every two junks, since the land is what
+    // (two junks put to sea whatever the army; past them, a soldier ashore for every two junks, since the land is what
     // feeds the yard)
     let junks = pickets + war + corsairs;
     let ashore = common::fighters(me) - junks;
-    if junks >= fleet_max || (threatened && junks >= 2.0) || ashore < 3.0 + (junks / 2.0).floor() {
+    if junks >= fleet_max || (threatened && junks >= 2.0) || (junks >= 2.0 && ashore < 1.0 + (junks / 2.0).floor()) {
         return false;
     }
     let guns = has("ranged");
@@ -1521,7 +1536,8 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
         && nearby(c.get("water").num_or(-1.0)) && c.path("cargo.load").num_or(0.0)>=2.0 && c.path("build.range").num_or(0.0)==0.0
         && c.path("build.carry").num_or(0.0)>=2.0).count();
     let salvage=me.path("rts.logistics.wrecks").iter().any(|w|w.get("sea").truthy()&&nearby(w.get("water").num_or(-1.0))&&w.get("cycles").num_or(0.0)>160000.0*common::price_level(me));
-    let want_cors = if guns && (prospects>0 || salvage) { (prospects as f64).clamp(1.0,2.0) } else { 0.0 };
+    // a raider for cargo seen near home, a wreck to salvage, or rival shipping lanes to hunt
+    let want_cors = if !guns { 0.0 } else if prospects>0 || salvage { (prospects as f64).clamp(1.0,2.0) } else if naval.raid > 0 { 1.0 } else { 0.0 };
     // Warships defend observed traffic and contested crossings. Land area alone
     // does not justify several idle hulls charging upkeep throughout the epoch.
     let escorts: f64 = if have.get("freighter").num_or(0.0) > 0.0 { 1.0 } else { 0.0 };
@@ -1581,10 +1597,14 @@ fn junk_goal(nv: &Value, role: u8, k: usize, now: f64) -> f64 {
             }
         }
         _ => {
-            // every other warjunk holds a strait on the blockade, the rest keep with the battle fleet
+            // every other warjunk holds a strait on the blockade, every third hunts the rival shipping lanes with the
+            // corsairs, the rest keep with the battle fleet
             let bx = nv.get("bx").items();
+            let rw = nv.get("rw").items();
             if k % 2 == 1 && !bx.is_empty() {
                 bx[(k / 2) % bx.len()].at(2).num_or(fw)
+            } else if k % 3 == 2 && !rw.is_empty() {
+                rw[(k / 3 + (now / 120.0).floor() as usize) % rw.len()].num_or(fw)
             } else {
                 fw
             }
@@ -1708,7 +1728,7 @@ fn junks(units: View, world: View, me: View, role: u8) -> Value {
                 o.set("sail", obj! { "chase" => tid, "keep" => if role == 2 { 3.5 } else { 4.5 } });
                 send = true;
             }
-        } else if role==2 && world.get("logistics").truthy() {
+        } else if role==2 && goal < 0.0 && world.get("logistics").truthy() {
             let home=heard.get("hw").num_or(carried.get("h").num_or(-1.0));
             if home>=0.0 && water!=home && chasing<0.0 && sea::route(world,water,home).is_some(){o.set("sail",home);send=true;}
         } else if goal >= 0.0 {
@@ -1794,7 +1814,8 @@ fn junk_reflex(u: View, ns: View, pool: &mut Pool) -> Option<Value> {
         if !afloat && foe.is_none() && d <= 7.0 {
             foe = Some(t);
         }
-        if d <= 6.0 && sea::in_arc(u, t, 44.0) {
+        // broadsides hit only ships and rowers at sea
+        if afloat && d <= 6.0 && sea::in_arc(u, t, 44.0) {
             if sea::bearing(u, t).side == "port" {
                 port += 1;
             } else {

@@ -14,9 +14,9 @@ use std::rc::Rc;
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
-use shared::common::{hauler, freighter};
+use shared::common::{hauler, freighter, escort};
 
-program!(think, hauler, freighter, miner, screen, skirm, runner, lancer, repairer, sentry, gun, wing, ghost, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, screen, skirm, runner, lancer, repairer, sentry, gun, wing, ghost, reflex, research, duel, challenge, look, build3d, live3d);
 
 // Builds: (stat, points), in the order the game shows them.
 type Build = &'static [(&'static str, f64)];
@@ -34,7 +34,7 @@ const WING_SHOT: Build = &[("hp", 2.0), ("speed", 2.0), ("strength", 1.0), ("car
 // Establish mining and a mobile archer screen, then pursue Flight and its crossings.
 // Ground upgrades follow Flight; Air weapons still requires Artillery.
 const TECHS: [&str; 23] = [
-    "extraction", "dash", "ranged", "storage", "flight", "armor", "antiAir", "pierce", "transmission", "artillery",
+    "extraction", "dash", "ranged", "flight", "storage", "armor", "antiAir", "pierce", "transmission", "artillery",
     "airWeapons", "computeBoost", "turbines", "scan", "repair", "capture", "influence", "cloak", "stealth",
     "seaTraversal", "mountainTraversal", "cooling", "gate",
 ];
@@ -327,7 +327,7 @@ fn flight_progress(orders: &mut Value, world: View, me: View) {
         || me.path("units.total").num_or(0.0) < 4.0 || me.path("units.stalled").num_or(0.0) > 0.0 { return; }
     let income = me.path("rts.cpu.income").num_or(0.0);
     if income <= 0.0 || me.path("rts.cpu.bank").num_or(0.0) < income * 2.0
-        || me.path("rts.cpu.last.upkeep").num_or(0.0) > income * 0.5
+        || common::unit_upkeep(me) > income * 0.5
         || orders.get("compute").get("cpu").get("limits").get("research").num_or(0.0) > 0.0 { return; }
     for tech in ["extraction", "dash", "ranged", "seaTraversal", "mountainTraversal", "flight"] {
         let spec = world.get("techs").get(tech);
