@@ -34,7 +34,7 @@ pub fn doctrine(seat: usize) -> Doctrine {
         // Kublai: dams where the steppe meets the range, boilers in conquered towns
         0 => d(&["hydro", "boiler", "wind", "geo", "solar"], 1.15, 0.0, 0.1, true, false),
         // Arjuna: solar fields and batteries, a reserve before every dusk
-        1 => d(&["solar", "wind", "tidal"], 1.3, 240.0, 0.45, true, false),
+        1 => d(&["solar", "wind", "tidal"], 1.3, 150.0, 0.45, true, false),
         // Templars: wind and water mills beside the chapter houses
         2 => d(&["wind", "hydro", "solar", "tidal"], 1.25, 90.0, 0.25, true, false),
         // New Atlantis: geothermal, then reactors, then the race to fusion
@@ -44,7 +44,7 @@ pub fn doctrine(seat: usize) -> Doctrine {
         // Kernel Manifesto: dams and boilers everywhere, and every province lit alike
         5 => d(&["hydro", "boiler", "wind", "geo", "solar"], 1.35, 0.0, 0.0, false, false),
         // Null Pointer Society: a lean grid on batteries
-        6 => d(&["solar", "wind", "geo"], 1.05, 150.0, 0.3, true, false),
+        6 => d(&["solar", "wind", "geo"], 1.05, 100.0, 0.3, true, false),
         // Compute of Nations: spare capacity, batteries, and power for sale
         7 => d(&["wind", "hydro", "solar", "tidal", "reactor"], 1.4, 120.0, 0.2, true, true),
         _ => d(&["solar", "wind", "hydro", "boiler", "geo", "reactor"], 1.2, 60.0, 0.2, true, false),
@@ -162,7 +162,7 @@ fn settings(orders: &mut Value, world: View, me: View, d: &Doctrine) {
     // with the sun up over a solar house's capital, it banks for the night
     let sunny = world.get("provinces").iter().find(|p| same(p.get("id"), me.get("capital")))
         .is_some_and(|p| p.path("power.sun").num_or(0.0) > 0.25);
-    let reserve = storage * if sunny && d.store >= 200.0 { d.reserve } else { d.reserve * 0.4 };
+    let reserve = storage * if sunny && d.store >= 150.0 { d.reserve } else { d.reserve * 0.4 };
     orders.set("grid", obj! { "shed" => shed.iter().take(24).map(|s| Value::Num(s.1)).collect::<Vec<Value>>(), "reserve" => reserve.round() });
 }
 

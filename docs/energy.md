@@ -17,12 +17,12 @@ is done. Kinds it can't build yet are skipped.
 | Faction | Plant kinds, best liked first | Margin | Battery store | Reserve kept | Darkens outlying land first | Sells power |
 | --- | --- | ---: | ---: | ---: | --- | --- |
 | Kublai Khan's Alt | hydro, boiler, wind, geo, solar | 1.15 | none | 10% | yes | no |
-| Arjuna's Halting Problem | solar, wind, tidal | 1.3 | 240 s | 45% | yes | no |
+| Arjuna's Halting Problem | solar, wind, tidal | 1.3 | 150 s | 45% | yes | no |
 | Knights Templated | wind, hydro, solar, tidal | 1.25 | 90 s | 25% | yes | no |
 | New Atlantis | fusion, reactor, geo, hydro, solar | 1.2 | 60 s | 20% | yes | no |
 | Quiet Fleet | tidal, boiler, wind, solar | 1.2 | 60 s | 20% | yes | no |
 | The Kernel Manifesto | hydro, boiler, wind, geo, solar | 1.35 | none | none | no | no |
-| Null Pointer Society | solar, wind, geo | 1.05 | 150 s | 30% | yes | no |
+| Null Pointer Society | solar, wind, geo | 1.05 | 100 s | 30% | yes | no |
 | Compute of Nations | wind, hydro, solar, tidal, reactor | 1.4 | 120 s | 20% | yes | yes |
 | Other seats | solar, wind, hydro, boiler, geo, reactor | 1.2 | 60 s | 20% | yes | no |
 
