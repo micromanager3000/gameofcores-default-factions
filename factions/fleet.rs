@@ -864,8 +864,8 @@ fn strategy(world: View, me: View) -> Value {
 fn intrigue(orders: &mut Value, world: View, me: View, clock: &mut Clock, now: f64) {
     let income = me.get("rts").get("cpu").get("income").or(me.get("compute").get("cycles").or(14000.0));
     let techs = me.get("techs");
-    // propaganda is a standing order: its targets are worked out again every 8 seconds
-    if techs.get("influence").truthy() && (now + me.get("id").num()) % 8.0 == 0.0 {
+    // propaganda is a standing order: its targets are worked out again every 9 seconds
+    if techs.get("influence").truthy() && common::every(now, 8.0, me.get("id").num()) {
         let each = round(income * if me.get("sway").get("faith").truthy() { 0.04 } else { 0.05 });
         orders.set("propaganda", Value::arr());
         for t in common::sway_targets(world, me).iter().take(4) {
@@ -949,7 +949,7 @@ fn mercenaries(orders: &mut Value, world: View, me: View, clock: &mut Clock, now
 }
 
 // The fleet's quiet faith: founded once it has the tech, then preached in one or two provinces on its border (its own or
-// a neighbour's) where the faith is weakest. Preaching is a standing order, so the list is worked out every 8 seconds.
+// a neighbour's) where the faith is weakest. Preaching is a standing order, so the list is worked out every 9 seconds.
 fn faith(orders: &mut Value, world: View, me: View, now: f64) {
     if !me.get("techs").get("faith").truthy() {
         return;
@@ -966,7 +966,7 @@ fn faith(orders: &mut Value, world: View, me: View, now: f64) {
         }
         return;
     }
-    if (now + me_id) % 8.0 != 0.0 {
+    if !common::every(now, 8.0, me_id) {
         return;
     }
     let income = me.get("rts").get("cpu").get("income").or(me.get("compute").get("cycles").or(14000.0));

@@ -750,7 +750,7 @@ fn pilgrim_sites(world: View, me: View) -> Value {
     let now = or(world.get("seconds"), 0.0).floor();
     let prior = mem::get(me.get("ramCapital"), 0).get("pilgrims").clone();
     let have = matches!(prior, Value::Arr(_));
-    if (have && (now + num(me.get("id"))) % 30.0 != 0.0) || !me.get("techs").get("faith").truthy() || cycles_left() < 40000.0 {
+    if (have && !common::every(now, 30.0, num(me.get("id")))) || !me.get("techs").get("faith").truthy() || cycles_left() < 40000.0 {
         return if have { prior } else { Value::arr() };
     }
     let me_id = me.get("id");
@@ -955,10 +955,10 @@ fn faith(orders: &mut Value, world: View, me: View, strained: bool, pressure: f6
         orders.set("faith", obj! { "found" => format!("The Templar Rite of Seat {}", jstr(num(me_id))) });
         return;
     }
-    // standing orders: worked out again every 4 seconds, and at once while there are none
+    // standing orders: worked out again on every full think (every 3 seconds), and at once while there are none
     let now = or(world.get("seconds"), 0.0).floor();
     let sway = me.get("sway");
-    let due = (now + num(me_id)) % 4.0 == 0.0 || (sway.get("preach").is_empty() && now % 2.0 == 0.0);
+    let due = common::every(now, 4.0, num(me_id)) || (sway.get("preach").is_empty() && common::every(now, 2.0, 0.0));
     if !due {
         return;
     }
@@ -970,7 +970,7 @@ fn faith(orders: &mut Value, world: View, me: View, strained: bool, pressure: f6
     let total = sway_share(strained, pressure) * income;
     // propaganda: the rival border provinces where the faith has begun to take (two at most), to bring the revolt on
     let mut prop_cost = 0.0;
-    if (now + num(me_id)) % 8.0 == 0.0 {
+    if common::every(now, 8.0, num(me_id)) {
         orders.set("propaganda", Value::arr());
         let each = round(150.0 * level);
         for t in common::sway_targets(world, me).iter().filter(|t| t.get("faith").truthy() && eq(t.get("faith").get("by"), me_id) && or(t.get("faith").get("zeal"), 0.0) >= 10.0).take(2) {
