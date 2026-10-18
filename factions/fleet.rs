@@ -16,7 +16,7 @@ use gameofcores::*;
 use shared::{air, capital, common, theme};
 use shared::common::{hauler, freighter, escort};
 
-program!(think, hauler, freighter, escort, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, warjunk, picket, corsair, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, warjunk, picket, corsair, carrier, reflex, research, duel, challenge, look, build3d, live3d);
 
 // The bodies: points in hp, speed, strength, carry and vision, and for some in range and wings.
 fn miner_body() -> Value {
@@ -65,12 +65,16 @@ fn corsair_body(cargo: bool) -> Value {
     if cargo { return obj! { "hp"=>2,"speed"=>2,"strength"=>2,"carry"=>1,"vision"=>1,"range"=>1 }; }
     obj! { "hp" => 2, "speed" => 4, "strength" => 2, "carry" => 0, "vision" => 0, "range" => 1 }
 }
+// One deck ship carries two kites across open water, with armor when researched.
+fn carrier_body() -> Value {
+    obj! { "hp" => 3, "speed" => 2, "strength" => 1, "carry" => 2, "vision" => 1 }
+}
 
 const FAITHS: [&str; 4] = ["The Silent Cache", "The Order of the Dark Fibre", "The Church of the Idle Loop", "The Brotherhood of the Hidden Bit"];
 
 const TECHS: [&str; 21] = [
     "extraction", "seaTraversal", "turbines", "ranged", "armor", "dash", "cloak", "scan", "influence", "faith",
-    "pierce", "artillery", "antiAir", "repair", "mountainTraversal", "flight", "airWeapons", "storage", "transmission",
+    "pierce", "artillery", "antiAir", "repair", "flight", "airWeapons", "mountainTraversal", "storage", "transmission",
     "subseaCable", "gate",
 ];
 
@@ -255,7 +259,7 @@ fn frontline(world: View, me: View, bonus: &[f64]) -> Option<View> {
         let enemy = owner >= 0.0 && owner != me_id;
         let held = hold(q);
         let landing = held && !q.get("adj").iter().any(|a| by_id.at(a).get("owner").num() == me_id);
-        let s = q.get("cores").or(0.0) * 3.0 + if enemy { 9.0 } else { 2.0 } + hostile * 2.0 - if q.get("capital").truthy() { 5.0 } else { 0.0 }
+        let s = q.get("cores").or(0.0) * 3.0 + if enemy { 9.0 } else { 2.0 } + hostile * 2.0 - if q.get("capital").truthy() { 1.0 } else { 0.0 }
             - if held { 0.0 } else { common::OVER_WATER }
             + if landing { 2.0 } else { 0.0 }
             + if bonus.contains(&q.get("id").num()) { 4.0 } else { 0.0 };
@@ -568,14 +572,68 @@ fn cpu_policy(me: View, offer: f64, under_attack: bool) -> Value {
             "abilities" => 0.28, "fabrication" => round(max(income * 0.34, common::fabrication(me, 2.0) + 300.0 * common::price_level(me))), "gate" => 0.08, "duel" => 0.14, "challenge" => 0.08, "visuals" => 0.03,
         },
         "reserve" => obj! { "think" => 3500, "reflex" => 7000, "research" => research },
-        "upkeepOrder" => vec!["miner", "picket", "sentry", "warjunk", "spire", "shade", "corsair", "kite", "needle", "scout", "runner"],
+        "upkeepOrder" => vec!["miner", "picket", "sentry", "warjunk", "carrier", "spire", "shade", "corsair", "kite", "needle", "scout", "runner"],
     }
 }
 
 // A damaged faction keeps accepted orders and local reflexes rather than
 // consuming its last shared CPU on map searches and new fabrication.
-fn conserve(world: View, me: View) -> Value {
-    common::recovery(world, me)
+fn full_think_need(world: View, me: View) -> f64 {
+    // The complete plan costs up to about 35k cycles before the world fills.
+    // Scale the floor with the map and the visible unit roster, and leave margin
+    // above the most recent peak so growth cannot strand the planner at its cap.
+    let size = 40000.0 + world.get("provinces").len() as f64 * 180.0 + world.get("units").len() as f64 * 90.0;
+    size.max(me.get("compute").get("thinkPeak").or(0.0) * 1.25 + 6000.0)
+}
+
+fn lean_think_need(world: View, me: View) -> f64 {
+    // A funded lean pass still builds the local plan. Its expensive census and
+    // naval searches already have their own cycle guards below.
+    24000.0 + world.get("provinces").len() as f64 * 100.0 + me.get("units").get("total").or(0.0) * 125.0
+}
+
+fn budgeted_think_need(world: View, me: View, spend_cap: f64) -> f64 {
+    let full = full_think_need(world, me);
+    if spend_cap >= full + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD {
+        full
+    } else {
+        lean_think_need(world, me)
+    }
+}
+
+fn plan_fuel_ready(allowance: f64, remaining: f64, need: f64) -> bool {
+    allowance >= need && remaining >= need + 4000.0
+}
+
+const PLAN_REMAINING_MARGIN: f64 = 4000.0;
+const PLAN_CALLBACK_OVERHEAD: f64 = 2500.0;
+
+fn affordable_plan_limit(me: View, need: f64) -> Option<f64> {
+    let cpu = me.path("rts.cpu");
+    let funded = cpu.get("bank").or(0.0) + cpu.get("income").or(20000.0).max(1.0);
+    let spend_cap = cpu.get("spendCap").or(cpu.get("burst").or(funded));
+    let required = need + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD;
+    let ceiling = required.min(funded).min(spend_cap);
+    (ceiling >= required).then_some(ceiling)
+}
+
+fn recovery_for_plan(world: View, me: View, need: f64) -> Value {
+    let mut orders = common::recovery(world, me);
+    let cpu = me.path("rts.cpu");
+    let income = cpu.get("income").or(20000.0).max(1.0);
+    let bank = cpu.get("bank").or(0.0);
+    let spend_cap = cpu.get("spendCap").or(cpu.get("burst").or(bank + income));
+    // Even the cheap recovery ceiling must respect the second's hard spend cap.
+    let cheap_ceiling = orders.get("compute").get("cpu").get("limits").get("think").num().min(spend_cap);
+    orders.entry("compute").entry("cpu").entry("limits").set("think", cheap_ceiling);
+    // Thin banks keep the shared recovery policy. With a healthy bank, grant
+    // the selected full or lean planning pass only when its complete runway fits.
+    if bank >= income * 2.0 {
+        if let Some(ceiling) = affordable_plan_limit(me, need) {
+            orders.entry("compute").entry("cpu").entry("limits").set("think", ceiling);
+        }
+    }
+    orders
 }
 
 fn think(world: View, me: View) -> Value {
@@ -599,15 +657,21 @@ fn think(world: View, me: View) -> Value {
 fn strategy(world: View, me: View) -> Value {
     // (from 3,000 cycles the short path below still sets the CPU policy: a think that sets none keeps a limit that may
     // be too small for it every second after)
+    let cpu = me.path("rts.cpu");
+    let spend_cap = cpu.get("spendCap").or(cpu.get("burst").or(0.0));
+    let need = budgeted_think_need(world, me, spend_cap);
     if rts(me) && cycles_left() < 3000.0 {
-        return common::recovery(world, me);
+        return recovery_for_plan(world, me, need);
     }
     let start = cycles_left();
-    // A full think costs 13,000 to 35,000 cycles as the world fills: under 20,000, keep standing orders rather than run
-    // out halfway (the census below and the trade at the end also wait for a fuller second).
+    // Skip the full scan before it can exceed this second's think lane. Recovery
+    // keeps local defenses and mining active, then raises a funded next attempt.
     let available = me.get("rts").get("cpu").get("available");
-    if rts(me) && (cycles_left() < 20000.0 || (available.truthy() && available.get("think").num() < 5000.0)) {
-        return conserve(world, me);
+    if rts(me) {
+        let allowance = if available.truthy() { available.get("think").num_or(0.0) } else { cycles_left() };
+        if !plan_fuel_ready(allowance, cycles_left(), need) {
+            return recovery_for_plan(world, me, need);
+        }
     }
     let me_id = me.get("id").num();
     let techs = me.get("techs");
@@ -667,7 +731,7 @@ fn strategy(world: View, me: View) -> Value {
         "policy" => obj! { "extraction" => 0.42, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true },
         "provinces" => Value::arr(),
     };
-    plan::share(&mut orders, &plan, me);
+    common::share(&mut orders, &plan, world, me);
 
     // Fabrication is paid from the combat bank.  Leave it alone until it can
     // afford a useful field unit instead of repeatedly queuing a rejected spawn.
@@ -725,7 +789,7 @@ fn strategy(world: View, me: View) -> Value {
         let book = obj! { "b" => broadsides, "p" => prizes, "pt" => intel.newest, "tk" => tk, "js" => js };
         concat(&mut orders, "ram", mem::put(LOG, &book, "local", None, 1).unwrap_or_default());
     }
-    let junks = have.get("warjunk").or(0.0) + have.get("picket").or(0.0) + have.get("corsair").or(0.0);
+    let junks = have.get("warjunk").or(0.0) + have.get("picket").or(0.0) + have.get("corsair").or(0.0) + have.get("carrier").or(0.0);
     let doing = if let Some(l) = &intel.line {
         l.clone()
     } else if naval.landing >= 0.0 && naval.landing == target_id {
@@ -766,6 +830,7 @@ fn strategy(world: View, me: View) -> Value {
             ("warjunk", 8000.0, 3.0),
             ("picket", 6000.0, 6.0),
             ("corsair", 8000.0, 3.0),
+            ("carrier", 8000.0, 3.0),
         ],
         me.get("rts").get("cpu").get("income").or(0.0),
         available_control,
@@ -1116,6 +1181,11 @@ fn prey(world: View, me: View, n: &[(f64, f64)]) -> f64 {
 
 // Kites defend at home, else raid the prey (a raid takes ◆, not land), else join the push on the target.
 fn kite(units: View, world: View, me: View) {
+    if common::air_recovery(units,me) { return; }
+    if !me.path("rts.air.decks").is_empty() {
+        common::fly(units, world, me);
+        return;
+    }
     // a flier a minute up comes down on your nearest land before anything else, even short of cycles: its burn climbs
     // the longer it flies, and an unpaid one crashes
     land_hot(units);
@@ -1517,13 +1587,13 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
         return false;
     }
     let have = me.get("units").get("byType");
-    let (pickets, war, corsairs) = (have.get("picket").or(0.0), have.get("warjunk").or(0.0), have.get("corsair").or(0.0));
+    let (pickets, war, corsairs, carriers) = (have.get("picket").or(0.0), have.get("warjunk").or(0.0), have.get("corsair").or(0.0), have.get("carrier").or(0.0));
     let income = me.get("rts").get("cpu").get("income").or(0.0);
     // Income bounds affordable hulls; an actual crossing, escort or target must justify each one.
     let fleet_max = max(3.0, (income / 20000.0).floor()).min(12.0);
     // (two junks put to sea whatever the army; past them, a soldier ashore for every two junks, since the land is what
     // feeds the yard)
-    let junks = pickets + war + corsairs;
+    let junks = pickets + war + corsairs + carriers;
     let ashore = common::fighters(me) - junks;
     if junks >= fleet_max || (threatened && junks >= 2.0) || (junks >= 2.0 && ashore < 1.0 + (junks / 2.0).floor()) {
         return false;
@@ -1552,8 +1622,11 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
     let escorts: f64 = if have.get("freighter").num_or(0.0) > 0.0 { 1.0 } else { 0.0 };
     let contested = rival_ships.min(3.0) + naval.blockade.min(1) as f64;
     let want_war = if guns { escorts.max(contested).max(if prospects > 0 { 1.0 } else { 0.0 }).min(4.0) } else { 0.0 };
+    let want_carrier = has("flight") && have.get("kite").or(0.0) >= 2.0 && carriers < 1.0;
     let pick: Option<(&str, Value, Vec<&str>)> = if pickets < want_pick {
         Some(("picket", picket_body(guns), armor("armor")))
+    } else if want_carrier {
+        Some(("carrier", carrier_body(), armor("armor")))
     } else if war < want_war.min(1.0) {
         Some(("warjunk", warjunk_body(), armor("armor")))
     } else if corsairs < want_cors {
@@ -1791,6 +1864,11 @@ fn picket(units: View, world: View, me: View) -> Value {
 
 fn corsair(units: View, world: View, me: View) -> Value {
     junks(units, world, me, 2)
+}
+
+fn carrier(units: View, world: View, me: View) -> Value {
+    // Keep the deck with the battle fleet; the flight controller handles its riders.
+    junks(units, world, me, 0)
 }
 
 /// A junk in contact: a broadside at whatever is at sea in its arc (the side with more; a broadside with nothing at
@@ -2031,7 +2109,8 @@ fn reflex(units: View, near: View) -> Value {
             }
             // Finish damaged targets, but also prefer exposed ranged and air threats
             // over a healthy nearby melee screen.
-            let score = t.get("hp").or(1.0) + d * 0.12 - if t.get("range").truthy() { 0.32 } else { 0.0 } - if air { 0.20 } else { 0.0 };
+            let score = t.get("hp").or(1.0) + d * 0.12 - if t.get("range").truthy() { 0.32 } else { 0.0 }
+                - if air { if common::air_defender(u) { 100.0 } else { 0.20 } } else { 0.0 };
             if score < best_score {
                 best = Some(t);
                 best_score = score;
@@ -2123,7 +2202,7 @@ fn look(budget: View, info: View) -> Value {
     let mut l = house.map_or(Value::Null, |t| t.look(budget.num(), info));
     // the junks wear the house's bodies and names ashore (at sea every ship wears the fleet's junk)
     if l.truthy() {
-        for (ship, ashore) in [("warjunk", ["lancer", "shade", "runner"]), ("picket", ["sentry", "spire", "runner"]), ("corsair", ["needle", "shade", "runner"])] {
+        for (ship, ashore) in [("warjunk", ["lancer", "shade", "runner"]), ("picket", ["sentry", "spire", "runner"]), ("corsair", ["needle", "shade", "runner"]), ("carrier", ["kite", "kite", "runner"])] {
             // Its kin ashore, or the house's main body when borrowing a style with different land functions.
             let body = ashore.iter().find(|t| l.get("units").get(t).truthy())
                 .map_or_else(|| l.get("units").get("guard").clone(), |kin| l.get("units").get(kin).clone());
@@ -2138,7 +2217,7 @@ fn look(budget: View, info: View) -> Value {
                 o.remove("envoy");
                 o.remove("sailor");
                 while o.0.len() > 20 {
-                    let unused = o.0.iter().position(|(k, _)| !matches!(k.as_str(), "miner" | "hauler" | "freighter" | "guard" | "scout" | "longbow" | "spy" | "runner" | "lancer" | "shade" | "sentry" | "spire" | "needle" | "kite" | "warjunk" | "picket" | "corsair"));
+                    let unused = o.0.iter().position(|(k, _)| !matches!(k.as_str(), "miner" | "hauler" | "freighter" | "guard" | "scout" | "longbow" | "spy" | "runner" | "lancer" | "shade" | "sentry" | "spire" | "needle" | "kite" | "warjunk" | "picket" | "corsair" | "carrier"));
                     let Some(i) = unused else { break };
                     o.0.remove(i);
                 }

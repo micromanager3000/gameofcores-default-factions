@@ -42,14 +42,21 @@ fn a_starved_recovery_preserves_its_policy_between_reviews() {
 fn escort_orders(armed: bool, privateer: bool) -> Vec<Value> {
     let (mut world, me, mut convoy) = fixture();
     item(&mut convoy, 0).entry("rts").entry("cargo").set("cycles", 40000);
+    item(&mut convoy, 0).entry("rts").entry("sea").set("water", 1);
     world.set("units", convoy);
     let mut me = me;
+    let snapshot = obj! { "attack" => -1, "convoy" => arr![1], "convoyAt" => world.get("seconds") };
+    let mut pages = Value::obj();
+    for op in mem::put(0, &snapshot, "shared", None, 1).unwrap() {
+        pages.set(&op.get("write").num().to_string(), obj! { "bytes" => op.get("bytes").clone(), "t" => 1 });
+    }
+    me.set("ramProvince", obj! { "0" => pages });
     me.entry("rts").entry("sea").set("contacts", arr![obj! {
         "id"=>201,"owner"=>2,"ship"=>true,"water"=>1,"hp"=>8,
         "build"=>obj! {"range"=>if armed {1}else{0},"carry"=>2},
         "cargo"=>obj! {"load"=>3}
     }]);
-    let guard = obj! {"id"=>108,"owner"=>1,"type"=>"escort","focus"=>201,
+    let guard = obj! {"id"=>108,"owner"=>1,"type"=>"escort","at"=>0,"focus"=>201,
         "rts"=>obj! {"sea"=>obj! {"ship"=>true,"water"=>0,"course"=>obj! {"chase"=>201}}}};
     let mut units = vec![guard.clone()];
     if privateer {
@@ -59,6 +66,8 @@ fn escort_orders(armed: bool, privateer: bool) -> Vec<Value> {
         raider.entry("rts").entry("sea").set("course", Value::Null);
         units.push(raider);
     }
+    // Unit callbacks have no world.units; only the plan snapshot tells this guard where its cargo is.
+    world.set("units", Value::arr());
     let args = views(&[Value::Arr(units), world, me]);
     abi::TEST_ORDERS.with(|o| o.borrow_mut().clear());
     common::guard_shipping(args[0], args[1], args[2]);
@@ -68,7 +77,7 @@ fn escort_orders(armed: bool, privateer: bool) -> Vec<Value> {
 #[test]
 fn a_convoy_guard_breaks_off_a_merchant_chase_to_stay_with_its_cargo() {
     let orders = escort_orders(false, false);
-    assert!(orders.iter().any(|o| o.get("id").num() == 108.0 && o.get("sail").num_or(-1.0) == 0.0
+    assert!(orders.iter().any(|o| o.get("id").num() == 108.0 && o.get("sail").num_or(-1.0) == 1.0
         && matches!(o.get("focus"), Value::Null)), "{orders:?}");
     assert!(!orders.iter().any(|o| matches!(o.get("sail").get("chase"), Value::Num(_))), "{orders:?}");
 }
@@ -82,6 +91,6 @@ fn a_convoy_guard_keeps_intercepting_a_raider_that_threatens_its_cargo() {
 #[test]
 fn the_privateer_can_raid_while_the_convoy_guard_stays_with_the_freighter() {
     let orders = escort_orders(false, true);
-    assert!(orders.iter().any(|o| o.get("id").num() == 108.0 && o.get("sail").num_or(-1.0) == 0.0), "{orders:?}");
+    assert!(orders.iter().any(|o| o.get("id").num() == 108.0 && o.get("sail").num_or(-1.0) == 1.0), "{orders:?}");
     assert!(orders.iter().any(|o| o.get("id").num() == 109.0 && o.get("focus").num_or(-1.0) == 201.0), "{orders:?}");
 }

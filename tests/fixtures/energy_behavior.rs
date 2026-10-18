@@ -87,3 +87,83 @@ fn transmission_is_required_before_the_market_opens() {
     let (orders, _, _) = power_orders(12.0, 4.0, 0.0, false, arr![]);
     assert!(orders.get("send").is_empty(), "{orders:?}");
 }
+
+#[test]
+fn only_a_trade_doctrine_sells_from_one_point_five_to_three_megawatts_spare() {
+    // 7 MW of native generation less the island's 4 MW draw plus its 15% reserve leaves 2.4 MW.
+    // Nations (seat 7) may offer it; another house must wait until it has 3 MW spare.
+    let (nations, world, _) = power_orders(7.0, 4.0, 0.0, true, arr![]);
+    assert_eq!(nations.get("send").len(), 1, "{nations:?}");
+
+    let (_, mut other) = power_market(7.0, 4.0, 0.0, true, arr![]);
+    other.set("seat", 0);
+    let args = views(&[world, other]);
+    let mut orders = obj! {};
+    shared::energy::apply(&mut orders, args[0], args[1]);
+    assert!(orders.get("send").is_empty(), "{orders:?}");
+}
+
+#[test]
+fn export_spare_is_only_the_linked_islands_native_power_after_demand_and_exports() {
+    let (_, me) = power_market(12.0, 4.0, 0.0, true, arr![]);
+    let args = views(&[me]);
+    assert!((shared::energy::export_spare(args[0], 2.0) - 7.4).abs() < 1e-9);
+
+    let (_, committed) = power_market(12.0, 4.0, 0.0, true, arr![obj! { "give"=>true, "with"=>3, "mw"=>2 }]);
+    let args = views(&[committed]);
+    assert!((shared::energy::export_spare(args[0], 2.0) - 5.4).abs() < 1e-9);
+
+    let (_, mut disconnected) = power_market(12.0, 4.0, 0.0, true, arr![]);
+    disconnected.entry("energy").set("exportLinks", arr![]);
+    let args = views(&[disconnected]);
+    assert_eq!(shared::energy::export_spare(args[0], 2.0), 0.0);
+}
+
+#[test]
+fn power_requests_are_accepted_only_when_the_seller_can_deliver_native_spare() {
+    let request = |mw| obj! { "from"=>2, "give"=>obj! { "coin"=>90 },
+        "ask"=>obj! { "power"=>obj! { "mw"=>mw, "seconds"=>180 } } };
+    let (world, mut seller) = power_market(12.0, 4.0, 0.0, true, arr![]);
+    seller.set("bank", 1_000);
+    seller.set("contracts", arr![]);
+    seller.set("units", obj! { "total"=>0, "queued"=>0, "cap"=>20 });
+    let request = request(4.0);
+    let args = views(&[request, seller, world]);
+    assert!(common::fair(args[0], args[1], args[2], &[]));
+}
+
+#[test]
+fn power_requests_reject_disconnected_or_non_native_or_already_committed_supply() {
+    let request = |mw| obj! { "from"=>2, "give"=>obj! { "coin"=>180 },
+        "ask"=>obj! { "power"=>obj! { "mw"=>mw, "seconds"=>180 } } };
+    let rejects = |mut seller: Value, world: Value, mw: f64| {
+        seller.set("bank", 1_000);
+        seller.set("contracts", arr![]);
+        seller.set("units", obj! { "total"=>0, "queued"=>0, "cap"=>20 });
+        let message = request(mw);
+        let args = views(&[message, seller, world]);
+        assert!(!common::fair(args[0], args[1], args[2], &[]));
+    };
+
+    let (world, mut disconnected) = power_market(12.0, 4.0, 0.0, true, arr![]);
+    disconnected.entry("energy").set("exportLinks", arr![]);
+    rejects(disconnected, world, 1.0);
+
+    let (world, beyond_spare) = power_market(12.0, 4.0, 0.0, true, arr![]);
+    rejects(beyond_spare, world, 8.0);
+
+    let (world, imported) = power_market(3.0, 4.0, 10.0, true, arr![obj! { "give"=>false, "with"=>2, "mw"=>10, "delivered"=>10 }]);
+    rejects(imported, world, 1.0);
+
+    for kind in ["battery", "boiler"] {
+        let (world, mut plant) = power_market(12.0, 4.0, 0.0, true, arr![]);
+        plant.entry("energy").set("plants", arr![
+            obj! { "p"=>0, "mw"=>9, "ports"=>arr![obj! { "kind"=>kind, "capacity"=>9 }] },
+            obj! { "p"=>1, "mw"=>0, "ports"=>arr![obj! { "kind"=>"wind", "capacity"=>0 }] }
+        ]);
+        rejects(plant, world, 1.0);
+    }
+
+    let (world, exported) = power_market(12.0, 4.0, 0.0, true, arr![obj! { "give"=>true, "with"=>3, "mw"=>8 }]);
+    rejects(exported, world, 1.0);
+}

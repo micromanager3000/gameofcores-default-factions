@@ -6,8 +6,8 @@ test('the default export carries the active grid planner and transmission resear
   const program = source('default');
   assert.match(program, /const TECHS: \[&str; 15\].*"transmission"/);
   assert.match(program, /pub fn apply\(orders: &mut Value, world: View, me: View\)/);
-  assert.match(program, /fn sell\(orders: &mut Value, world: View, me: View\)/);
-  assert.match(program, /let native: f64 = e.get\("plants"\)/);
+  assert.match(program, /fn sell\(orders: &mut Value, world: View, me: View,/);
+  assert.match(program, /pub fn export_spare\(me: View, buyer: f64\) -> f64/);
   assert.doesNotMatch(program, /Plans nothing: the house generator/);
   assert.ok(Buffer.byteLength(program) <= 512 * 1024, 'default source fits the game source limit');
 });

@@ -437,7 +437,7 @@ fn strategy(world: View, me: View) -> Value {
         "slots" => army_room(me),
         "priceLevel" => common::price_level(me),
     };
-    plan::share(&mut orders, &plan, me);
+    common::share(&mut orders, &plan, world, me);
 
     let count = |k: &str| bt.get(k).or(0.0);
     let (miners, screens, runners, skirms, lancers) = (count("miner"), count("screen"), count("runner"), count("skirm"), count("lancer"));
@@ -1346,7 +1346,7 @@ fn miner(units: View, world: View, me: View) {
 // in its RAM (orders::carry) on its order, or on a RAM-only order when its order stands. Without it, a unit that
 // crosses the border forgets its target and walks home.
 fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
-    let Some(ops) = orders::carry(u, p, me) else { return o };
+    let Some(ops) = common::carry(u, p, me) else { return o };
     let mut x = o.unwrap_or_else(|| obj! { "id" => u.get("id") });
     x.set("ram", ops);
     Some(x)
@@ -1391,13 +1391,20 @@ struct ControlBudget {
     seen: Vec<(f64, f64)>,
 }
 
+const CONTROL_MIN_NEXT: f64 = 2400.0;
+const CONTROL_ADMISSION_MARGIN: f64 = 1800.0;
+
+fn control_has_runway(available: f64, next: f64, read: f64) -> bool {
+    available >= next.max(CONTROL_MIN_NEXT) + read + CONTROL_ADMISSION_MARGIN
+}
+
 impl ControlBudget {
     fn new(me: View) -> Self {
         if me.get("rts").truthy() {
             orders::set_reserve(1100.0);
             orders::set_first(1400.0);
         }
-        Self { next: 800.0, seen: Vec::new() }
+        Self { next: CONTROL_MIN_NEXT, seen: Vec::new() }
     }
 
     fn admits(&mut self, u: View, me: View) -> bool {
@@ -1412,13 +1419,13 @@ impl ControlBudget {
             let b = bytes.bytes();
             2.0 * f64::from(u16::from_le_bytes([b[0], b[1]]))
         } else { 0.0 };
-        if cycles_left() < self.next + read + 600.0 { return false; }
+        if !control_has_runway(cycles_left(), self.next, read) { return false; }
         if cold { self.seen.push(key); }
         true
     }
 
     fn finish(&mut self, began: f64) {
-        self.next = self.next.max((began - cycles_left()) * 1.5 + 400.0);
+        self.next = self.next.max((began - cycles_left()) * 2.0 + 1200.0);
     }
 
     fn submit(o: Value) -> bool {

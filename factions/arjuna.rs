@@ -28,14 +28,14 @@ const SENTRY: Build = &[("hp", 2.0), ("speed", 2.0), ("strength", 1.0), ("carry"
 const GUN: Build = &[("hp", 2.0), ("speed", 1.0), ("strength", 2.0), ("carry", 0.0), ("vision", 1.0), ("range", 2.0)];
 const GHOST: Build = &[("hp", 1.0), ("speed", 3.0), ("strength", 1.0), ("carry", 0.0), ("vision", 3.0), ("stealth", 1.0)];
 // The vimana, once Flight allows wings: a striking flier, and a shooting one once Air weapons allows range on wings.
-const WING: Build = &[("hp", 2.0), ("speed", 2.0), ("strength", 3.0), ("carry", 0.0), ("vision", 0.0), ("wings", 1.0)];
-const WING_SHOT: Build = &[("hp", 2.0), ("speed", 2.0), ("strength", 1.0), ("carry", 0.0), ("vision", 0.0), ("wings", 1.0), ("range", 1.0)];
+const WING: Build = &[("hp", 2.0), ("speed", 3.0), ("strength", 2.0), ("carry", 0.0), ("vision", 0.0), ("wings", 1.0)];
+const WING_SHOT: Build = &[("hp", 2.0), ("speed", 1.0), ("strength", 2.0), ("carry", 0.0), ("vision", 0.0), ("wings", 1.0), ("range", 1.0)];
 
 // Establish mining and a mobile archer screen, then pursue the Flight path.
 // Ground upgrades follow Flight, Artillery and Air weapons.
 const TECHS: [&str; 23] = [
-    "extraction", "dash", "ranged", "flight", "airWeapons", "armor", "antiAir", "storage", "pierce", "artillery",
-    "computeBoost", "turbines", "scan", "repair", "capture", "influence", "cloak", "stealth", "seaTraversal",
+    "extraction", "dash", "ranged", "antiAir", "flight", "artillery", "airWeapons", "armor", "capture", "storage",
+    "computeBoost", "turbines", "scan", "repair", "pierce", "influence", "cloak", "stealth", "seaTraversal",
     "mountainTraversal", "transmission", "cooling", "gate",
 ];
 
@@ -328,22 +328,30 @@ fn flight_progress(orders: &mut Value, world: View, me: View) {
     let income = me.path("rts.cpu.income").num_or(0.0);
     if income <= 0.0 || me.path("rts.cpu.bank").num_or(0.0) < income * 2.0
         || common::unit_upkeep(me) > income * 0.5 { return; }
+    // A full strategy already funds research. Recovery alone needs this smaller lane reopened.
+    let recovering = mem::get(me.get("ramCapital"), RECOVERY_PAGE).get("r").truthy()
+        || orders.get("memo").str() == "Recovering production"
+        || orders.get("compute").get("cpu").get("limits").get("research").num_or(0.0) <= 0.0;
     // The engine retains the active topic and its solved puzzle when no replacement is sent. Recovery can zero its
     // lane, though, so restore the healthy sky-path allocation without changing that topic.
     if me.path("research.tech").truthy() {
-        let cpu = orders.entry("compute").entry("cpu");
-        cpu.entry("limits").set("research", 0.12);
-        cpu.entry("reserve").set("research", 0.02);
+        if recovering {
+            let cpu = orders.entry("compute").entry("cpu");
+            cpu.entry("limits").set("research", 0.12);
+            cpu.entry("reserve").set("research", 0.02);
+        }
         return;
     }
-    for tech in ["extraction", "dash", "ranged", "seaTraversal", "mountainTraversal", "flight", "artillery", "airWeapons"] {
+    for tech in ["extraction", "dash", "ranged", "antiAir", "seaTraversal", "mountainTraversal", "flight", "artillery", "airWeapons"] {
         let spec = world.get("techs").get(tech);
         if me.get("techs").get(tech).truthy() || !spec.truthy() { continue; }
         if !spec.get("requires").iter().all(|t| me.get("techs").get(t.str()).truthy()) { return; }
         orders.set("research", tech);
-        let cpu = orders.entry("compute").entry("cpu");
-        cpu.entry("limits").set("research", 0.12);
-        cpu.entry("reserve").set("research", 0.02);
+        if recovering {
+            let cpu = orders.entry("compute").entry("cpu");
+            cpu.entry("limits").set("research", 0.12);
+            cpu.entry("reserve").set("research", 0.02);
+        }
         return;
     }
 }
@@ -408,7 +416,22 @@ fn strategy(world: View, me: View) -> Value {
     let rim = common::frontier(world, me);
     // the best land first, marked down where the army couldn't hold on to it (common::can_hold)
     let hold = common::can_hold(world, me, false);
-    let ranked = realm::rank(world, me, rim, |w, m, q| common::score(w, m, q) - if hold(q) { 0.0 } else { common::OVER_WATER });
+    let mut ranked = realm::rank(world, me, rim, |w, m, q| common::score(w, m, q) - if hold(q) { 0.0 } else { common::OVER_WATER });
+    // An established archer column can finish a nearby capital instead of circling richer provinces.
+    // Count capturers separately: aircraft and freight crews cannot occupy the town ring.
+    let ground = (common::fighters(me) - bt.get("wing").or(0.0) - bt.get("ghost").or(0.0)).max(0.0);
+    let campaign = rts_cpu(me).get("income").num_or(0.0) >= 60000.0
+        && rts_cpu(me).get("bank").num_or(0.0) >= rts_cpu(me).get("income").num_or(0.0) * 2.0 && ground >= 12.0;
+    if campaign {
+        let lead = common::dominant(world).map(|f| f.get("id").num());
+        let press_leader = lead.is_some_and(|id| id != me.get("id").num()
+            && ranked.iter().any(|q| q.get("owner").num_or(-1.0) == id && hold(*q)));
+        let capital = ranked.iter().copied().find(|q| q.get("capital").truthy() && hold(*q)
+            && realm::is_rival(world, me, q.get("owner").num_or(-1.0))
+            && common::muster_for(*q) <= ground * 0.75
+            && (!press_leader || lead == Some(q.get("owner").num())));
+        if let Some(q) = capital { ranked = vec![q]; }
+    }
     let mut plan = common::survey(world, me, &ranked, 2.0);
     // The sky's strike for the vimanas (sky::pick), once Flight allows them and vimanas fly: its census is budgeted at
     // about 40 cycles a unit in sight and 40 a province, only when think can still finish after it; else last second's
@@ -456,7 +479,7 @@ fn strategy(world: View, me: View) -> Value {
         "slots" => army_room(me),
         "priceLevel" => common::price_level(me),
     };
-    plan::share(&mut orders, &plan, me);
+    common::share(&mut orders, &plan, world, me);
 
     let count = |k: &str| bt.get(k).or(0.0);
     let (miners, screens, runners, skirms, lancers) = (count("miner"), count("screen"), count("runner"), count("skirm"), count("lancer"));
@@ -480,7 +503,8 @@ fn strategy(world: View, me: View) -> Value {
         let archer = has("airWeapons") && (wings as i64) % 3 == 2;
         spawn(&mut orders, "wing", if archer { WING_SHOT } else { WING }, mods(me, "wing"));
     }
-    if screens < jmax(3.0, ((skirms + guns + 1.0) * 0.42).floor()) {
+    let column = if campaign { jmin(5.0, (income / 60000.0).floor()) } else { 0.0 };
+    if screens < jmax(3.0 + column, ((skirms + guns + 1.0) * 0.42).floor()) {
         spawn(&mut orders, "screen", if emu {EMU_SCREEN}else{SCREEN}, mods(me, "screen"));
     }
     // Ranged is its own license. Before it arrives, fast melee runners scout and pull defenders out of position without
@@ -494,7 +518,7 @@ fn strategy(world: View, me: View) -> Value {
     if has("ranged") && skirms < jmax(4.0, screens * 2.0) {
         spawn(&mut orders, "skirm", if emu {EMU_SKIRM}else{SKIRM}, mods(me, "skirm"));
     }
-    if spawning(&orders) < 3 && has("scan") && has("ranged") && sentries < 2.0 {
+    if spawning(&orders) < 3 && has("antiAir") && has("ranged") && sentries < jmax(2.0, (screens / 3.0).floor()) {
         spawn(&mut orders, "sentry", SENTRY, mods(me, "sentry"));
     }
     if spawning(&orders) < 3 && has("artillery") && guns < jmax(1.0, (skirms / 4.0).floor()) {
@@ -701,7 +725,7 @@ fn miner(units: View, world: View, me: View) {
 // in its RAM (orders::carry) on its order, or on a RAM-only order when its order stands. Without it, a unit that
 // crosses the border forgets its target and walks home.
 fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
-    let Some(ops) = orders::carry(u, p, me) else { return o };
+    let Some(ops) = common::carry(u, p, me) else { return o };
     let mut x = o.unwrap_or_else(|| obj! { "id" => u.get("id") });
     x.set("ram", ops);
     Some(x)
@@ -865,6 +889,7 @@ const READY: f64 = 6.0;
 const HOP: f64 = 4.5;
 
 fn wing(units: View, world: View, me: View) {
+    if common::air_recovery(units, me) { return; }
     let rts = me.get("rts").truthy();
     if rts && cycles_left() < 800.0 {
         return;
@@ -876,13 +901,18 @@ fn wing(units: View, world: View, me: View) {
     }
 
     let geo = sky::Geo::new(world, me, 12.0);
-    // the strike is in the plan our land holds: read where a vimana stands on it (abroad, none is needed)
-    let pl = match units.iter().find(|u| plan::here(me, *u)) {
+    // A home province supplies the current squadron plan. Abroad, each aircraft keeps its paid sortie.
+    let home = units.iter().find(|u| plan::here(me, *u));
+    let pl = match home {
         Some(u) => plan::of(me, u),
         None => Rc::new(Value::obj()),
     };
     let target = if vn(pl.get("sky")) >= 0.0 { vn(pl.get("sky")) } else { vn(pl.get("attack")) };
     let target = if target.is_nan() { -1.0 } else { target };
+    // A fighter needs the visible rival's id to begin interception. Ground strikes keep their own objective.
+    let contacts: Vec<View> = me.path("rts.air.contacts").iter().take_while(|_| cycles_left() > 3500.0)
+        .filter(|u| u.get("air").truthy() && realm::is_rival(world, me, u.get("owner").num_or(-1.0)))
+        .take(12).collect();
     let verb = if is_str_v(pl.get("skyVerb"), "raid") { "raid" } else { "fight" };
     let by_id = realm::index(world);
     let me_id = n(me.get("id"));
@@ -895,7 +925,6 @@ fn wing(units: View, world: View, me: View) {
             cool += 1;
         }
     }
-    let go = target >= 0.0 && (ours(target) || cool >= units.len().min(3));
     for i in 0..units.len() {
         if rts && cycles_left() < 1600.0 {
             break;
@@ -908,6 +937,16 @@ fn wing(units: View, world: View, me: View) {
         let heat = n(a.get("heat"));
         let doing = u.get("doing");
         let (at, to, tgt) = (n(u.get("at")), n(u.get("to")), n(u.get("target")));
+        let standing = is_str(doing, "fight") || is_str(doing, "raid");
+        let target = if home.is_none() && standing && tgt >= 0.0 { tgt } else { target };
+        let focus = if u.get("range").num_or(0.0) == 0.0 {
+            contacts.iter().filter(|v| v.get("at").num_or(-1.0) == target)
+                .min_by(|a,b| a.get("hp").num_or(1.0).total_cmp(&b.get("hp").num_or(1.0)))
+                .map(|v|v.get("id").num())
+        } else { None };
+        let verb = if home.is_none() && standing { if is_str(doing, "raid") { "raid" } else { "fight" } } else { verb };
+        let go = target >= 0.0 && (ours(target) || cool >= units.len().min(3));
+        let carried = home.map(|_| &pl);
         if a.get("aloft").truthy() {
             if is_str(doing, "move") && ours(tgt) {
                 // on its way down
@@ -923,18 +962,20 @@ fn wing(units: View, world: View, me: View) {
                 }
                 continue;
             }
+            // Abroad, the wing can finish its carried objective while the capital's plan is out of reach.
+            let strike_target = if target >= 0.0 { target } else { tgt };
+            if let Some(run) = common::bombing_run(u, world, me, strike_target) {
+                if let Some(o) = run { order(o); }
+                continue;
+            }
             let striking = is_str(doing, "fight") || is_str(doing, "raid");
+            if striking && tgt == target && focus.is_some_and(|id| u.get("focus").num_or(-1.0) != id) {
+                if let Some(o) = launch(u, target, "fight", &geo, focus, carried, me) { order(o); }
+                continue;
+            }
             if striking && tgt == at && to < 0.0 {
                 // over its target: with no rival there left to hit, raid a rival town no ground unit guards, else home
-                let (foes, guards, prey) = sky::hostiles(world, me, at);
-                if let Some((x, y)) = prey {
-                    // a vimana hovers where it's sent: over the best prey there, not the town
-                    let spot = u.get("spot");
-                    let far = !spot.truthy() || (n(spot.get("x")) - x).hypot(n(spot.get("y")) - y) > 1.5;
-                    if far && is_str(doing, "fight") && x.hypot(y) <= 8.0 {
-                        order(obj! { "id" => u.get("id"), "do" => "fight", "target" => at, "at" => obj! { "x" => round(x * 10.0) / 10.0, "y" => round(y * 10.0) / 10.0 }, "alert" => 8 });
-                    }
-                }
+                let (foes, guards, _) = sky::hostiles(world, me, at);
                 if foes == 0.0 {
                     let q = by_id.get(at);
                     let rival = q.get("owner").is_num() && q.get("owner").num() >= 0.0 && q.get("owner").num() != me_id && realm::is_rival(world, me, q.get("owner").num());
@@ -954,7 +995,7 @@ fn wing(units: View, world: View, me: View) {
             // up with no sortie of its own (it rose off a step at home, or is settling after one): cool, the strike if
             // there is one; hot over our land, it settles and comes down; anywhere else, home
             if heat <= READY && go {
-                if let Some(o) = launch(u, target, verb, &geo) {
+                if let Some(o) = launch(u, target, verb, &geo, focus, carried, me) {
                     order(o);
                     continue;
                 }
@@ -968,7 +1009,7 @@ fn wing(units: View, world: View, me: View) {
         if heat > READY || !go || (tgt == target && is_str(doing, verb)) {
             continue;
         }
-        if let Some(o) = launch(u, target, verb, &geo) {
+        if let Some(o) = launch(u, target, verb, &geo, focus, carried, me) {
             order(o);
         }
     }
@@ -976,17 +1017,23 @@ fn wing(units: View, world: View, me: View) {
 
 /// The order sending vimana `u` to `verb` at province `to`, by the shortest way a flier has (sky::Geo::route). Its
 /// drive carries a little power (faster sorties burn less), and its blows a little more force.
-fn launch(u: View, to: f64, verb: &str, geo: &sky::Geo) -> Option<Value> {
+fn launch(u: View, to: f64, verb: &str, geo: &sky::Geo, focus: Option<f64>, plan: Option<&Rc<Value>>, me: View) -> Option<Value> {
     if to < 0.0 {
         return None;
     }
     let from = if n(u.get("to")) >= 0.0 { n(u.get("to")) } else { n(u.get("at")) };
     let mut o = obj! { "id" => u.get("id"), "do" => verb, "target" => to, "alert" => 8 };
+    if let Some(id) = focus { o.set("focus", id); }
     if from != to {
         let via = geo.route(from, to)?;
         o.set("via", via);
     }
     o.set("power", obj! { "drive" => 120, "armor" => 0, "weapon" => 200 });
+    if cycles_left() > 3000.0 {
+        if let Some(plan) = plan {
+            if let Some(ram) = common::carry(u, plan, me) { o.set("ram", ram); }
+        }
+    }
     Some(o)
 }
 
@@ -1524,42 +1571,13 @@ mod sky {
         pub score: f64,
     }
 
-    /// The rival units we see in province `at`: how many, how many of them on the ground, and where the best prey
-    /// among them stands (`{x, y}` on the province's map: a miner, else a besieger, else an archer, else any).
+    /// Count visible rivals in province `at`. Treat every counted unit as a defender.
+    /// Unit callbacks receive province counts; local reflexes choose targets and positions.
     pub fn hostiles(world: View, me: View, at: f64) -> (f64, f64, Option<(f64, f64)>) {
-        let me_id = me.get("id").num();
-        let (mut foes, mut ground) = (0.0, 0.0);
-        let (mut prey, mut rank) = (None, 9);
-        for u in world.get("units").iter() {
-            if u.get("at").num_or(-1.0) != at || u.get("to").num_or(-1.0) >= 0.0 {
-                continue;
-            }
-            let o = u.get("owner").num_or(-1.0);
-            if o == me_id || !realm::is_rival(world, me, o) {
-                continue;
-            }
-            foes += 1.0;
-            let b = u.get("build");
-            if !b.get("wings").truthy() {
-                ground += 1.0;
-            }
-            let doing = u.get("doing").str();
-            let r = if doing == "gather" || b.get("carry").num_or(0.0) >= 3.0 {
-                0
-            } else if doing == "capture" {
-                1
-            } else if b.get("range").num_or(0.0) > 0.0 {
-                2
-            } else {
-                3
-            };
-            let pos = u.get("pos");
-            if r < rank && pos.truthy() && pos.get("p").num_or(-1.0) == at {
-                rank = r;
-                prey = Some((pos.get("x").num_or(0.0), pos.get("y").num_or(0.0)));
-            }
-        }
-        (foes, ground, prey)
+        let counts = realm::index(world).get(at).get("units");
+        let foes = world.get("factions").iter().filter(|f| realm::is_rival(world, me, f.get("id").num_or(-1.0)))
+            .map(|f| counts.key(f.get("id").num()).num_or(0.0)).sum();
+        (foes, foes, None)
     }
 
     /// Where the vimanas strike now, within [`REACH`] hops of our land: each province we see scores its prey (a miner
@@ -1587,8 +1605,8 @@ mod sky {
             let b = u.get("build");
             let ranged = b.get("range").num_or(0.0) > 0.0;
             if b.get("wings").truthy() {
-                aa[i] += 1.0;
-                prey[i] += 0.6;
+                aa[i] += 0.5;
+                prey[i] += 4.0;
                 continue;
             }
             ground[i] += 1.0;

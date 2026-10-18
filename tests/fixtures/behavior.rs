@@ -160,7 +160,11 @@ fn front_case(target_hp: f64, stage_hp: f64, rival_hp: f64) -> (Option<Option<Va
     front_case_max(target_hp, target_hp + 1.0, stage_hp, rival_hp)
 }
 fn front_case_max(target_hp: f64, max: f64, stage_hp: f64, rival_hp: f64) -> (Option<Option<Value>>, Option<Option<Value>>) {
+    front_case_observed(target_hp, max, stage_hp, rival_hp, 1.0, 5.0)
+}
+fn front_case_observed(target_hp: f64, max: f64, stage_hp: f64, rival_hp: f64, now: f64, attack: f64) -> (Option<Option<Value>>, Option<Option<Value>>) {
     let (mut world, mut me, _) = fixture();
+    world.set("factions", Value::parse(r#"[null,{"id":1,"alive":true},{"id":2,"alive":true}]"#));
     world.set("provinces", Value::parse(r#"[{"id":0,"owner":1,"adj":[4]},{"id":4,"owner":1,"adj":[0,5]},{"id":5,"owner":2,"adj":[4]}]"#));
     world.set("units", Value::parse(&format!(r#"[
         {{"id":1,"owner":1,"type":"line","at":5,"to":-1,"doing":"capture","target":5,"hp":{target_hp},"hpMax":{max}}},
@@ -168,10 +172,25 @@ fn front_case_max(target_hp: f64, max: f64, stage_hp: f64, rival_hp: f64) -> (Op
         {{"id":3,"owner":2,"type":"line","at":5,"to":-1,"doing":"fight","target":5,"hp":{rival_hp}}},
         {{"id":4,"owner":2,"type":"miner","at":5,"to":-1,"doing":"gather","target":5,"hp":50}}]"#)));
     me.set("ramProvince", obj! {"0"=>arr![obj!{}],"4"=>arr![obj!{}]});
-    let args = views(&[world, me]);
-    let plan = obj! {"attack"=>5,"stage"=>4};
-    let units: Vec<View> = args[0].get("units").iter().collect();
-    (common::front(units[0], args[0], args[1], &plan), common::front(units[1], args[0], args[1], &plan))
+    let args = views(&[world.clone(), me.clone()]);
+    let mut plan = obj! {"attack"=>5,"stage"=>4};
+    common::front_snapshot(&mut plan, args[0], args[1]);
+    assert_eq!(plan.get("front"), &arr![5,4,target_hp.floor(),rival_hp.ceil(),stage_hp.floor(),1]);
+    let mut departing = world.get("units").at(0).clone();
+    departing.set("at", 4);
+    let args = views(&[departing, me.clone()]);
+    let ops = common::carry(args[0], &Rc::new(plan.clone()), args[1]).expect("a departing unit carries the snapshot");
+    let carried = ram_pages(&obj! {"ram"=>ops});
+    let mut units = arr![world.get("units").at(0).clone(),world.get("units").at(1).clone()];
+    for i in 0..2 { item(&mut units,i).set("ramUnit",carried.clone()); }
+    item(&mut units,0).set("at",attack);
+    world.set("seconds",now);
+    if let Value::Obj(o) = &mut world { o.remove("units"); }
+    let args = views(&[units, world, me]);
+    assert!(args[1].get("units").is_undef(), "unit callbacks omit the THINK unit census");
+    assert_eq!(mem::get(args[0].at(0).get("ramUnit"),93), plan.get("front").clone());
+    let core = obj! {"attack"=>attack,"stage"=>4};
+    (common::front(args[0].at(0), args[1], args[2], &core), common::front(args[0].at(1), args[1], args[2], &core))
 }
 #[test]
 fn an_outweighed_army_falls_back_and_goes_back_in_as_one_wave() {
@@ -192,6 +211,50 @@ fn an_outweighed_army_falls_back_and_goes_back_in_as_one_wave() {
     // an even fight stands: 15 × 1.6 outweighs 20, and workers don't count
     let (ahead, stage) = front_case(15.0, 10.0, 20.0);
     assert!(ahead.is_none() && stage.is_none(), "{ahead:?} {stage:?}");
+}
+
+#[test]
+fn front_snapshots_expire_and_never_apply_to_a_different_attack() {
+    let (ahead, stage) = front_case_observed(3.0, 4.0, 10.0, 20.0, 122.0, 5.0);
+    assert!(ahead.is_none() && stage.is_none(), "expired totals cannot change standing orders");
+    let (ahead, stage) = front_case_observed(3.0, 4.0, 10.0, 20.0, 1.0, 6.0);
+    assert!(ahead.is_none() && stage.is_none(), "a previous attack's totals cannot order retreat or regrouping");
+}
+
+#[test]
+fn front_uses_the_full_plan_and_rejects_a_wrong_stage_or_future_snapshot() {
+    let world = Value::parse(r#"{"seconds":10,"provinces":[{"id":4,"owner":1,"adj":[5]},{"id":5,"owner":2,"adj":[4]}]}"#);
+    let me = obj! {"id"=>1,"ramProvince"=>obj! {"4"=>arr![obj!{}]}};
+    let unit = obj! {"id"=>1,"owner"=>1,"at"=>5,"to"=>-1,"hp"=>3,"hpMax"=>4,"doing"=>"capture","target"=>5};
+    let args = views(&[unit,world,me]);
+    let mut plan = obj! {"attack"=>5,"stage"=>4,"front"=>arr![5,4,3,20,10,1]};
+    let retreat = common::front(args[0],args[1],args[2],&plan).flatten().expect("the full plan can order retreat");
+    assert_eq!(retreat.get("target").num(),4.0);
+    plan.set("front",arr![5,0,3,20,10,1]);
+    assert!(common::front(args[0],args[1],args[2],&plan).is_none(),"a different stage invalidates the snapshot");
+    plan.set("front",arr![5,4,3,20,10,11]);
+    assert!(common::front(args[0],args[1],args[2],&plan).is_none(),"future totals cannot change standing orders");
+}
+
+#[test]
+fn front_snapshots_count_ground_fighters_and_exclude_workers_scouts_ships_and_aircraft() {
+    let world = Value::parse(r#"{"seconds":10,"factions":[null,{"id":1,"alive":true},{"id":2,"alive":true},{"id":3,"alive":true}],"units":[
+        {"owner":1,"type":"line","at":5,"hp":3.8},
+        {"owner":3,"type":"line","at":5,"hp":2},
+        {"owner":2,"type":"line","at":5,"hp":20.2},
+        {"owner":1,"type":"line","at":4,"hp":10.6},
+        {"owner":1,"type":"hauler","at":5,"hp":200},
+        {"owner":2,"type":"miner","at":5,"doing":"gather","hp":200},
+        {"owner":2,"type":"researcher","at":5,"doing":"study","hp":200},
+        {"owner":1,"type":"scout","at":4,"hp":200},
+        {"owner":2,"type":"frigate","at":5,"hp":200,"rts":{"sea":{"ship":true}}},
+        {"owner":2,"type":"wing","at":5,"hp":200,"build":{"wings":1}}]}"#);
+    let me = obj! {"id"=>1,"allies"=>arr![3]};
+    let args = views(&[world,me]);
+    let mut plan = obj! {"attack"=>5,"stage"=>4};
+    common::front_snapshot(&mut plan,args[0],args[1]);
+    assert_eq!(plan.get("front"),&arr![5,4,5,21,10,10]);
+    assert!(plan.get("front").to_json().len()<=62,"the snapshot must fit one unit RAM page");
 }
 #[test]
 fn a_full_think_runs_every_third_second_while_nothing_presses() {

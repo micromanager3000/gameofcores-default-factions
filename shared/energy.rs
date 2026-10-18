@@ -21,7 +21,7 @@ pub struct Doctrine {
     pub reserve: f64,
     /// Whether it darkens its outlying land first in a shortfall (otherwise every province dims alike).
     pub shed: bool,
-    /// Whether it sells spare power to its neighbours.
+    /// Whether it offers power from 1.5 MW spare; other houses wait for 3 MW.
     pub sell: bool,
 }
 
@@ -125,7 +125,7 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     if now % 6.0 != 3.0 { return; }
     if cycles_left() > 30000.0 { build(orders, world, me, &d, now); }
     if now % 12.0 == 9.0 && cycles_left() > 10000.0 { settings(orders, world, me, &d); }
-    if d.sell && now % 60.0 == 3.0 && cycles_left() > 10000.0 { sell(orders, world, me); }
+    if now % 60.0 == 3.0 && cycles_left() > 10000.0 { sell(orders, world, me, &d); }
 }
 
 /// A plant going up is charged a twelfth of its build cost a second through the fabrication lane, which recruits share,
@@ -312,41 +312,34 @@ fn place(orders: &mut Value, me: View, sites: View, units: &[View], mut picks: V
 fn price(me: View) -> f64 { me.path("rts.costs.priceLevel").num_or(1.0).max(0.01) }
 fn seat_style(me: View) -> usize { me.get("seat").num_or(9.0).max(0.0) as usize }
 
-/// Offers a locally surplus island's power to the neighbour its first grid link reaches, for ◆ a second.
-/// The engine sends every deal through its first valid border link, so this follows that same order instead of treating
-/// a surplus on one island as power another island can sell.
-fn sell(orders: &mut Value, world: View, me: View) {
+/// Native MW available on the engine's export route to `buyer`, after local demand and existing sales.
+/// Returns zero without Transmission or a live route. Imports, battery discharge and boiler output are excluded.
+pub fn export_spare(me: View, buyer: f64) -> f64 {
+    let e = me.get("energy");
+    if !me.get("techs").get("transmission").truthy() { return 0.0; }
+    // Only the engine can identify the active crossing and the island supplying this buyer.
+    let Some(link) = e.get("exportLinks").iter().find(|l| l.get("with").num_or(-1.0) == buyer) else { return 0.0 };
+    let Some(island) = e.get("islands").iter().find(|i| i.get("provinces").has_num(link.get("at").num_or(-1.0))) else { return 0.0 };
+    // Imports, batteries and boiler fuel cannot be exported. A mixed plant's split is unavailable, so omit it.
+    let native = e.get("plants").iter().filter(|p| island.get("provinces").has_num(p.get("p").num()))
+        .filter(|p| p.get("ports").iter().all(|q| !matches!(q.get("kind").str(), "battery" | "boiler")))
+        .map(|p| p.get("mw").num_or(0.0)).sum::<f64>()
+        + if island.get("capital").truthy() { e.get("house").num_or(3.0) } else { 0.0 };
+    // Reserve all current exports, including those whose other end is temporarily short of demand.
+    let committed = e.get("deals").iter().filter(|d| d.get("give").truthy()).map(|d| d.get("mw").num_or(0.0)).sum::<f64>();
+    (native - island.get("demand").num_or(0.0) * 1.15 - committed).max(0.0)
+}
+
+/// Offers power to one short neighbour. Houses with a trade doctrine keep a smaller surplus before offering.
+fn sell(orders: &mut Value, world: View, me: View, d: &Doctrine) {
     let e = me.get("energy");
     if !me.get("techs").get("transmission").truthy() { return; }
-    let id = me.get("id").num();
-    let islands: Vec<View> = e.get("islands").iter().collect();
-    let mut links: Vec<(f64, usize)> = Vec::new();
-    // The engine has already applied `wire_neighbors` and `deal_link`'s ordering to these links. It is the only
-    // source that can know whether a moving ship still relays an overseas route, so a missing observation is unsafe.
-    for link in e.get("exportLinks").iter() {
-        let buyer = link.get("with").num_or(-1.0);
-        let at = link.get("at").num_or(-1.0);
-        let Some(at) = islands.iter().position(|i| i.get("provinces").has_num(at)) else { continue };
-        if buyer >= 0.0 && buyer != id && !links.iter().any(|(other, _)| *other == buyer) {
-            links.push((buyer, at));
-        }
-    }
     let buyer = world.get("factions").iter().filter_map(|f| {
         let buyer = f.get("id").num();
-        let at = links.iter().find(|(other, _)| *other == buyer).map(|(_, at)| *at)?;
-        if !f.get("alive").truthy() || f.get("powered").num_or(1.0) >= 0.9
+        if !f.get("alive").truthy() || buyer == me.get("id").num() || f.get("powered").num_or(1.0) >= 0.95
             || e.path("deals").iter().any(|d| d.get("give").truthy() && d.get("with").num_or(-1.0) == buyer) { return None; }
-        // A grid's reported supply includes imports, battery discharge and boiler fuel. Deals can only export
-        // the island's plant output and its house generator, so omit a mixed plant too when its exact split is
-        // unavailable. Reserve every active export globally: that is conservative across disconnected islands.
-        let native: f64 = e.get("plants").iter()
-            .filter(|p| islands[at].get("provinces").has_num(p.get("p").num()))
-            .filter(|p| p.get("ports").iter().all(|q| !matches!(q.get("kind").str(), "battery" | "boiler")))
-            .map(|p| p.get("mw").num_or(0.0)).sum::<f64>()
-            + if islands[at].get("capital").truthy() { e.get("house").num_or(3.0) } else { 0.0 };
-        let committed: f64 = e.path("deals").iter().filter(|d| d.get("give").truthy()).map(|d| d.get("mw").num_or(0.0)).sum();
-        let spare = native - islands[at].get("demand").num_or(0.0) * 1.15 - committed;
-        (spare >= 1.5).then_some((f, spare))
+        let spare = export_spare(me, buyer);
+        (spare >= if d.sell { 1.5 } else { 3.0 }).then_some((f, spare))
     }).min_by(|a, b| a.0.get("powered").num_or(1.0).total_cmp(&b.0.get("powered").num_or(1.0)));
     let Some((buyer, spare)) = buyer else { return };
     let mw = (spare * 0.6).min(6.0).floor().max(1.0);

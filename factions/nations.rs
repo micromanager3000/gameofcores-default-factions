@@ -198,29 +198,31 @@ fn rival_in(q: View, me: View) -> f64 {
     n
 }
 
-// The frontier province to press: cores, a rival's land and its units there count for it, a capital against, and land
-// the army couldn't hold on to (over the water with no ship of ours on station: common::can_hold) is marked down. A
-// province whose mines we lease is no target: a lessee can't capture there.
-fn frontline(world: View, me: View) -> Option<View> {
+// Trade funds a campaign through valuable land. Existing leases keep their protection.
+fn frontline(world: View, me: View) -> Vec<View> {
     let me_id = me.get("id").num();
-    let hold = common::can_hold(world, me, false);
-    let mut best = None;
-    let mut score = -1e9;
-    for q in common::frontier(world, me) {
-        if q.get("leased").iter().any(|l| l.get("to").num() == me_id) {
-            continue;
-        }
+    let hold = common::can_hold(world, me, true);
+    let campaign = mem::get(me.get("ramCapital"), 0).get("campaign").num_or(-1.0);
+    let fighters = common::fighters(me);
+    let by_id = realm::index(world);
+    let candidates: Vec<View> = common::frontier(world, me).into_iter()
+        .filter(|q| !q.get("leased").iter().any(|l| l.get("to").num() == me_id)).collect();
+    let ranked = realm::rank(world, me, candidates, |_, _, q| {
         let owner = q.get("owner").num();
         let hostile = rival_in(q, me);
         let enemy = owner >= 0.0 && owner != me_id;
-        let s = q.get("cores").or(0.0) * 3.0 + if enemy { 9.0 } else { 2.0 } + hostile * 2.0 - if q.get("capital").truthy() { 5.0 } else { 0.0 }
-            - if hold(q) { 0.0 } else { common::OVER_WATER };
-        if s > score {
-            score = s;
-            best = Some(q);
-        }
-    }
-    best
+        let capital = enemy && q.get("capital").truthy() && common::muster_for(q) <= fighters;
+        let approach = enemy && q.get("adj").iter().any(|id| {
+            let next = by_id.at(id);
+            next.get("owner").num_or(-2.0) == owner && next.get("capital").truthy()
+        });
+        q.get("cores").or(0.0) * 3.0 + if enemy { 9.0 } else { 2.0 } - hostile * 0.6
+            + if capital { 12.0 } else if q.get("capital").truthy() { -5.0 } else { 0.0 }
+            + if approach { 5.0 } else { 0.0 }
+            + if enemy && owner == campaign { 4.0 } else { 0.0 }
+            - if hold(q) { 0.0 } else { common::OVER_WATER }
+    });
+    common::rally(world, me, ranked)
 }
 
 /// What think saw of its rivals' units: fliers, shooters and all, and their miners at work by province.
@@ -532,17 +534,13 @@ fn strategy(world: View, me: View) -> Value {
     let techs = me.get("techs");
     let has = |t: &str| techs.get(t).truthy();
     let have = me.get("units").get("byType");
-    let target = frontline(world, me);
-    let stage = match target.and_then(realm::from) {
-        Some(from) => Value::Num(from),
-        None => me.get("capital").value(),
-    };
-    let target_id = target.map_or(-1.0, |t| t.get("id").num());
-    let mines: Vec<Value> = realm::open_mines(world, me, 2.0, 12.0).into_iter().map(|[p, k]| arr![p, k]).collect();
-    let mut plan = obj! { "target" => target_id, "stage" => stage, "home" => me.get("capital"), "mines" => mines };
-    // invaders in our land: everyone defends the capital or a big landing, a guard sized to the threat anything less
-    // (common::defense)
-    common::defense(world, me, &mut plan);
+    let ranked = frontline(world, me);
+    let mut plan = common::survey(world, me, &ranked, 2.0);
+    let target_id = plan.get("attack").num_or(-1.0);
+    let target = ranked.iter().copied().find(|q| q.get("id").num() == target_id);
+    let owner = target.map_or(-1.0, |q| q.get("owner").num_or(-1.0));
+    plan.set("target", target_id);
+    plan.set("campaign", if realm::is_rival(world, me, owner) { owner } else { -1.0 });
     let defend = plan.get("defend").num_or(-1.0);
     let threatened = plan.get("threat").num_or(0.0) > 0.0;
     // unseen land the game said a partner holds (common::partner_land), remembered past the second it was refused
@@ -563,7 +561,7 @@ fn strategy(world: View, me: View) -> Value {
         "policy" => obj! { "extraction" => 0.42, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true },
         "provinces" => Value::arr(),
     };
-    plan::share(&mut orders, &plan, me);
+    common::share(&mut orders, &plan, world, me);
 
     // The techs another faction holds, which the market buys rather than researches. While one is for sale the spawns
     // leave its price in the bank, except under attack and in the first four minutes, when units win land.
@@ -1596,6 +1594,13 @@ fn needle(units: View, world: View, me: View) {
     infantry(units, world, me, false);
 }
 
+fn carry_order(o: Option<Value>, u: View, pl: &std::rc::Rc<Value>, me: View) -> Option<Value> {
+    let Some(ops) = common::carry(u, pl, me) else { return o };
+    let mut o = o.unwrap_or_else(|| obj! { "id" => u.get("id") });
+    o.set("ram", ops);
+    Some(o)
+}
+
 // Under 2,500 cycles a call can't pay for the plan lookup and an order: its units keep their orders a second longer.
 fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
     if short(me, 2500.0, 1200.0) {
@@ -1609,12 +1614,12 @@ fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
         let u = nth(units, turn, world);
         // those the plan sends to defend (common::defends), the rest on the target
         let defend = Value::Num(common::defends(&pl, u));
-        let goal = if num(&defend) >= 0.0 { &defend } else { pl.get("target") };
+        let goal = if num(&defend) >= 0.0 { &defend } else { pl.get("attack") };
         let verb = if num(&defend) >= 0.0 || u.get("air").truthy() || u.path("build.wings").truthy() { "fight" } else { "capture" };
         // a beaten army falls back to the stage, and reinforcements wait there for a wave (common::front)
         if verb == "capture" {
             if let Some(o) = common::front(u, world, me, &pl) {
-                if let Some(o) = o {
+                if let Some(o) = carry_order(o, u, &pl, me) {
                     order(o);
                 }
                 continue;
@@ -1624,10 +1629,11 @@ fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
         // order, so recalculate only when the strategic destination changes.
         let doing = u.get("doing").str();
         if (doing == verb || doing == "move") && same(u.get("target"), goal) {
+            if let Some(o) = carry_order(None, u, &pl, me) { order(o); }
             continue;
         }
         let o = if num(goal) >= 0.0 { orders::to(u, verb, num(goal), world, me, ()) } else { None };
-        if let Some(mut o) = o {
+        if let Some(mut o) = carry_order(o, u, &pl, me) {
             if cloak {
                 o.set("cloak", true);
             }
@@ -1746,30 +1752,39 @@ fn spire(units: View, world: View, me: View) {
 }
 
 fn sentry(units: View, world: View, me: View) -> Value {
-    if short(me, 2500.0, 1200.0) {
+    if short(me, 3500.0, 1600.0) {
         return Value::arr();
     }
-    let pl = plan::for_units(me, units, View::undefined());
-    let at = if num(pl.get("defend")) >= 0.0 {
-        pl.get("defend")
-    } else if num(pl.get("stage")) >= 0.0 {
-        pl.get("stage")
-    } else {
-        pl.get("home")
-    };
+    let by_id = realm::index(world);
     for turn in 0..units.len() {
         if rts(me) && cycles_left() < 2200.0 {
             break;
         }
         let u = nth(units, turn, world);
-        let doing = u.get("doing").str();
-        if (doing == "hold" || doing == "move") && same(u.get("target"), at) {
-            continue;
+        let pl = plan::of(me, u);
+        let defend = common::defends(&pl, u);
+        let attack = pl.get("attack").num_or(-1.0);
+        let q = by_id.get(attack);
+        let owner = q.get("owner").num_or(-1.0);
+        // Armor and artillery follow a committed wave instead of staying behind after every capture.
+        let committed = attack >= 0.0 && !realm::is_ally(me, owner)
+            && (q.get("units").key(me.get("id").num()).or(0.0) >= 2.0
+                || q.get("siege").get("by").num_or(-1.0) == me.get("id").num());
+        let at = if defend >= 0.0 { defend } else if committed { attack }
+            else { pl.get("stage").num_or(pl.get("home").num_or(u.get("at").num())) };
+        let mut o = if defend < 0.0 && committed {
+            match common::front(u, world, me, &pl) {
+                Some(o) => o,
+                None => orders::to(u, if u.get("type").str() == "spire" || owner == me.get("id").num() { "fight" } else { "capture" }, at, world, me, ()),
+            }
+        } else {
+            orders::hold(u, Point::new(0.0, 0.0), world, me, Some(at))
+        };
+        if let Some(ops) = common::carry(u, &pl, me) {
+            o.get_or_insert_with(|| obj! { "id" => u.get("id") }).set("ram", ops);
         }
-        // with no place to hold, the province it stands in
-        let p = if at.is_undef() { None } else { Some(num(at)) };
-        if let Some(mut o) = orders::hold(u, Point::new(0.0, 0.0), world, me, p) {
-            o.set("power", obj! { "drive" => 0, "armor" => 0, "weapon" => 180 });
+        if let Some(mut o) = o {
+            o.set("power", obj! { "drive" => 120, "armor" => 0, "weapon" => 180 });
             o.set("alert", 7);
             order(o);
         }

@@ -259,9 +259,12 @@ fn short(me: View) -> bool {
 
 // ---- think ----
 
-fn pick_target(world: View, me: View) -> Option<View> {
+fn targets(world: View, me: View) -> Vec<View> {
     // land the army couldn't hold on to (over the water, no ship of ours on station) counts for less: common::can_hold
-    let hold = common::can_hold(world, me, false);
+    let hold = common::can_hold(world, me, true);
+    let campaign = mem::get(me.get("ramCapital"), 0).get("campaign").num_or(-1.0);
+    let by_id = realm::index(world);
+    let fighters = common::fighters(me);
     let ranked = realm::rank(world, me, common::frontier(world, me), |w, m, q| {
         let owner = num(q.get("owner"));
         let enemy = if owner >= 0.0 && realm::is_rival(w, m, owner) { 7.0 } else { 0.0 };
@@ -275,12 +278,21 @@ fn pick_target(world: View, me: View) -> Option<View> {
         } else {
             0.0
         };
-        enemy + or(q.get("cores"), 0.0) * 2.0 - or(q.get("garrison"), 0.0) * 1.6 - if q.get("capital").truthy() { 3.0 } else { 0.0 }
+        // Follow a crusade through the same realm and take a capital when the army can muster for it.
+        let capital = enemy > 0.0 && q.get("capital").truthy() && common::muster_for(q) <= fighters;
+        let approach = enemy > 0.0 && q.get("adj").iter().any(|id| {
+            let next = by_id.at(id);
+            next.get("owner").num_or(-2.0) == owner && next.get("capital").truthy()
+        });
+        enemy + or(q.get("cores"), 0.0) * 2.0 - q.get("townGarrison").num_or(or(q.get("garrison"), 0.0)) * 1.6
+            + if capital { 12.0 } else if q.get("capital").truthy() { -3.0 } else { 0.0 }
+            + if approach { 5.0 } else { 0.0 }
+            + if enemy > 0.0 && owner == campaign { 4.0 } else { 0.0 }
             + crusade
             + min(sway::favour(m, num(q.get("id"))), 300.0) / 60.0
             - if hold(q) { 0.0 } else { common::OVER_WATER }
     });
-    ranked.first().copied()
+    common::rally(world, me, ranked)
 }
 
 // The type furthest below its share of the mix. Miners stop at `room`, what our mines can use (common::miner_room):
@@ -613,8 +625,11 @@ fn strategy(world: View, me: View) -> Value {
         return common::recovery(world, me);
     }
     let mut orders = obj! { "policy" => obj! { "extraction" => 0.47, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true } };
-    let target = pick_target(world, me);
-    let mut survey = common::survey(world, me, &target.into_iter().collect::<Vec<View>>(), 2.0);
+    // Survey needs every candidate to retain an active siege or bypass an unwinnable one.
+    let ranked = targets(world, me);
+    let mut survey = common::survey(world, me, &ranked, 2.0);
+    let owner = realm::index(world).get(survey.get("attack").num_or(-1.0)).get("owner").num_or(-1.0);
+    survey.set("campaign", if realm::is_rival(world, me, owner) { owner } else { -1.0 });
     survey.set("home", me.get("capital"));
     // the road goes where the army goes: the province everyone defends, else the attack (a picket's guard is near it)
     let defend = vnum(survey.get("defend"));
@@ -624,7 +639,7 @@ fn strategy(world: View, me: View) -> Value {
     }
     // the pilgrims' holy sites travel in the plan to the scouts at home
     survey.set("pilgrims", pilgrim_sites(world, me));
-    plan::share(&mut orders, &survey, me);
+    common::share(&mut orders, &survey, world, me);
 
     let techs = me.get("techs");
     let has = |t: &str| techs.get(t).truthy();
@@ -1098,7 +1113,7 @@ fn line(units: View, world: View, me: View) {
 // in its RAM (orders::carry) on its order, or on a RAM-only order when its order stands. Without it, a unit that
 // crosses the border forgets its target and walks home.
 fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
-    let Some(ops) = orders::carry(u, p, me) else { return o };
+    let Some(ops) = common::carry(u, p, me) else { return o };
     let mut x = o.unwrap_or_else(|| obj! { "id" => u.get("id") });
     x.set("ram", ops);
     Some(x)
@@ -1463,7 +1478,8 @@ fn reflex(units: View, near: View) -> Vec<Value> {
             if d > num(u.get("reach")) || (air && !u.get("air").truthy() && !mods.has_str("antiAir")) {
                 continue;
             }
-            let s = num(t.get("hp")) / num(t.get("hpMax")) - if range.truthy() { 0.18 } else { 0.0 } - if air { 0.11 } else { 0.0 };
+            let s = num(t.get("hp")) / num(t.get("hpMax")) - if range.truthy() { 0.18 } else { 0.0 }
+                - if air { if common::air_defender(u) { 2.0 } else { 0.11 } } else { 0.0 };
             if s < score {
                 score = s;
                 best = Some(t);
@@ -1659,7 +1675,7 @@ fn legacy_think(world: View, me: View) -> Value {
     if ready > 0.0 && ready >= survey.get("need").num() {
         survey.set("ready", ready);
     }
-    plan::share(&mut orders, &survey, me);
+    common::share(&mut orders, &survey, world, me);
     let techs = me.get("techs");
     let mut mix: Vec<(&str, f64)> = if techs.get("archery").truthy() {
         vec![("miner", 0.6), ("guard", 0.22), ("longbow", 0.13), ("scout", 0.05)]

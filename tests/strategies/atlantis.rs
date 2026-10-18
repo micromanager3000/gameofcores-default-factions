@@ -1,0 +1,45 @@
+fn factions() -> Value {
+    Value::parse(r#"[{"id":1,"alive":true,"shielded":false},{"id":2,"alive":true,"shielded":false}]"#)
+}
+
+#[test]
+fn interceptor_moves_to_the_owned_province_under_air_pressure() {
+    let plan = obj! {"attack"=>2,"stage"=>0,"defend"=>-1,"airGuard"=>1,"threat"=>0};
+    let world = obj! {
+        "seconds"=>1, "factions"=>factions(),
+        "provinces"=>arr![
+            obj! {"id"=>0,"owner"=>1,"adj"=>arr![1]},
+            obj! {"id"=>1,"owner"=>1,"adj"=>arr![0,2]},
+            obj! {"id"=>2,"owner"=>2,"adj"=>arr![1]},
+        ],
+    };
+    let me = obj! {"id"=>1,"capital"=>0,"ramProvince"=>obj! {"0"=>pages(&plan)},
+        "rts"=>obj! {"cpu"=>obj! {"income"=>10000,"bank"=>100000}}};
+    let unit = obj! {"id"=>101,"owner"=>1,"type"=>"interceptor","at"=>0,"to"=>-1,
+        "doing"=>"idle","ramUnit"=>obj! {}};
+    let args = views(&[unit, world, me]);
+    let order = super::tactical_order(args[0], args[1], args[2], super::Role::Fast).expect("air guard order");
+    assert_eq!(order.get("do").str(), "fight");
+    assert_eq!(order.get("target").num(), 1.0, "interceptors protect the owned air-guard province before the attack");
+}
+
+#[test]
+fn ground_tactical_unit_captures_the_planned_attack_when_unpressed() {
+    let plan = obj! {"attack"=>2,"stage"=>0,"defend"=>-1,"airGuard"=>-1,"threat"=>0};
+    let world = obj! {
+        "seconds"=>1, "factions"=>factions(),
+        "provinces"=>arr![
+            obj! {"id"=>0,"owner"=>1,"adj"=>arr![1]},
+            obj! {"id"=>1,"owner"=>1,"adj"=>arr![0,2]},
+            obj! {"id"=>2,"owner"=>2,"adj"=>arr![1]},
+        ],
+    };
+    let me = obj! {"id"=>1,"capital"=>0,"ramProvince"=>obj! {"0"=>pages(&plan)},
+        "rts"=>obj! {"cpu"=>obj! {"income"=>10000,"bank"=>100000}}};
+    let unit = obj! {"id"=>102,"owner"=>1,"type"=>"bulwark","at"=>0,"to"=>-1,
+        "doing"=>"idle","ramUnit"=>obj! {}};
+    let args = views(&[unit, world, me]);
+    let order = super::tactical_order(args[0], args[1], args[2], super::Role::Wall).expect("capture order");
+    assert_eq!(order.get("do").str(), "capture");
+    assert_eq!(order.get("target").num(), 2.0);
+}

@@ -81,8 +81,11 @@ freighters or a raider shows at sea. The second sails as a privateer off the nea
 The same programs retain their earlier mining policy in saved worlds without logistics.
 
 Every house plans a power grid when `world.energy` is present. It orders plants and batteries for its own doctrine,
-sets which provinces go dark first in a shortfall, and keeps a battery reserve. Compute of Nations and unclaimed
-default seats sell power from a locally surplus island to a short neighbour. [The grid planner](docs/energy.md) gives each doctrine and rule.
+sets which provinces go dark first in a shortfall, and keeps a battery reserve. After `transmission`, every house can
+offer native surplus from a linked grid island to a short neighbour. Compute of Nations and unclaimed default seats offer from 1.5 MW
+spare. Other houses wait for 3 MW. Incoming buyer requests must fit the seller's route-specific spare power.
+When a province with plant capacity is invaded, its house assigns a larger local guard, up to four extra units.
+[The grid planner](docs/energy.md) gives each doctrine and rule.
 
 Export a structure example with `node tools/source.mjs foundry /tmp/foundry.rs`.
 The names `lantern` and `raiders` select the other two programs.
@@ -123,3 +126,9 @@ Freighters reserve reachable loads and use a receiving dock connected to the cap
 An empty freighter retires after two minutes without movement. Loaded, hired and passenger ships are preserved.
 Recruitment requires a reachable outbound load and waits after an idle retirement.
 Arjuna pursues Flight after mining, Dash and Ranged. A funded recovery crew can continue that research while the army planner waits.
+
+Aircraft controllers use visible `me.rts.air.contacts` entries to intercept rival wings. They use `me.rts.air.decks` to board their own afloat decks while cooling. During recovery, each fielded aircraft type gets 2,400 controller cycles every third second. Recovery gives fabrication zero, so the controllers land aircraft while production waits.
+
+Think shares convoy locations and combat estimates through plan RAM. Ground units carry combat estimates on unit page 93 and discard them after 120 seconds. Convoy guards use locations observed within the last 12 seconds.
+
+Run the authored house fixtures with `node tools/test-strategies.mjs ../gameofcores`. They exercise exported programs against that checkout's SDK.

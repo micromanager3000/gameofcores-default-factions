@@ -81,7 +81,7 @@ fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: Vie
             && realm::is_rival(world, me, foe.get("owner").num_or(-1.0))
             && same(foe.path("pos.p"), u.path("pos.p"))
             && (foe.path("pos.x").num() - u.path("pos.x").num()).hypot(foe.path("pos.y").num() - u.path("pos.y").num()) < reach + 1.0));
-        if enemy_near { continue; }
+        if enemy_near && !bomber { continue; }
         attacks.push(obj! { "unit" => u.get("id"), "target" => target.get("id"), "until" => now + 6.0 });
     }
     if !attacks.is_empty() { orders.set("structureAttacks", attacks); }

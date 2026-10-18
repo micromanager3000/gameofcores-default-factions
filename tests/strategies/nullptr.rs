@@ -1,0 +1,53 @@
+#[test]
+fn a_lone_spy_in_a_rival_capital_steals_instead_of_treating_itself_as_support() {
+    let world = Value::parse(r#"{"seconds":100,"techs":{"artillery":{"need":100,"requires":[]}},"factions":[null,
+        {"id":1,"alive":true,"capital":0},{"id":2,"alive":true,"capital":2,"techs":["artillery"]}],"provinces":[
+        {"id":0,"owner":1,"adj":[2]},{"id":2,"owner":2,"adj":[0],"units":{"1":1}}],"units":[]}"#);
+    let me = obj! { "id"=>1, "capital"=>0, "allies"=>arr![], "bank"=>10000, "costs"=>obj! { "unit"=>100 },
+        "techs"=>obj! {}, "ramCapital"=>obj! {} };
+    let ghosts = Value::parse(r#"[{"id":10,"owner":1,"type":"ghost","at":2,"to":-1,"doing":"idle","hidden":true,
+        "name":"exploit","build":{"stealth":1},"rts":{"modules":["cloak"]}}]"#);
+    let args = views(&[ghosts, world, me]);
+    nullptr_ext::spies(args[0], args[1], args[2]);
+    let orders = emitted();
+    assert_eq!(orders.len(), 1, "{orders:?}");
+    assert_eq!(orders[0].get("do").str(), "steal", "{orders:?}");
+    assert_eq!(orders[0].get("tech").str(), "artillery");
+}
+
+fn recovery_recruit(bank: f64, control_reserve: f64, fabrication_spent: f64) -> (Value, bool) {
+    let me = obj! { "id"=>1, "compute"=>obj! { "thinkPeak"=>20000 },
+        "units"=>obj! { "total"=>6, "queued"=>0, "byType"=>obj! { "miner"=>4, "hauler"=>2 }, "doing"=>obj! {} },
+        "rts"=>obj! { "costs"=>obj! { "priceLevel"=>2 }, "cpu"=>obj! {
+            "income"=>40000, "bank"=>bank, "capacity"=>1000000,
+            "limits"=>obj! { "fabrication"=>0 }, "available"=>obj! { "fabrication"=>0 },
+            "reserve"=>obj! { "control"=>control_reserve }, "spent"=>obj! { "fabrication"=>fabrication_spent }
+        } } };
+    let args = views(&[me]);
+    let mut policy = cpu_policy(args[0], &obj! { "defend"=>-1, "threat"=>0 }, &obj! {});
+    common::fit_cpu(&mut policy, args[0]);
+    let budget = fabrication_budget(args[0], &policy);
+    let mut orders = obj! { "compute"=>obj! { "cpu"=>policy }, "spawn"=>Value::arr(),
+        "fabrication"=>budget, "treasury"=>1000, "unitPrice"=>100, "slots"=>1, "priceLevel"=>2 };
+    let recruited = spawn(&mut orders, "screen", SCREEN, vec!["dash", "armor"]);
+    (orders, recruited)
+}
+
+#[test]
+fn a_funded_recovery_exit_recruits_under_the_policy_it_emits() {
+    let (orders, recruited) = recovery_recruit(1000000.0, 4000.0, 0.0);
+    assert!(recruited, "the old zero fabrication allowance must not suppress the restored policy");
+    assert_eq!(orders.get("spawn").at(0).get("type").str(), "screen");
+    let limit = orders.get("compute").get("cpu").get("limits").get("fabrication").num();
+    assert_eq!(limit, 10400.0);
+    assert_eq!(orders.get("fabrication").num(), limit - 4800.0, "the proposed recruit consumes its fabrication budget");
+}
+
+#[test]
+fn recovery_recruitment_preserves_think_control_and_fabrication_commitments() {
+    for (bank, reserve, spent) in [(45000.0, 4000.0, 0.0), (200000.0, 180000.0, 0.0), (1000000.0, 4000.0, 6000.0)] {
+        let (orders, recruited) = recovery_recruit(bank, reserve, spent);
+        assert!(!recruited, "bank={bank}, control reserve={reserve}, fabrication spent={spent}");
+        assert!(orders.get("spawn").is_empty());
+    }
+}

@@ -2,8 +2,8 @@
 //
 // Research takes a share of income the army can live with: 30% while the faction is small, 40% once its income passes
 // 150,000 a second, 50% while the bank holds cycles the army isn't spending, 20% while the bank is thin or invaders
-// press. The research order serves the army first (Extraction, Armor, Dash, then Repair, Artillery and Scan whoever
-// holds them), then Flight and Air weapons before optional world firsts and nuclear research.
+// press. Research serves the army first: Extraction, Armor, Dash, Repair, Artillery, Capture and Scan.
+// Flight and Air weapons follow, before optional world firsts and nuclear research.
 // The Merchants of Light sell and lease the techs of the economy, the map and
 // the mind to the factions under half New Atlantis's share, allies first, never the runaway leader; the army's techs
 // stay home. The army, bodies, look and capital are the Bulwark Doctrine's.
@@ -53,9 +53,9 @@ const TECHS: [&str; 25] = [
 /// every minute to every small faction, they came back as armies with our own guns.
 const GOODS: [&str; 8] = ["extraction", "seaTraversal", "mountainTraversal", "influence", "capture", "faith", "computeBoost", "flight"];
 
-/// The tier-2 techs the army fields (medics, artillery, scanners): researched in this order whoever holds them, before
+/// The tier-2 techs the army fields (medics, artillery, capture, scanners): researched in this order whoever holds them, before
 /// any world first.
-const ARMY: [&str; 3] = ["repair", "artillery", "scan"];
+const ARMY: [&str; 4] = ["repair", "artillery", "capture", "scan"];
 // A research wing needs both a crossing license and armed aircraft before optional world-first projects.
 const SKY: [&str; 3] = ["mountainTraversal", "flight", "airWeapons"];
 // In a world with energy, rift wells and batteries come before the army's tier-2 techs. Fission and fusion wait their
@@ -173,12 +173,26 @@ fn due(clock: &mut Clock, name: &str, base: f64, now: f64) -> bool {
 fn pick_target(world: View, me: View) -> Option<View> {
     // land the army couldn't hold on to (over the water, no ship of ours on station) counts for less: common::can_hold
     let hold = common::can_hold(world, me, false);
+    let ground = (common::fighters(me) - me.path("units.byType.aeronaut").num_or(0.0)).max(0.0);
+    let campaign = me.path("rts.cpu.income").num_or(0.0) >= 60000.0 && ground >= 12.0
+        && me.path("rts.cpu.bank").num_or(0.0) >= me.path("rts.cpu.income").num_or(0.0) * 2.0;
+    let lead = common::dominant(world).map(|f| f.get("id").num());
     let ranked = realm::rank(world, me, common::frontier(world, me), |w, m, q| {
         let owner = q.get("owner").num();
         let enemy = if owner >= 0.0 && realm::is_rival(w, m, owner) { 7.0 } else { 0.0 };
-        enemy + q.get("cores").or(0.0) * 2.0 - q.get("garrison").or(0.0) * 1.6 - if q.get("capital").truthy() { 3.0 } else { 0.0 }
+        let leader = if lead.is_some_and(|id| id == owner && id != me.get("id").num()) { 6.0 } else { 0.0 };
+        enemy + leader + q.get("cores").or(0.0) * 2.0 - q.get("garrison").or(0.0) * 1.6 - if q.get("capital").truthy() { 3.0 } else { 0.0 }
             - if hold(q) { 0.0 } else { common::OVER_WATER }
     });
+    // A funded combined-arms corps takes an exposed capital before choosing its next economic prize.
+    if campaign {
+        let press_leader = lead.is_some_and(|id| id != me.get("id").num()
+            && ranked.iter().any(|q| q.get("owner").num_or(-1.0) == id && hold(*q)));
+        if let Some(q) = ranked.iter().copied().find(|q| q.get("capital").truthy() && hold(*q)
+            && realm::is_rival(world, me, q.get("owner").num_or(-1.0))
+            && common::muster_for(*q) <= ground * 0.75
+            && (!press_leader || lead == Some(q.get("owner").num()))) { return Some(q); }
+    }
     ranked.first().copied()
 }
 
@@ -567,11 +581,11 @@ fn strategy(world: View, me: View) -> Value {
     if let Some(f) = field {
         survey.set("field", f);
     }
-    plan::share(&mut orders, &survey, me);
-
     let techs = me.get("techs");
     let has = |t: &str| techs.get(t).truthy();
     let (mut air, mut stealth, mut ground) = (0.0, 0.0, 0.0);
+    let mut air_guard = -1.0;
+    let mut capital_air = false;
     // `world.units` is fog-limited: this reacts only to units the faction has
     // actually seen, rather than to a hidden global composition.
     if !lean {
@@ -583,6 +597,12 @@ fn strategy(world: View, me: View) -> Value {
             let build = u.get("build");
             if build.get("wings").truthy() {
                 air += 1.0;
+                let at = u.get("at").num_or(-1.0);
+                if realm::index(world).get(at).get("owner").num_or(-1.0) == me_id
+                    && (!capital_air || at == me.get("capital").num()) {
+                    air_guard = at;
+                    capital_air = at == me.get("capital").num();
+                }
             } else {
                 ground += 1.0;
             }
@@ -591,7 +611,11 @@ fn strategy(world: View, me: View) -> Value {
             }
         }
     }
-    let pressure = invaded_n + min(2.0, ground);
+    if lean { air_guard = prev.get("airGuard").num_or(-1.0); }
+    survey.set("airGuard", air_guard);
+    common::share(&mut orders, &survey, world, me);
+    // Distant visible armies shape the mix. Only invaders and aircraft over our land cut research funding.
+    let pressure = invaded_n + if air_guard >= 0.0 { 1.0 } else { 0.0 };
     let cpu = me.get("rts").get("cpu");
     let income = max(1.0, cpu.get("income").or(me.get("compute").get("cycles").or(14000.0)));
     let capacity = income * 3.0;
@@ -602,8 +626,8 @@ fn strategy(world: View, me: View) -> Value {
         mix_set(&mut mix, "bulwark", 0.28);
         mix_set(&mut mix, "line", 0.08);
     }
-    if has("artillery") && has("ranged") && ground >= 3.0 && !strained {
-        mix_set(&mut mix, "artillery", 0.18);
+    if has("artillery") && has("ranged") && !strained {
+        mix_set(&mut mix, "artillery", if ground >= 3.0 { 0.18 } else { 0.12 });
     }
     if has("repair") && !strained {
         mix_set(&mut mix, "medic", if stealth != 0.0 && has("scan") { 0.13 } else { 0.07 });
@@ -611,12 +635,13 @@ fn strategy(world: View, me: View) -> Value {
     if has("pierce") && has("ranged") && !strained {
         mix_set(&mut mix, "piercer", 0.12);
     }
-    if has("antiAir") && has("ranged") && !strained {
-        mix_set(&mut mix, "interceptor", if air != 0.0 { 0.17 } else { 0.06 });
+    if has("antiAir") && has("ranged") && (!strained || air_guard >= 0.0) {
+        mix_set(&mut mix, "interceptor", if air_guard >= 0.0 { 0.24 } else if air != 0.0 { 0.17 } else { 0.08 });
     }
     // Salomon's House fields a small research wing after Flight, without displacing its mining/screen floor.
     let own_ground=me.path("units.total").num_or(0.0)-me.path("units.byType.miner").num_or(0.0)-me.path("units.byType.aeronaut").num_or(0.0);
-    if has("flight")&&!strained&&own_ground>=4.0&&me.path("units.byType.aeronaut").num_or(0.0)<4.0 {
+    let air_room = min(6.0, min((income / 45000.0).floor().max(1.0), (me.path("units.total").num_or(0.0) * 0.22).floor()));
+    if has("flight")&&!strained&&own_ground>=4.0&&me.path("units.byType.aeronaut").num_or(0.0)<air_room {
         mix_set(&mut mix,"aeronaut",0.12);
     }
     let pick = |a: (bool, &'static str), b: (bool, &'static str)| -> Vec<&'static str> { [a, b].into_iter().filter(|x| x.0).map(|x| x.1).collect() };
@@ -628,7 +653,13 @@ fn strategy(world: View, me: View) -> Value {
         Some("medic") => spawn_one(&mut orders, me, "medic", medic_body(), &pick((has("repair"), "repair"), (has("scan"), "scan"))),
         Some("piercer") => spawn_one(&mut orders, me, "piercer", interceptor_body(), if has("dash") { &["pierce", "dash"][..] } else { &["pierce"][..] }),
         Some("interceptor") => spawn_one(&mut orders, me, "interceptor", interceptor_body(), &pick((has("antiAir"), "antiAir"), (has("dash"), "dash"))),
-        Some("aeronaut") => spawn_one(&mut orders,me,"aeronaut",common::airframe(me,me.path("units.byType.aeronaut").num_or(0.0)).build(),&[]),
+        Some("aeronaut") => {
+            let slot = me.path("units.byType.aeronaut").num_or(0.0) as usize % 6;
+            let role = if has("airWeapons") && matches!(slot, 1 | 4) { air::Role::Striker }
+                else if slot == 2 { air::Role::Scout } else { air::Role::Fighter };
+            let frame = theme::of(me.get("seat"), 3.0).map(|t|t.airframe(role)).unwrap_or_else(||air::of(3,role).expect("Atlantis"));
+            spawn_one(&mut orders,me,"aeronaut",frame.build(),&[]);
+        },
         _ => spawn_one(&mut orders, me, "scout", scout_body(), &[]),
     }
 
@@ -651,7 +682,7 @@ fn strategy(world: View, me: View) -> Value {
             ("piercer", 6000.0, 5.0),
             ("medic", 6000.0, 6.0),
             ("interceptor", 6000.0, 5.0),
-            ("aeronaut", 4200.0, 3.0),
+            ("aeronaut", 7000.0, 3.0),
             ("line", 6000.0, 4.0),
             ("scout", 4000.0, 6.0),
         ],
@@ -933,7 +964,7 @@ fn line(units: View, world: View, me: View) {
 // in its RAM (orders::carry) on its order, or on a RAM-only order when its order stands. Without it, a unit that
 // crosses the border forgets its target and walks home.
 fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
-    let Some(ops) = orders::carry(u, p, me) else { return o };
+    let Some(ops) = common::carry(u, p, me) else { return o };
     let mut x = o.unwrap_or_else(|| obj! { "id" => u.get("id") });
     x.set("ram", ops);
     Some(x)
@@ -949,7 +980,12 @@ enum Role {
 
 fn tactical_order(u: View, world: View, me: View, role: Role) -> Option<Value> {
     let p = plan::of(me, u);
-    let defend = common::defends(&p, u);
+    let mut defend = common::defends(&p, u);
+    let air_guard = p.get("airGuard").num_or(-1.0);
+    if defend < 0.0 && u.get("type").str() == "interceptor" && air_guard >= 0.0
+        && realm::index(world).get(air_guard).get("owner").num_or(-1.0) == me.get("id").num() {
+        defend = air_guard;
+    }
     let attack = num(p.get("attack"));
     // a beaten army falls back to the stage, and reinforcements wait there for a wave (common::front)
     if defend < 0.0 && attack >= 0.0 {
@@ -1195,7 +1231,8 @@ fn reflex(units: View, near: View) -> Vec<Value> {
             if d > u.get("reach").num() || (air && !u.get("air").truthy() && !modules.has_str("antiAir")) {
                 continue;
             }
-            let s = t.get("hp").num() / t.get("hpMax").num() - if t.get("range").truthy() { 0.18 } else { 0.0 } - if air { 0.11 } else { 0.0 };
+            let s = t.get("hp").num() / t.get("hpMax").num() - if t.get("range").truthy() { 0.18 } else { 0.0 }
+                - if air { if common::air_defender(u) { 2.0 } else { 0.11 } } else { 0.0 };
             if s < score {
                 score = s;
                 best = Some(t);

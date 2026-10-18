@@ -118,10 +118,11 @@ impl Theme {
         self.style().names.iter().find(|(t, _)| *t == unit).map(|(_, list)| *list)
     }
 
-    /// Display name for the fleet program's three ship functions, in this house's style.
+    /// Display name for the fleet program's ship functions, in this house's style.
     /// Function identifiers remain stable so deployed orders and recordings keep working.
     #[must_use]
     pub fn naval_name(&self, unit: &str) -> Option<&'static str> {
+        if unit == "carrier" { return Some("Carrier"); }
         let i = match unit {
             "warjunk" => 0,
             "picket" => 1,

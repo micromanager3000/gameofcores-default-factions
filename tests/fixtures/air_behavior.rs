@@ -34,6 +34,11 @@ fn interceptors_and_anti_air_choose_a_visible_aircraft_first() {
 fn arjuna_funds_an_active_flight_without_replacing_its_topic() {
     let (world, mut me, _) = fixture();
     me.set("research", obj! { "tech"=>"flight" });
+    let mut pages = Value::obj();
+    for op in mem::put(super::RECOVERY_PAGE, &obj! {"r"=>true}, "local", None, 1).expect("recovery marker") {
+        pages.set(&op.get("write").num().to_string(), obj! {"bytes"=>op.get("bytes").clone(),"t"=>1});
+    }
+    me.set("ramCapital", pages);
     // Model the standing recovery policy that paused research while the bank recovered.
     let mut orders = obj! { "compute"=>obj! { "cpu"=>obj! {
         "limits"=>obj! { "research"=>0 }, "reserve"=>obj! { "research"=>0 }
@@ -43,4 +48,17 @@ fn arjuna_funds_an_active_flight_without_replacing_its_topic() {
     assert!(orders.get("research").is_undef(), "the existing Flight topic stands in the engine");
     assert_eq!(orders.get("compute").get("cpu").get("limits").get("research").num(), 0.12);
     assert_eq!(orders.get("compute").get("cpu").get("reserve").get("research").num(), 0.02);
+}
+
+#[test]
+fn arjuna_preserves_the_full_planners_research_budget() {
+    let (world, mut me, _) = fixture();
+    me.set("research", obj! { "tech"=>"flight" });
+    let mut orders = obj! { "compute"=>obj! { "cpu"=>obj! {
+        "limits"=>obj! { "research"=>0.30 }, "reserve"=>obj! { "research"=>0.06 }
+    } } };
+    let args = views(&[world, me]);
+    super::flight_progress(&mut orders, args[0], args[1]);
+    assert_eq!(orders.get("compute").get("cpu").get("limits").get("research").num(), 0.30);
+    assert_eq!(orders.get("compute").get("cpu").get("reserve").get("research").num(), 0.06);
 }

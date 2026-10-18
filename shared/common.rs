@@ -16,6 +16,12 @@ use super::{air, theme};
         preferred
     }
 
+    /// Fighters and anti-air guns clear aircraft before choosing a ground target.
+    pub fn air_defender(u: View) -> bool {
+        u.path("rts.modules").has_str("antiAir")
+            || (u.get("air").truthy() && u.get("range").num_or(0.0) == 0.0 && u.path("build.vision").num_or(0.0) < 2.0)
+    }
+
     /// A moving ground unit's next 0.2-second drive charge, before the price level.
     pub fn drive_tick(u: View, power: f64) -> f64 {
         (60.0+power)*u.path("rts.driveScale").num_or(1.0)/5.0
@@ -109,12 +115,78 @@ use super::{air, theme};
         theme::of(me.get("seat"), 3.0).map_or_else(|| air::of(3, role).expect("Atlantis"), |t| t.airframe(role))
     }
 
+    /// Approach a visible hostile shell in a bomber's current objective. A standing approach remains paid.
+    /// `Some(None)` keeps that approach; `None` leaves the aircraft's other job in control.
+    pub fn bombing_run(u: View, world: View, me: View, goal: f64) -> Option<Option<Value>> {
+        if !u.get("air").truthy() || u.path("build.range").num_or(0.0) <= 0.0
+            || u.get("at").num_or(-1.0) != goal || u.get("to").num_or(-1.0) >= 0.0 { return None; }
+        let conduct = u.get("conduct");
+        let target = me.path("rts.structures").iter().take_while(|_| cycles_left() > 2200.0)
+            .filter(|s| s.get("p").num_or(-1.0) == goal && s.get("state").str() != "ruin"
+                && realm::is_rival(world, me, s.get("owner").num_or(-1.0))
+                && !(conduct.get("seconds").num_or(0.0) > 0.0 && conduct.get("from").num_or(-2.0) == s.get("owner").num_or(-1.0)))
+            .min_by(|a,b| {
+                let score=|s:View| s.get("hp").num_or(100.0) - if s.get("power").truthy() {150.0} else {0.0};
+                score(*a).total_cmp(&score(*b))
+            })?;
+        let (x,y)=(target.get("x").num_or(0.0),target.get("y").num_or(0.0));
+        let spot=u.get("spot");
+        if u.get("doing").str()=="fight" && u.get("target").num_or(-1.0)==goal
+            && spot.truthy() && (spot.get("x").num()-x).hypot(spot.get("y").num()-y)<0.5 { return Some(None); }
+        Some(Some(obj! {"id"=>u.get("id"),"do"=>"fight","target"=>goal,"at"=>obj!{"x"=>x,"y"=>y},
+            "alert"=>6,"power"=>obj!{"drive"=>420,"weapon"=>420}}))
+    }
+
+    /// A zero fabrication allowance is the houses' recovery policy. Preserve aircraft by landing them.
+    /// Recovery keeps a small flight callback funded even when recruitment and research are suspended.
+    pub fn air_recovery(units: View, me: View) -> bool {
+        if cycles_left()<800.0 {return true;}
+        let fabrication=me.path("rts.cpu.limits.fabrication");
+        if !fabrication.is_num() || fabrication.num()!=0.0 {return false;}
+        for u in units.iter().take_while(|_| cycles_left()>400.0) {
+            if u.path("rts.air.aloft").truthy() && u.path("rts.sea.aboard").num_or(-1.0)<0.0 {
+                order(obj!{"id"=>u.get("id"),"land"=>true});
+            }
+        }
+        true
+    }
+
     /// Aerial orders for a house that opts into an aircraft function. Land before the expensive heat climb,
     /// preserve a cooling stop, and use the carried plan again after cooling. Wings remain part of the body.
     pub fn fly(units: View, world: View, me: View) {
+        if air_recovery(units,me) {return;}
+        let by = realm::index(world);
+        let carriers: Vec<View> = me.path("rts.air.decks").iter().take(12).collect();
+        let mut returning = Vec::new();
+        let mut reserved: Vec<f64> = Vec::new();
         for u in units.iter() {
             if cycles_left() < 200.0 { return; }
             let a = u.path("rts.air");
+            let sea = u.path("rts.sea");
+            if sea.get("aboard").num_or(-1.0) >= 0.0 {
+                if a.get("heat").num_or(0.0) <= 0.0 { order(obj! {"id"=>u.get("id"),"launch"=>true}); }
+                returning.push(u.get("id").num());
+                continue;
+            }
+            // A paid return to a deck stands until it arrives. Reserve room before sending another wing.
+            let board = sea.path("course.board").num_or(-1.0);
+            if board >= 0.0 && carriers.iter().any(|c| c.get("id").num() == board) {
+                reserved.push(board); returning.push(u.get("id").num()); continue;
+            }
+            if a.get("aloft").truthy() && (a.get("heat").num_or(0.0) >= 30.0
+                || (sea.get("flier").truthy() && !a.get("bomb").truthy())) {
+                let at = u.get("at").num_or(-1.0);
+                let carrier = carriers.iter().find(|c| {
+                    let p = c.get("at").num_or(-2.0);
+                    (p == at || by.get(at).get("adj").has_num(p))
+                        && c.get("room").num_or(0.0) > c.get("riders").len() as f64
+                            + reserved.iter().filter(|&&id| id == c.get("id").num()).count() as f64
+                });
+                if let Some(c) = carrier {
+                    let id = c.get("id").num(); reserved.push(id); returning.push(u.get("id").num());
+                    order(obj! {"id"=>u.get("id"),"board"=>id}); continue;
+                }
+            }
             if a.get("aloft").truthy() && a.get("heat").num_or(0.0) >= 45.0 {
                 let coming_home=u.get("doing").str()=="move"&&world.get("provinces").iter().any(|p| {
                     let owner=p.get("owner").num_or(-1.0);
@@ -127,30 +199,57 @@ use super::{air, theme};
         let plan = plan::for_units(me, units, world);
         let goal = ["defend", "target", "attack"].iter().map(|k|plan.get(k)).find(|v|v.num().is_finite()&&v.num()>=0.0);
         let Some(goal) = goal else { return };
-        // One bounded scan serves the whole flight. Interceptors clear enemy aircraft over the objective.
-        let intercept = world.get("units").iter().take_while(|_| cycles_left() > 5000.0)
-            .filter(|v| v.get("air").truthy() && v.get("at").num_or(v.path("pos.p").num_or(-1.0)) == goal.num()
-                && realm::is_rival(world, me, v.get("owner").num_or(-1.0)))
-            .min_by(|a,b| {
-                let health = |u: View| u.get("hp").num_or(1.0) / u.get("hpMax").num_or(1.0).max(1.0);
-                health(*a).total_cmp(&health(*b))
-            }).map(|v| v.get("id").num());
+        // One bounded scan serves the flight. Nearby aircraft can be intercepted before reaching the land objective.
+        let aircraft: Vec<View> = me.path("rts.air.contacts").iter().take_while(|_| cycles_left() > 2200.0)
+            .filter(|v| v.get("air").truthy() && v.path("rts.sea.aboard").num_or(-1.0) < 0.0
+                && realm::is_rival(world, me, v.get("owner").num_or(-1.0))).take(12).collect();
         for u in units.iter() {
             if cycles_left() < 1800.0 { break; }
+            if returning.contains(&u.get("id").num()) { continue; }
             let a=u.path("rts.air");
             let heat=a.get("heat").num_or(0.0);
             if heat>=45.0 || (heat>0.0&&!a.get("aloft").truthy()) { continue; }
             let scout=u.path("build.vision").num_or(0.0)>=2.0;
             let bomber=!scout&&u.path("build.range").num_or(0.0)>0.0;
-            let focus=if !scout&&!bomber {intercept}else{None};
+            if bomber {
+                if let Some(approach)=bombing_run(u,world,me,goal.num()) {
+                    if let Some(o)=approach {order(o);}
+                    continue;
+                }
+            }
+            let at=u.get("at").num_or(-1.0);
+            let intercept=if !scout&&!bomber { aircraft.iter().filter(|v| {
+                let p=v.get("at").num_or(v.path("pos.p").num_or(-1.0));
+                p==at || p==goal.num() || by.get(at).get("adj").has_num(p)
+            }).min_by(|a,b| {
+                let priority=|v:View| {
+                    let p=v.get("at").num_or(v.path("pos.p").num_or(-1.0));
+                    (if p==at {0.0}else if p==goal.num(){2.0}else{4.0})
+                        + v.get("hp").num_or(1.0)/v.get("hpMax").num_or(1.0).max(1.0)
+                }; priority(**a).total_cmp(&priority(**b))
+            }).copied() } else { None };
+            let focus=intercept.map(|v|v.get("id").num());
+            let destination=intercept.map_or(goal.num(),|v|v.get("at").num_or(v.path("pos.p").num_or(goal.num())));
+            // Deck-launched strike craft can bomb visible ships before returning to their land objective.
+            if bomber && u.path("rts.sea.flier").truthy() && a.get("bomb").truthy() {
+                if let Some(ship)=me.path("rts.sea.contacts").iter().find(|v| v.get("ship").truthy()
+                    && realm::is_rival(world,me,v.get("owner").num_or(-1.0))) {
+                    order(obj! {"id"=>u.get("id"),"sail"=>obj!{"chase"=>ship.get("id"),"keep"=>2},
+                        "focus"=>ship.get("id"),"alert"=>6,"power"=>obj!{"drive"=>420,"weapon"=>420}});
+                    continue;
+                }
+            }
             let verb=if scout {"move"} else {"fight"};
-            let standing=u.get("doing").str()==verb&&u.get("target").num_or(-1.0)==goal.num();
+            let standing=u.get("doing").str()==verb&&u.get("target").num_or(-1.0)==destination;
             let focus_unchanged=match focus { Some(id)=>u.get("focus").num_or(-1.0)==id, None=>!u.get("focus").is_num() };
             if standing && focus_unchanged { continue; }
-            let next=orders::to(u,verb,goal.num(),world,me,())
-                .or_else(||standing.then(||obj!{"id"=>u.get("id"),"do"=>verb,"target"=>goal.num()}));
+            let next=orders::to(u,verb,destination,world,me,())
+                .or_else(||standing.then(||obj!{"id"=>u.get("id"),"do"=>verb,"target"=>destination}));
             if let Some(mut o)=next {
                 if let Some(id)=focus {o.set("focus",id);}
+                if cycles_left()>2400.0 {
+                    if let Some(ops)=carry(u,&plan,me) {o.set("ram",ops);}
+                }
                 o.set("alert",6);o.set("power",obj!{"drive"=>if bomber {420}else{600},"weapon"=>if scout {0}else{420}});order(o);
             }
         }
@@ -347,24 +446,39 @@ use super::{air, theme};
         c.get("ship").truthy() && (c.path("build.range").num_or(0.0) > 0.0 || c.path("build.carry").num_or(0.0) == 0.0)
     }
 
+    /// Shares a house plan with the current waters of its freighters. Unit callbacks cannot read `world.units`, so
+    /// escorts use this compact think snapshot rather than inferring a convoy from their own type call.
+    pub fn share(orders: &mut Value, pl: &Value, world: View, me: View) {
+        let mut packed = pl.clone();
+        let ours = me.get("id").num();
+        let mut convoy = Vec::new();
+        for u in world.get("units").iter() {
+            if cycles_left() < 2500.0 || convoy.len() >= 4 { break; }
+            if u.get("owner").num_or(-1.0) != ours || u.get("type").str() != "freighter" { continue; }
+            let water = u.path("rts.sea.water").num_or(-1.0);
+            if water < 0.0 || convoy.iter().any(|w: &Value| w.num_or(-1.0) == water) { continue; }
+            if logistics::cargo(u) > 0.0 { convoy.insert(0, Value::Num(water)); } else { convoy.push(Value::Num(water)); }
+        }
+        packed.set("convoy", Value::Arr(convoy));
+        packed.set("convoyAt", world.get("seconds"));
+        front_snapshot(&mut packed, world, me);
+        plan::share(orders, &packed, me);
+    }
+
     /// Escorts keep with the house's freighters, laden ones first, or off its home dock; the second of each pair sails as
     /// a privateer off the nearest rival dock. Convoy guards intercept nearby raiders that threaten their convoy.
     /// Privateers also chase laden rival freighters. Both name a `focus`, so they strike without a reflex.
     pub fn guard_shipping(units: View, world: View, me: View) {
         if cycles_left() < 4000.0 || !world.get("logistics").truthy() { return; }
-        let id = me.get("id").num();
         let waters = sea::index(world);
         let home = receiving_dock(world, me)
             .and_then(|p| world.path("logistics.docks").iter().find(|d| d.get("p").num() == p))
             .map_or(-1.0, |d| d.get("water").num_or(-1.0));
-        let mut convoy: Vec<f64> = Vec::new();
-        for u in world.get("units").iter() {
-            if cycles_left() < 3000.0 { break; }
-            if u.get("owner").num() != id || u.get("type").str() != "freighter" { continue; }
-            let w = u.path("rts.sea.water").num_or(-1.0);
-            if w < 0.0 || convoy.contains(&w) { continue; }
-            if logistics::cargo(u) > 0.0 { convoy.insert(0, w); } else { convoy.push(w); }
-        }
+        let packed = plan::for_units(me, units, world);
+        let now = world.get("seconds").num_or(-1.0);
+        let stamped = packed.get("convoyAt").num_or(-1e9);
+        let current = now >= stamped && now - stamped <= 12.0;
+        let convoy: Vec<f64> = if current { packed.get("convoy").items().iter().map(|w| w.num_or(-1.0)).filter(|w| *w >= 0.0).collect() } else { Vec::new() };
         let contacts: Vec<View> = me.path("rts.sea.contacts").iter().filter(|c| c.get("ship").truthy()).collect();
         // the rival dock nearest home by sea, where laden rival freighters come and go
         let mut prey = (usize::MAX, -1.0);
@@ -898,7 +1012,13 @@ use super::{air, theme};
         if inv.at < 0.0 {
             return;
         }
-        let want = inv.n * 2.0 + 1.0;
+        let grid: f64 = me.path("rts.structures").iter().take_while(|_| cycles_left() > 4500.0)
+            .filter(|s| s.get("owner").num_or(-1.0) == me.get("id").num() && s.get("p").num_or(-1.0) == inv.at
+                && s.get("state").str() != "ruin")
+            .flat_map(|s| s.path("power.ports").iter())
+            .filter(|p| p.get("kind").str() != "battery").map(|p| p.get("capacity").num_or(0.0)).sum();
+        // Keep a larger local guard where losing plants would darken the army's grid.
+        let want = inv.n * 2.0 + 1.0 + (grid / 2.0).ceil().min(4.0);
         // (the count of units free to fight comes from me.units, so a big threat costs no pass over world.units)
         if inv.at == me.get("capital").num() || want > GUARD_MAX || want >= fighters(me) * 0.6 {
             plan.set("defend", inv.at);
@@ -969,39 +1089,55 @@ use super::{air, theme};
     /// Fewer rival hit points than this at the target never turn an army back.
     const FRONT_MIN: f64 = 6.0;
 
-    thread_local! {
-        /// Fighting hit points by province ([`front`]) for the call's world: (province, yours and allies', rivals').
-        static FRONT: RefCell<Option<(View, Rc<Vec<(f64, f64, f64)>>)>> = const { RefCell::new(None) };
-    }
-
-    /// Hit points of the fighting units in sight by province: yours and your allies', and everyone else's. Workers,
-    /// cargo carriers, scouts and ships don't count. One pass over world.units a call (about 40 cycles a unit).
-    fn strengths(world: View, me: View) -> Rc<Vec<(f64, f64, f64)>> {
-        if let Some(x) = FRONT.with(|c| c.borrow().as_ref().filter(|(w, _)| w.same(&world)).map(|(_, v)| v.clone())) {
-            return x;
-        }
+    /// THINK records fighting hit points at the attack and stage. Unit callbacks receive this compact snapshot.
+    /// Workers, scouts, ships and aircraft do not count. A short scan never publishes partial totals.
+    pub fn front_snapshot(plan: &mut Value, world: View, me: View) {
+        let attack = plan.get("attack").num_or(plan.get("target").num_or(-1.0));
+        let stage = plan.get("stage").num_or(-1.0);
+        if attack < 0.0 || stage < 0.0 || attack == stage || !world.get("units").is_arr() { return; }
         let me_id = me.get("id").num();
-        let mut out: Vec<(f64, f64, f64)> = Vec::new();
+        let (mut ours, mut theirs, mut home) = (0.0, 0.0, 0.0);
         for u in world.get("units").iter() {
+            if cycles_left() < 3500.0 { return; }
+            let at = u.get("at").num_or(-1.0);
+            if at != attack && at != stage { continue; }
             let (kind, doing) = (u.get("type").str(), u.get("doing").str());
-            if matches!(kind, "miner" | "hauler" | "freighter" | "scout") || doing == "gather" || doing == "study" || u.path("rts.sea.ship").truthy() {
+            if matches!(kind, "miner" | "hauler" | "freighter" | "scout") || doing == "gather" || doing == "study"
+                || u.path("rts.sea.ship").truthy() || u.get("air").truthy() || u.path("build.wings").num_or(0.0) > 0.0 {
                 continue;
             }
-            let owner = u.get("owner").num();
-            let ours = owner == me_id || realm::is_ally(me, owner);
-            let (at, hp) = (u.get("at").num(), u.get("hp").num_or(0.0));
-            let i = match out.iter().position(|x| x.0 == at) {
-                Some(i) => i,
-                None => {
-                    out.push((at, 0.0, 0.0));
-                    out.len() - 1
-                }
-            };
-            if ours { out[i].1 += hp } else { out[i].2 += hp }
+            let owner = u.get("owner").num_or(-1.0);
+            let hp = u.get("hp").num_or(0.0).max(0.0);
+            if owner == me_id || realm::is_ally(me, owner) {
+                if at == attack { ours += hp; } else { home += hp; }
+            } else if at == attack && realm::is_rival(world, me, owner) { theirs += hp; }
         }
-        let out = Rc::new(out);
-        FRONT.with(|c| *c.borrow_mut() = Some((world, out.clone())));
-        out
+        let row = arr![attack, stage, ours.min(1_000_000.0).floor(), theirs.min(1_000_000.0).ceil(),
+            home.min(1_000_000.0).floor(), world.get("seconds").num_or(0.0).floor()];
+        if row.to_json().len() <= 62 { plan.set("front", row); }
+    }
+
+    const FRONT_PAGE: u32 = 93;
+
+    /// Carry the SDK core plan and one page of combat totals. Page 93 belongs to this snapshot.
+    pub fn carry(u: View, pl: &Rc<Value>, me: View) -> Option<Vec<Value>> {
+        let mut ops = orders::carry(u, pl, me);
+        if !plan::here(me, u) || cycles_left() < 1500.0 { return ops; }
+        let front = pl.get("front");
+        if matches!(front, Value::Arr(_)) && front.len() == 6 && mem::get(u.get("ramUnit"), FRONT_PAGE).to_json() != front.to_json() {
+            if let Some(extra) = mem::put(FRONT_PAGE, front, "local", Some("unit"), 1) {
+                ops.get_or_insert_with(Vec::new).extend(extra);
+            }
+        }
+        ops
+    }
+
+    fn front_strength(row: &Value, attack: f64, stage: f64, now: f64) -> Option<(f64, f64, f64)> {
+        if !matches!(row, Value::Arr(_)) || row.len() != 6 || row.at(0).num_or(-1.0) != attack || row.at(1).num_or(-1.0) != stage { return None; }
+        let age = now - row.at(5).num_or(f64::NEG_INFINITY);
+        let (ours, theirs, home) = (row.at(2).num(), row.at(3).num(), row.at(4).num());
+        (age >= 0.0 && age <= 120.0 && ours.is_finite() && theirs.is_finite() && home.is_finite()
+            && ours >= 0.0 && theirs >= 0.0 && home >= 0.0).then_some((ours, theirs, home))
     }
 
     /// The army's turn at the front, before a ground unit takes the plan's attack (or `target`): `Some(order)` overrides it (`None`
@@ -1019,13 +1155,9 @@ use super::{air, theme};
         if at != attack && at != stage {
             return None;
         }
-        let cached = FRONT.with(|c| c.borrow().as_ref().is_some_and(|(w, _)| w.same(&world)));
-        if !cached && cycles_left() < 3000.0 + 40.0 * world.get("units").len() as f64 {
-            return None;
-        }
-        let s = strengths(world, me);
-        let of = |p: f64| s.iter().find(|x| x.0 == p).map_or((0.0, 0.0), |x| (x.1, x.2));
-        let (ours, theirs) = of(attack);
+        let now = world.get("seconds").num_or(0.0);
+        let (ours, theirs, home) = front_strength(pl.get("front"), attack, stage, now)
+            .or_else(|| front_strength(&mem::get(u.get("ramUnit"), FRONT_PAGE), attack, stage, now))?;
         if theirs < FRONT_MIN || ours * FALL_BACK_ODDS >= theirs {
             return None;
         }
@@ -1034,7 +1166,6 @@ use super::{air, theme};
             return (hurt && !plan::here(me, u)).then(|| orders::to(u, "fight", stage, world, me, ()));
         }
         // A first attack goes in on the plan. Once yours in the target are losing, the rest wait for a wave.
-        let (home, _) = of(stage);
         (ours > 0.0 && plan::here(me, u) && home + ours < theirs * PUSH_ODDS).then(|| orders::to(u, "fight", stage, world, me, ()))
     }
 
@@ -1082,7 +1213,7 @@ use super::{air, theme};
             if !orders::room(world) {
                 continue;
             }
-            let ops = orders::carry(u, pl, me);
+            let ops = carry(u, pl, me);
             let a = attack_of(pl);
             if a < 0.0 {
                 add(&mut out, u, None, ops);
@@ -1133,7 +1264,7 @@ use super::{air, theme};
                 let picket = defends(&pl, u);
                 if picket >= 0.0 && orders::room(world) {
                     let o = orders::to(u, "fight", picket, world, me, ());
-                    let ops = orders::carry(u, &pl, me);
+                    let ops = carry(u, &pl, me);
                     add(&mut out, u, o, ops);
                 } else if picket < 0.0 {
                     rest.push(u);
@@ -1164,7 +1295,7 @@ use super::{air, theme};
                     rest_pl.push(pl);
                 } else if orders::room(world) {
                     let o = orders::to(u, "fight", d, world, me, ());
-                    let ops = orders::carry(u, &pl, me);
+                    let ops = carry(u, &pl, me);
                     add(&mut out, u, o, ops);
                 }
             }
@@ -1508,6 +1639,14 @@ use super::{air, theme};
             return Value::obj();
         }
         let mut orders = govern_units(world, me, share, strategy);
+        if orders.get("memo").str() == "Recovering production" {
+            // Recovery suspends aircraft callbacks. Bring airborne units down before their heat keeps rising.
+            for u in world.get("units").iter().take_while(|_| cycles_left() > 3500.0) {
+                if u.get("owner").num_or(-1.0) == me.get("id").num() && u.path("build.wings").num_or(0.0)>0.0 {
+                    orders.entry("compute").entry("types").set(u.get("type").str(),obj!{"cycles"=>2400,"every"=>3});
+                }
+            }
+        }
         maintain_freighters(&mut orders, world, me);
         // @house
         maintain_escorts(&mut orders, world, me);
@@ -2157,6 +2296,9 @@ use super::{air, theme};
                 && me.get("contracts").iter().any(|c| c.get("with").num() == from && !c.get("ended").truthy() && c.get("get").get(right).truthy() && c.get("endsIn").or(0.0) > 60.0)
         };
         if held("passage") || held("sight") || held("relay") {
+            return false;
+        }
+        if ask.path("power.mw").num_or(0.0) > super::energy::export_spare(me, from) {
             return false;
         }
         let hire = give.get("hire");
