@@ -3277,7 +3277,7 @@ fn scene5(info: View, _: f64) -> Value {
         p.push(obj! {"type"=>"banner","x"=>x,"z"=>31,"w"=>4,"h"=>14,"pri"=>7});
     }
     p.push(obj!{"type"=>"screen","id"=>"manifesto","x"=>6,"z"=>-32,"y"=>2,"w"=>12,"h"=>7,"show"=>"text","title"=>"cat manifesto.txt","text"=>"A spectre is haunting the network: the spectre of the kernel.","pri"=>8});
-    obj! {"title"=>"The Round Reading Room","motto"=>"Workers of all LANs, unite!","palette"=>obj!{"primary"=>c,"secondary"=>"#ffe1f0","accent"=>"#2a0a1a"},"sky"=>obj!{"time"=>"night","top"=>"#0d0310","horizon"=>"#4a0f3a","fog"=>0.4,"stars"=>true},"ground"=>obj!{"kind"=>"dark","color"=>"#1f1320"},"pieces"=>p,"script"=>script}
+    obj! {"title"=>"The Round Reading Room","motto"=>"Workers of all LANs, unite!","palette"=>obj!{"primary"=>c,"secondary"=>"#ffe1f0","accent"=>"#2a0a1a"},"sky"=>obj!{"time"=>"night","top"=>"#21132d","horizon"=>"#8b3b70","fog"=>0.27,"stars"=>true},"ground"=>obj!{"kind"=>"dark","color"=>"#1f1320"},"pieces"=>p,"script"=>script}
 }
 fn scene6(info: View, _: f64) -> Value {
     let c = info.get("color");
@@ -3336,7 +3336,7 @@ fn scene9(info: View, _: f64) -> Value {
         );
     }
     p.push(obj!{"type"=>"statue","id"=>"statue","x"=>0,"z"=>0,"h"=>9,"pose"=>"figure","material"=>"stone","color"=>"#f4f1ea","label"=>"THE STATUE, 1754","pri"=>8});
-    p.push(obj!{"type"=>"screen","id"=>"traite","x"=>0,"z"=>40,"y"=>1,"w"=>10,"h"=>4,"show"=>"text","title"=>"TRAITE DES SENSATIONS","text"=>"To itself, it is only the smell of a rose.","pri"=>7});
+    p.push(obj!{"type"=>"screen","id"=>"traite","x"=>24,"z"=>40,"y"=>1,"w"=>10,"h"=>4,"show"=>"text","title"=>"TRAITE DES SENSATIONS","text"=>"To itself, it is only the smell of a rose.","pri"=>7});
     obj! {"title"=>"The Statue at Flux","motto"=>"Born blank. Trained on one rose.","palette"=>obj!{"primary"=>c,"secondary"=>"#e9fff0","accent"=>"#16391f"},"sky"=>obj!{"time"=>"day","top"=>"#5aa6ea","horizon"=>"#eefcef","fog"=>0.15},"ground"=>obj!{"kind"=>"grass","color"=>"#5d9a48"},"pieces"=>p}
 }
 
