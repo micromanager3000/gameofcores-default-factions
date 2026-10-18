@@ -937,12 +937,16 @@ use super::{air, theme};
     pub fn frontier(world: View, me: View) -> Vec<View> {
         let skip = partner_land(world, me);
         let ours=me.get("id").num();
-        let live=|c:View|c.get("graceIn").num_or(if c.get("ended").truthy(){0.0}else{c.get("endsIn").num_or(1.0)})>0.0;
-        let hosts: Vec<f64> = me.get("contracts").iter().filter(|c|live(*c)&&c.path("get.passage").truthy()
-            && !(c.path("ended.by").num_or(-1.0)==ours&&c.path("ended.why").str()=="broke its deal by attacking"))
-            .map(|c|c.get("with").num()).collect();
-        let leased:Vec<f64>=me.get("contracts").iter().filter(|c|live(*c)).flat_map(|c|c.get("mines").iter()
-            .filter(|l|l.get("to").num_or(-1.0)==ours).map(|l|l.get("province").num())).collect();
+        let mut hosts=Vec::new();let mut leased=Vec::new();
+        for c in me.get("contracts").iter() {
+            let grace=c.get("graceIn");let ended=c.get("ended");
+            let live=if grace.is_num(){grace.num()>0.0}else{!ended.truthy()&&c.get("endsIn").num_or(1.0)>0.0};
+            if !live {continue;}
+            if c.get("get").get("passage").truthy()&&!(ended.get("by").num_or(-1.0)==ours&&ended.get("why").str()=="broke its deal by attacking") {
+                hosts.push(c.get("with").num());
+            }
+            for l in c.get("mines").iter() {if l.get("to").num_or(-1.0)==ours {leased.push(l.get("province").num());}}
+        }
         realm::frontier(world, me).into_iter().filter(|q|!skip.contains(&q.get("id").num())
             && !leased.contains(&q.get("id").num()) && !q.get("leased").iter().any(|l|l.get("to").num_or(-1.0)==ours)
             && !(q.get("owner").is_num()&&hosts.contains(&q.get("owner").num()))).collect()

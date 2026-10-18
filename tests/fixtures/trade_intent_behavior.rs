@@ -75,3 +75,26 @@ fn standing_capture_intent_declines_renewal_when_the_frontier_hides_it() {
     item(me.entry("contracts"),0).set("graceIn",0);
     assert_eq!(frontier_ids(&world,&me),vec![1.0],"the objective is eligible after grace if the lease is not renewed");
 }
+
+#[test]
+fn older_contract_views_still_distinguish_live_rights_from_expired_ones() {
+    let (world,mut me,_)=trade_intent_case(-1.0);
+    me.set("contracts",arr![obj!{"with"=>2,"get"=>obj!{"passage"=>true},"endsIn"=>10}]);
+    assert!(frontier_ids(&world,&me).is_empty(),"older active rights remain protected without graceIn");
+    item(me.entry("contracts"),0).set("endsIn",0);
+    assert_eq!(frontier_ids(&world,&me),vec![1.0]);
+    item(me.entry("contracts"),0).set("endsIn",10);
+    item(me.entry("contracts"),0).set("ended",obj!{"by"=>2});
+    assert_eq!(frontier_ids(&world,&me),vec![1.0],"ended older rights publish no remaining grace");
+}
+
+#[test]
+fn one_contract_can_cover_a_target_by_lease_after_its_passage_was_broken() {
+    let (world,mut me,_)=trade_intent_case(-1.0);
+    me.set("contracts",arr![obj!{"with"=>2,"get"=>obj!{"passage"=>true},"graceIn"=>10,
+        "ended"=>obj!{"by"=>1,"why"=>"broke its deal by attacking"},
+        "mines"=>arr![obj!{"province"=>1,"from"=>2,"to"=>1}]}]);
+    assert!(frontier_ids(&world,&me).is_empty(),"dropping broken passage cannot skip the same contract's lease grace");
+    item(me.entry("contracts"),0).set("graceIn",0);
+    assert_eq!(frontier_ids(&world,&me),vec![1.0]);
+}

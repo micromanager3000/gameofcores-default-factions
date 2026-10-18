@@ -1,0 +1,166 @@
+{
+  "purpose": "Preserve contract-safe frontier filtering without exhausting captured Nations and Templar planning turns.",
+  "inputRevision": "7a5ad215f43d5afd6e1d560e201b96e0efa3f235",
+  "comparisonRevision": "fae85c61331e430f2ae30943d5dbd98c44b48017",
+  "fixtures": [
+    "nations-think-late.json",
+    "nations-think-naval.json",
+    "templar-think-naval.json"
+  ],
+  "meter": {
+    "toolchain": "1.97.0",
+    "instructionsPerCycle": 64,
+    "runner": "/tmp/c4-day101-sdk/release/cores",
+    "results": "/tmp/goc-trade-regression-fixed-sweep.json",
+    "calls": 160,
+    "errors": 0
+  },
+  "before": [
+    {
+      "rev": "fae",
+      "house": "nations",
+      "budget": 65000,
+      "ok": true,
+      "used": 57152.5,
+      "error": null,
+      "memo": "Kirkcaldy: buying the favour of Mercury Mere",
+      "fab": 30961,
+      "think": 36425.227813005746
+    },
+    {
+      "rev": "fae",
+      "house": "templar",
+      "budget": 51000,
+      "ok": true,
+      "used": 41001.140625,
+      "error": null,
+      "memo": "The Fellowship of the Null Byte: 3 provinces believe \u00b7 the faithful keep watch",
+      "fab": 11820,
+      "think": 32000
+    },
+    {
+      "rev": "fae",
+      "house": "templar",
+      "budget": 52000,
+      "ok": true,
+      "used": 43089.671875,
+      "error": null,
+      "memo": "The Fellowship of the Null Byte: 3 provinces believe \u00b7 the faithful keep watch",
+      "fab": 11820,
+      "think": 32000
+    },
+    {
+      "rev": "7a",
+      "house": "nations",
+      "budget": 65000,
+      "ok": false,
+      "used": 65000,
+      "error": "ran out of cycles",
+      "memo": null,
+      "fab": null,
+      "think": null
+    },
+    {
+      "rev": "7a",
+      "house": "templar",
+      "budget": 51000,
+      "ok": true,
+      "used": 21681.9375,
+      "error": null,
+      "memo": "Recovering production",
+      "fab": 0,
+      "think": 51360
+    },
+    {
+      "rev": "7a",
+      "house": "templar",
+      "retry": 51360,
+      "ok": true,
+      "used": 21681.9375,
+      "fab": 0,
+      "think": 51360,
+      "memo": "Recovering production"
+    },
+    {
+      "rev": "7a",
+      "house": "templar",
+      "budget": 52000,
+      "ok": true,
+      "used": 42121.734375,
+      "error": null,
+      "memo": "The Fellowship of the Null Byte: 3 provinces believe \u00b7 the faithful keep watch",
+      "fab": 11820,
+      "think": 32000
+    }
+  ],
+  "afterExact": [
+    {
+      "house": "nations",
+      "fixture": "late",
+      "budget": 65000,
+      "ok": true,
+      "used": 56102.265625,
+      "error": null,
+      "fab": 30961,
+      "think": 36425.227813005746,
+      "types": {
+        "runner": 5464,
+        "shade": 7000
+      }
+    },
+    {
+      "house": "templar",
+      "fixture": "naval",
+      "budget": 51000,
+      "ok": true,
+      "used": 40765.828125,
+      "error": null,
+      "fab": 11820,
+      "think": 32000,
+      "types": {
+        "bulwark": 6000
+      }
+    },
+    {
+      "house": "templar",
+      "fixture": "naval",
+      "budget": 51360,
+      "ok": true,
+      "used": 40765.828125,
+      "error": null,
+      "fab": 11820,
+      "think": 32000,
+      "types": {
+        "bulwark": 6000
+      }
+    }
+  ],
+  "sweep": {
+    "nationsLate": "60000..75000 step250, then90000/95000/100000/105000/110000/113740/115000",
+    "nationsNaval": "40000..70000 step1000 plus47500/67128",
+    "templarNaval": "50000..54000 step100,55000..70000 step1000,51360/53775",
+    "production": "All Nations calls and Templar calls at50900 or more retain positive fabrication and ground-controller calls. Templar50000..50800 safely request51360; that retry returns normal production."
+  },
+  "change": "Walk contracts once, read grace and ending state once, and avoid eager fallback field lookups when graceIn is present. Target eligibility, incoming rights, lease grace and broken-passage behavior remain unchanged.",
+  "limits": [
+    "Metered costs also depend on compiler outlining and which optional planner branches fit; the whole-call saving is not a pure measurement of frontier alone.",
+    "Existing public capture fixtures are reused without changing observations or budgets. No engine limits or faction planning thresholds changed."
+  ],
+  "sourceAndModuleHashes": {
+    "nations": {
+      "sourceSha256": "44ec7bbe0130dfbe0b84b9086e824afc0667140e088c812e6a1eaea13e66ae1b",
+      "wasmSha256": "426ca79f79134142179aa024f39b6034788a24a5bb915c8e4646fe8cdc4b4360"
+    },
+    "templar": {
+      "sourceSha256": "e86b51218c1834551e5aa3f495e507e1849fdd372e147308034a376529355483",
+      "wasmSha256": "50329f3cf1529d623c2003ecdc7052ee212847b0768e34b6fa30fdcd8d120238"
+    }
+  },
+  "validation": {
+    "behaviorLog": "/tmp/goc-trade-regression-fixed-behavior-final.log",
+    "sourceChecksLog": "/tmp/goc-trade-regression-fixed-source-checks.log",
+    "nativeRegression": "tests::founders::nations_naval_and_building_plans_preserve_their_return_budget and tests::founders::templar_optional_naval_search_keeps_funded_ground_orders retain their original assertions.",
+    "behaviorPassed": 93,
+    "sourceChecksPassed": 5
+  }
+}
