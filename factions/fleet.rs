@@ -1581,8 +1581,30 @@ fn prize_intel(world: View, me: View, log: &Value) -> Intel {
     out
 }
 
+fn armor_modules(me: View, module: &'static str) -> Vec<&'static str> {
+    if me.path("rts.licenses").iter().any(|l| l.str() == module) { vec!["hull", module] } else { vec!["hull"] }
+}
+
+/// A local sea wreck pays for a new one-hold corsair's fabrication and round trip. This only uses wrecks already
+/// observed by the faction and keeps the same travel and expiry estimates as `common::salvage_target`.
+fn paying_recovery_wreck(world: View, me: View, hold: f64) -> bool {
+    let home=shore_water(world,me.get("capital").num());
+    if home<0.0 || hold<=0.0 { return false; }
+    let adj=sea::index(world).get(home).get("adj");
+    let now=world.get("seconds").num_or(0.0); let level=common::price_level(me);
+    me.path("rts.logistics.wrecks").iter().any(|w| {
+        if !w.get("sea").truthy(){return false;}
+        let water=w.get("water").num_or(-1.0);
+        let hops=if water==home {0.0}else if adj.has_num(water){1.0}else{return false};
+        let leg=35.0+20.0*hops;
+        let cost=common::fabrication(me,2.0)+300.0*level+2.0*leg*700.0*level*1.5;
+        w.get("cycles").num_or(0.0).min(hold)>cost && w.get("until").num_or(0.0)>(now+2.0*leg)*5.0
+    })
+}
+
 /// One junk a second at most, toward the fleet the plan needs: a picket for every crossing and the next landing, then
-/// warjunks, then up to two corsairs when visible cargo can pay for a raid. True when one was ordered.
+/// warjunks, then up to two corsairs when visible cargo can pay for a raid. A valuable nearby sea wreck can reserve
+/// one cargo corsair before the ordinary fleet priorities. True when one was ordered.
 fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_ships: f64, threatened: bool) -> bool {
     let techs = me.get("techs");
     let has = |t: &str| techs.get(t).truthy();
@@ -1591,6 +1613,12 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
     }
     let have = me.get("units").get("byType");
     let (pickets, war, corsairs, carriers) = (have.get("picket").or(0.0), have.get("warjunk").or(0.0), have.get("corsair").or(0.0), have.get("carrier").or(0.0));
+    let guns=has("ranged");
+    let corsair_capacity=me.path("rts.logistics.rules.shipHoldPerCarry").num_or(160000.0*common::price_level(me));
+    // A live or queued corsair already owns the recovery assignment. Do not recruit a second one.
+    if guns && corsairs<1.0 && paying_recovery_wreck(world,me,corsair_capacity) {
+        return add_spawn(orders,me,"corsair",corsair_body(true),&armor_modules(me,"dash"));
+    }
     let income = me.get("rts").get("cpu").get("income").or(0.0);
     // Income and a crossing, escort or target bound hull recruitment.
     let fleet_max = max(3.0, (income / 20000.0).floor()).min(12.0);
@@ -1601,20 +1629,11 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
     if junks >= fleet_max || (threatened && junks >= 2.0) || (junks >= 2.0 && ashore < 1.0 + (junks / 2.0).floor()) {
         return false;
     }
-    let guns = has("ranged");
-    let armor = |m: &'static str| -> Vec<&'static str> {
-        if me.path("rts.licenses").iter().any(|l| l.str() == m) {
-            vec!["hull", m]
-        } else {
-            vec!["hull"]
-        }
-    };
     let want_pick = (naval.stations as f64 + if naval.landing >= 0.0 { 1.0 } else { 0.0 }).min(5.0);
     // Replace raiders only when cargo prey is visible.
     let home=shore_water(world,me.get("capital").num());
     let adj=sea::index(world).get(home).get("adj");
     let nearby=|water:f64|water>=0.0&&(water==home||adj.has_num(water));
-    let corsair_capacity=me.path("rts.logistics.rules.shipHoldPerCarry").num_or(160000.0*common::price_level(me));
     let contacts=me.path("rts.sea.contacts");
     let prospects=contacts.iter().filter(|c| nearby(c.get("water").num_or(-1.0))
         && paying_corsair_prey(*c, contacts, me, corsair_capacity, true, 1.0)).count();
@@ -1627,15 +1646,15 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
     let want_war = if guns { escorts.max(contested).max(if prospects > 0 { 1.0 } else { 0.0 }).min(4.0) } else { 0.0 };
     let want_carrier = has("flight") && have.get("kite").or(0.0) >= 2.0 && carriers < 1.0;
     let pick: Option<(&str, Value, Vec<&str>)> = if pickets < want_pick {
-        Some(("picket", picket_body(guns), armor("armor")))
+        Some(("picket", picket_body(guns), armor_modules(me,"armor")))
     } else if want_carrier {
-        Some(("carrier", carrier_body(), armor("armor")))
+        Some(("carrier", carrier_body(), armor_modules(me,"armor")))
     } else if war < want_war.min(1.0) {
-        Some(("warjunk", warjunk_body(), armor("armor")))
+        Some(("warjunk", warjunk_body(), armor_modules(me,"armor")))
     } else if corsairs < want_cors {
-        Some(("corsair", corsair_body(me.path("rts.logistics").truthy()), armor("dash")))
+        Some(("corsair", corsair_body(me.path("rts.logistics").truthy()), armor_modules(me,"dash")))
     } else if war < want_war {
-        Some(("warjunk", warjunk_body(), armor("armor")))
+        Some(("warjunk", warjunk_body(), armor_modules(me,"armor")))
     } else {
         None
     };

@@ -190,6 +190,37 @@ fn fleet_corsair_spawn_keeps_a_profitable_unescorted_prey_eligible() {
     assert!(super::paying_corsair_prey(args[1],args[2],args[0],300000.0,true,0.0));
 }
 
+fn recovery_corsair_args(wreck:&str,corsairs:f64,queued:f64,coast:bool)->Vec<View>{
+    let waters=if coast {r#"[{"id":0,"p":0,"coast":[0],"adj":[1]},{"id":1,"p":1,"coast":[1],"adj":[0]}]"#}else{r#"[{"id":0,"p":1,"coast":[1],"adj":[]}]"#};
+    let world=Value::parse(&format!(r#"{{"seconds":1,"logistics":{{}},"waters":{waters}}}"#));
+    let me=Value::parse(&format!(r#"{{"id":1,"seat":4,"capital":0,"bank":1000,"costs":{{"unit":1}},"techs":{{"seaTraversal":true,"ranged":true}},"units":{{"cap":20,"total":10,"queued":{queued},"spawned":0,"byType":{{"kite":0,"carrier":0,"picket":0,"warjunk":0,"corsair":{corsairs},"freighter":0}}}},"build":{{"max":{{"hp":5,"speed":5,"strength":5,"carry":2,"vision":5}},"price":{{}},"points":100}},"rts":{{"licenses":["hull","dash"],"sea":{{"ports":[0],"contacts":[]}},"logistics":{{"rules":{{"shipHoldPerCarry":160000}},"wrecks":{wreck}}},"cpu":{{"income":60000,"available":{{"fabrication":100000}}}}}}}}"#));
+    views(&[world,me])
+}
+
+#[test]
+fn fleet_emergency_recovery_recruits_one_cargo_corsair_for_a_paying_nearby_sea_wreck(){
+    let args=recovery_corsair_args(r#"[{"sea":true,"water":1,"cycles":160000,"until":1000}]"#,0.0,0.0,true);
+    let naval=super::Naval{stations:5,landing:-1.0,landing_name:String::new(),fleet:-1.0,blockade:0,raid:0};let mut orders=Value::obj();
+    assert!(super::naval_spawn(&mut orders,args[0],args[1],&naval,0.0,false));
+    let corsair=orders.get("spawn").at(0);assert_eq!(corsair.get("type").str(),"corsair");assert_eq!(corsair.get("build").get("carry").num(),1.0);
+}
+
+#[test]
+fn fleet_emergency_recovery_rejects_unprofitable_wrecks_and_inland_capitals(){
+    let naval=super::Naval{stations:0,landing:-1.0,landing_name:String::new(),fleet:-1.0,blockade:0,raid:0};let mut orders=Value::obj();
+    let args=recovery_corsair_args(r#"[{"sea":true,"water":1,"cycles":118000,"until":1000}]"#,0.0,0.0,true);
+    assert!(!super::naval_spawn(&mut orders,args[0],args[1],&naval,0.0,false));
+    let args=recovery_corsair_args(r#"[{"sea":true,"water":0,"cycles":160000,"until":1000}]"#,0.0,0.0,false);
+    assert!(!super::naval_spawn(&mut orders,args[0],args[1],&naval,0.0,false));
+}
+
+#[test]
+fn fleet_emergency_recovery_does_not_duplicate_a_live_or_queued_corsair(){
+    let args=recovery_corsair_args(r#"[{"sea":true,"water":1,"cycles":160000,"until":1000}]"#,1.0,1.0,true);
+    let naval=super::Naval{stations:0,landing:-1.0,landing_name:String::new(),fleet:-1.0,blockade:0,raid:0};let mut orders=Value::obj();
+    assert!(!super::naval_spawn(&mut orders,args[0],args[1],&naval,0.0,false));assert!(orders.get("spawn").is_empty());
+}
+
 fn storage_research_pick(powered: f64, capacity: f64) -> String {
     let provinces = arr![obj! { "id"=>0,"owner"=>1,"power"=>obj! {"sunFactor"=>1,"lat"=>0,"windFactor"=>1} }];
     let mut world_techs = obj! {};
