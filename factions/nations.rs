@@ -1700,10 +1700,10 @@ fn gate_attack_field(units: View, world: View, me: View, pl: &Value) -> bool {
     let by = realm::index(world); let ours = me.get("id").num();
     let field: Vec<View> = units.iter().filter(|u| {
         let at=u.get("at").num(); let p=by.get(at);
-        u.get("to").num_or(-1.0)<0.0 && !u.get("stalled").truthy() && !u.get("carry").truthy()
-            && u.path("rts.cargo.load").num_or(0.0)<=0.0 && !u.path("build.wings").truthy()
-            && p.get("owner").num_or(-1.0)==ours && !realm::reach(p,me).contains(&stage)
-            && u.get("goal").num_or(-1.0)==attack && common::defends(pl,*u)<0.0
+        u.get("to").num_or(-1.0)<0.0 && u.get("doing").str()=="idle" && u.get("target").num_or(-1.0)<0.0
+            && !u.get("stalled").truthy() && !u.get("carry").truthy() && u.path("rts.cargo.load").num_or(0.0)<=0.0
+            && !u.path("build.wings").truthy() && p.get("owner").num_or(-1.0)==ours
+            && path::home(world,me,at,stage).is_none() && common::defends(pl,*u)<0.0
     }).collect();
     let mut origin=-1.0; let mut most=0usize;
     for u in &field { let at=u.get("at").num(); let n=field.iter().filter(|v|v.get("at").num()==at).count(); if n>most {origin=at;most=n;} }
