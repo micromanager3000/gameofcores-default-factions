@@ -701,6 +701,7 @@ fn scene0(info: View, budget: f64) -> Value {
         &Civic {
             wonder: obj! { "shape" => "dome", "tiers" => 3, "height" => 40, "glow" => true },
             wonder_r: 9.0,
+            wonder_h_scale: 0.72,
             wonder_color: Some("#e9b949"),
             wonder_mat: Some("metal"),
             trim: hue(c),
@@ -709,6 +710,7 @@ fn scene0(info: View, budget: f64) -> Value {
             hall_label: Some("THE KHAN'S GER"),
             screen_title: Some("YAM RELAY"),
             banners: 4.0,
+            court: Some("steppe"),
             ..Civic::default()
         },
     );
@@ -1006,7 +1008,7 @@ fn look1(b: f64) -> Value {
 fn scene1(info: View, budget: f64) -> Value {
     let (c, gold, foe) = (info.get("color"), "#e8c37a", "#c8423a");
     let car = obj! {
-        "type" => "chariot", "id" => "chariot", "x" => -2.5, "z" => 26, "rot" => 90, "horses" => 4, "coat" => "#f4f1ea", "flag" => true,
+        "type" => "chariot", "id" => "chariot", "x" => -2.5, "z" => 26, "rot" => 90, "horses" => 4, "coat" => "#f4f1ea", "flag" => true, "court" => "procession",
         "text" => "KAPIDHVAJA", "material" => "wood", "color" => "#8a5a2b", "trim" => gold,
     };
     let (front, back) = (build3d::on(&car, 0.0, 0.5), build3d::on(&car, 0.0, -0.5));
@@ -1031,15 +1033,20 @@ fn scene1(info: View, budget: f64) -> Value {
                 "banners" => banners, "color" => color, "trim" => trim.clone(),
             });
         };
-        army("foot", 24.0, 12.0, 3.0 + n, 24.0, 4.0);
-        army("chariots", 34.0, 12.0, 1.0, 6.0, 0.0);
-        army("elephants", 44.0, 12.0, 1.0, 4.0, 0.0);
-        army("riders", 28.0, 40.0, 2.0, 5.0, 1.0);
-        army("riders", 30.0, -20.0, 2.0, 6.0, 1.0);
-        // a bigger budget fields more archers behind the lines (the expander's whole idea)
-        for z in [22.0, 2.0, 40.0, -16.0].into_iter().take(super::capital::spare(budget, 24.0, 4.0) as usize) {
-            army("archers", 53.0, z, 2.0, 8.0, 0.0);
+        // A compact ceremonial line leaves a readable processional court around the
+        // halted chariot instead of filling the whole plaza with distant troops.
+        army("foot", 23.0, 12.0, 2.0 + n, 12.0, 2.0);
+        army("chariots", 34.0, 12.0, 1.0, 3.0, 0.0);
+        army("elephants", 44.0, 12.0, 1.0, 2.0, 0.0);
+        army("riders", 28.0, 40.0, 1.0, 3.0, 1.0);
+        army("riders", 30.0, -20.0, 1.0, 3.0, 1.0);
+        // A larger budget fills the rear ranks, not the visitor's route.
+        for z in [22.0, 2.0].into_iter().take(super::capital::spare(budget, 36.0, 2.0) as usize) {
+            army("archers", 49.0, z, 1.0, 6.0, 0.0);
         }
+    }
+    for x in [-18.0, 18.0] {
+        p.push(obj! { "type" => "arch", "style" => "round", "x" => x, "z" => 31, "w" => 7, "h" => 7, "t" => 0.8, "color" => "#d8c08a", "trim" => gold, "pri" => 5 });
     }
     // the dust the armies raise
     for q in [[-34.0, 12.0], [34.0, 12.0], [0.0, -30.0]] {
@@ -1283,11 +1290,13 @@ fn scene2(info: View, _: f64) -> Value {
             &Civic {
                 wonder: obj! { "shape" => "spire", "tiers" => 3, "height" => 30, "glow" => true },
                 wonder_r: 6.0,
+                wonder_h_scale: 0.78,
                 wonder_color: Some("#f0e6c8"),
                 trim: Some("#d0ab54"),
                 hall_label: Some("CHAPTER HOUSE"),
                 screen_title: Some("SWORN ORDERS"),
                 banners: 4.0,
+                court: Some("cloister"),
                 ..Civic::default()
             },
         ),
@@ -1491,6 +1500,7 @@ fn scene3(info: View, budget: f64) -> Value {
         &Civic {
             wonder: obj! { "shape" => "ziggurat", "tiers" => 4, "height" => 50, "glow" => true },
             wonder_r: 6.0,
+            wonder_h_scale: 0.74,
             wonder_color: Some(brass),
             wonder_mat: Some("metal"),
             trim: hue(c),
@@ -1501,6 +1511,10 @@ fn scene3(info: View, budget: f64) -> Value {
             hall_label: Some("ENGINE-HOUSE"),
             screen_title: Some("EXPERIMENTS OF LIGHT"),
             banners: 2.0,
+            court: Some("laboratory"),
+            // The nine authored Lamps already light Bensalem; keep the civic extras
+            // out so the base scene and the ten-light renderer cap both hold.
+            forecourt_lights: false,
             ..Civic::default()
         },
     );
@@ -1794,6 +1808,7 @@ fn scene4(info: View, budget: f64) -> Value {
         &Civic {
             wonder: obj! { "shape" => "ring", "tiers" => 3, "height" => 40, "glow" => true, "spin" => true },
             wonder_r: 6.0,
+            wonder_h_scale: 0.76,
             wonder_color: Some("#d8b45a"),
             wonder_mat: Some("metal"),
             trim: Some(gold),
@@ -1803,6 +1818,9 @@ fn scene4(info: View, budget: f64) -> Value {
             hall_label: Some("TRIBUTE OFFICE"),
             screen_title: Some("GIFTS RECEIVED"),
             banners: 2.0,
+            court: Some("dockyard"),
+            // The shipyard has its own dock lamps.
+            forecourt_lights: false,
             ..Civic::default()
         },
     );
@@ -2086,6 +2104,7 @@ fn scene5(info: View, budget: f64) -> Value {
         &Civic {
             wonder: obj! { "shape" => "spire", "tiers" => 5, "height" => 60, "glow" => true },
             wonder_r: 6.0,
+            wonder_h_scale: 0.72,
             wonder_mat: Some("crystal"),
             trim: hue(c),
             roof: Some("gable"),
@@ -2094,6 +2113,7 @@ fn scene5(info: View, budget: f64) -> Value {
             hall_label: Some("MEISSNER PRESS"),
             screen_title: Some("UNREST.EXE"),
             banners: 4.0,
+            court: Some("reading"),
             ..Civic::default()
         },
     );
@@ -2388,6 +2408,7 @@ fn scene6(info: View, budget: f64) -> Value {
         &Civic {
             wonder: obj! { "shape" => "ring", "tiers" => 3, "height" => 40, "glow" => true },
             wonder_r: 7.0,
+            wonder_h_scale: 0.76,
             wonder_color: Some("#bff5ec"),
             wonder_mat: Some("metal"),
             trim: hue(c),
@@ -2397,6 +2418,7 @@ fn scene6(info: View, budget: f64) -> Value {
             hall_label: Some("THE LODGE (EMPTY)"),
             screen_title: Some("SEGFAULT LOG"),
             banners: 4.0,
+            court: Some("void"),
             ..Civic::default()
         },
     );
@@ -2650,6 +2672,7 @@ fn scene7(info: View, budget: f64) -> Value {
         &Civic {
             wonder: obj! { "shape" => "obelisk", "tiers" => 3, "height" => 40, "glow" => true },
             wonder_r: 4.0,
+            wonder_h_scale: 0.78,
             wonder_color: Some("#d8d2b8"),
             wonder_mat: Some("metal"),
             trim: Some(brass),
@@ -2659,6 +2682,9 @@ fn scene7(info: View, budget: f64) -> Value {
             hall_label: Some("CUSTOM HOUSE"),
             screen_title: Some("PRICE TICKER"),
             banners: 2.0,
+            court: Some("market"),
+            // Kirkcaldy has its own harbour lamps.
+            forecourt_lights: false,
             ..Civic::default()
         },
     );
@@ -2840,6 +2866,7 @@ fn scene8(info: View, budget: f64) -> Value {
         &Civic {
             wonder: obj! { "shape" => "ziggurat", "tiers" => 4, "height" => 26 },
             wonder_r: 7.0,
+            wonder_h_scale: 0.82,
             wonder_color: Some("#d8b66a"),
             trim: Some("#8a6a3a"),
             roof: Some("gable"),
@@ -2847,6 +2874,7 @@ fn scene8(info: View, budget: f64) -> Value {
             hall_color: Some("#a9b3b8"),
             hall_label: Some("WOOLSHED HQ"),
             screen_title: Some("MOB HEADCOUNT"),
+            court: Some("paddock"),
             ..Civic::default()
         },
     );
@@ -3054,6 +3082,7 @@ fn scene9(info: View, budget: f64) -> Value {
         &Civic {
             wonder: obj! { "shape" => "tree", "tiers" => 4, "height" => 36, "glow" => true },
             wonder_r: 8.0,
+            wonder_h_scale: 0.78,
             wonder_color: Some("#5fae4a"),
             trim: Some("#d4b54a"),
             roof: Some("flat"),
@@ -3062,6 +3091,7 @@ fn scene9(info: View, budget: f64) -> Value {
             hall_label: Some("ORANGERIE"),
             screen_title: Some("SENSE DATA"),
             banners: 4.0,
+            court: Some("garden"),
             ..Civic::default()
         },
     );
