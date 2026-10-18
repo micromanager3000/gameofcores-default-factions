@@ -246,6 +246,21 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     if to.is_nan() || to < 0.0 {
         return None;
     }
+    let now = world.get("seconds").or(0.0).floor();
+    let last = mem::get(me.get("ramCapital"), 0);
+    let kept = if last.truthy() && last.get("field").truthy() && matches!(last.get("field").get("to"), Value::Num(x) if *x == to) {
+        Some(last.get("field").clone())
+    } else {
+        None
+    };
+    if let Some(k) = &kept {
+        if now - vor0(k.get("at")) < 10.0 {
+            return kept;
+        }
+    }
+    if cycles_left() < 300.0 * world.get("provinces").len() as f64 + after {
+        return kept;
+    }
     let by_id = realm::index(world);
     let ok = path::friendly(world, me);
     let me_id = me.get("id");
@@ -274,21 +289,6 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     }
     if !apart && path::home(world, me, n(me.get("capital")), to).is_some() {
         return None;
-    }
-    let now = world.get("seconds").or(0.0).floor();
-    let last = mem::get(me.get("ramCapital"), 0);
-    let kept = if last.truthy() && last.get("field").truthy() && matches!(last.get("field").get("to"), Value::Num(x) if *x == to) {
-        Some(last.get("field").clone())
-    } else {
-        None
-    };
-    if let Some(k) = &kept {
-        if now - vor0(k.get("at")) < 10.0 {
-            return kept;
-        }
-    }
-    if cycles_left() < 300.0 * world.get("provinces").len() as f64 + after {
-        return kept;
     }
     let mut field = path::field(world, me, to, &path::Opts { ok: Some(&ok), from: Some(&from), keep: Some(after), ..path::Opts::default() });
     field.set("at", now);
@@ -351,6 +351,22 @@ fn recovery_policy(me: View) -> Value {
     obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
         "ram" => mem::put(RECOVERY_PAGE, &recovery, "local", None, 1).unwrap_or_default(),
         "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0 }
+}
+
+// A short think keeps the standing plan while it restores the army's controllers and normal CPU policy.
+fn share_phase(orders: &mut Value, plan: &Value, world: View, me: View, remaining: f64) {
+    if !me.path("rts.cpu").truthy() || remaining >= 9000.0 {
+        common::share(orders, plan, world, me);
+    }
+}
+
+// Keep controller allocations when the optional crossing, research and rent review cannot leave return runway.
+fn budget_phase(orders: &mut Value, world: View, me: View, budget: &common::Budget, type_calls: &Value, remaining: f64) {
+    if me.path("rts.cpu").truthy() && remaining < 8000.0 {
+        orders.entry("compute").set("types", type_calls.clone());
+    } else {
+        common::budget(orders, world, me, budget);
+    }
 }
 
 fn strategy(world: View, me: View) -> Value {
@@ -437,7 +453,7 @@ fn strategy(world: View, me: View) -> Value {
         "slots" => army_room(me),
         "priceLevel" => common::price_level(me),
     };
-    common::share(&mut orders, &plan, world, me);
+    share_phase(&mut orders, &plan, world, me, cycles_left());
 
     let count = |k: &str| bt.get(k).or(0.0);
     let (miners, screens, runners, skirms, lancers) = (count("miner"), count("screen"), count("runner"), count("skirm"), count("lancer"));
@@ -493,7 +509,7 @@ fn strategy(world: View, me: View) -> Value {
     // common::budget keeps its useful research choice, rent choice and type schedules. In CPU RTS the old split is
     // ignored; cpu_policy below atomically installs caps and reserves for the one shared balance.
     let budget = common::Budget { research: if has("repair") { 0.06 } else { 0.12 }, code: 0.72, techs: &TECHS, types: Some(&type_calls) };
-    common::budget(&mut orders, world, me, &budget);
+    budget_phase(&mut orders, world, me, &budget, &type_calls, cycles_left());
     let mut policy = cpu_policy(me, &plan, &type_calls);
     common::fit_cpu(&mut policy, me);
     orders.entry("compute").set("cpu", policy);
