@@ -3138,11 +3138,12 @@ fn scene0(info: View, budget: f64) -> Value {
     ] {
         p.push(obj!{"type"=>"dome","x"=>x,"z"=>z,"r"=>r,"drum"=>1.4,"material"=>"stone","color"=>"#eadcc1","trim"=>c,"pri"=>6});
     }
-    for (x, z, x2, z2) in [
+    let channels: [(f64, f64, f64, f64); 3] = [
         (-55.0, 35.0, -21.0, 29.0),
         (-19.0, 29.0, 18.0, 32.0),
         (20.0, 32.0, 55.0, 24.0),
-    ] {
+    ];
+    for (x, z, x2, z2) in channels {
         p.push(obj!{"type"=>"bridge","x"=>x,"z"=>z,"x2"=>x2,"z2"=>z2,"w"=>3,"material"=>"wood","color"=>"#b88345","pri"=>5});
     }
     for (x, z) in [(-40.0, -34.0), (-34.0, 31.0), (41.0, 20.0)] {
@@ -3186,7 +3187,9 @@ fn scene3(info: View, _: f64) -> Value {
         (-18.0, -42.0, -18.0, 42.0),
         (18.0, -42.0, 18.0, 42.0),
     ] {
-        p.push(obj!{"type"=>"water","shape"=>"rect","x"=>x,"z"=>z,"w"=>(x2-x).abs()+3,"d"=>(z2-z).abs()+3,"color"=>"#3f8490","pri"=>5});
+        let w = if x2 >= x { x2 - x + 3.0 } else { x - x2 + 3.0 };
+        let d = if z2 >= z { z2 - z + 3.0 } else { z - z2 + 3.0 };
+        p.push(obj!{"type"=>"water","shape"=>"rect","x"=>x,"z"=>z,"w"=>w,"d"=>d,"color"=>"#3f8490","pri"=>5});
     }
     p.push(obj!{"type"=>"screen","id"=>"ledger","x"=>0,"z"=>42,"y"=>3,"w"=>14,"h"=>7,"show"=>"messages","title"=>"SALOMON'S HOUSE","pri"=>7});
     obj! {"title"=>"Salomon's House","motto"=>"What the college chooses to publish.","palette"=>obj!{"primary"=>c,"secondary"=>"#d8efe7","accent"=>"#503426"},"sky"=>obj!{"time"=>"day","top"=>"#5b9ec8","horizon"=>"#e5d3a3","fog"=>0.18},"ground"=>obj!{"kind"=>"stone","color"=>"#8f775c"},"pieces"=>p}
@@ -3281,7 +3284,7 @@ fn scene6(info: View, _: f64) -> Value {
     ];
     for i in 0..7 {
         let a = i as f64 * 0.88;
-        p.push(obj!{"type"=>"bridge","x"=>a.cos()*52,"z"=>a.sin()*52,"x2"=>a.cos()*27,"z2"=>a.sin()*27,"y"=>2+i%2,"w"=>4,"material"=>"metal","color"=>"#8bb8b4","pri"=>6});
+        p.push(obj!{"type"=>"bridge","x"=>a.cos()*52.0,"z"=>a.sin()*52.0,"x2"=>a.cos()*27.0,"z2"=>a.sin()*27.0,"y"=>2+i%2,"w"=>4,"material"=>"metal","color"=>"#8bb8b4","pri"=>6});
     }
     for (x, z) in [(-35.0, -34.0), (37.0, -26.0), (34.0, 35.0)] {
         p.push(obj!{"type"=>"spire","x"=>x,"z"=>z,"r"=>3,"h"=>18,"facets"=>5,"tilt"=>18,"material"=>"metal","color"=>"#8bb8b4","trim"=>c,"pri"=>5});
@@ -3294,7 +3297,7 @@ fn scene7(info: View, _: f64) -> Value {
         obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"obelisk","tiers"=>3,"h"=>44,"r"=>5,"glow"=>true,"material"=>"metal","color"=>"#d8d2b8","trim"=>"#c9a14a","court"=>"market","pri"=>9},
     ];
     for i in 0..7 {
-        p.push(obj!{"type"=>"tower","x"=>-50+i*15,"z"=>8,"r"=>3,"h"=>7,"sides"=>4,"roof"=>"sawtooth","material"=>"wood","color"=>"#4a3a2a","trim"=>"#c9a14a","pri"=>6});
+        p.push(obj!{"type"=>"tower","x"=>-50.0+i as f64*15.0,"z"=>8,"r"=>3,"h"=>7,"sides"=>4,"roof"=>"sawtooth","material"=>"wood","color"=>"#4a3a2a","trim"=>"#c9a14a","pri"=>6});
     }
     p.push(obj!{"type"=>"screen","id"=>"prices","x"=>-42,"z"=>-22,"y"=>3,"w"=>15,"h"=>7,"show"=>"stats","title"=>"PRICE TICKER","pri"=>7});
     obj! {"title"=>"The Pin Works","motto"=>"Division of labour, in sequence.","palette"=>obj!{"primary"=>c,"secondary"=>"#6c7374","accent"=>"#c9a14a"},"sky"=>obj!{"time"=>"day","top"=>"#7695a8","horizon"=>"#d9c28d","fog"=>0.2},"ground"=>obj!{"kind"=>"metal","color"=>"#4b5358"},"pieces"=>p}
@@ -3313,7 +3316,7 @@ fn scene8(info: View, _: f64) -> Value {
         p.push(obj!{"type"=>"hall","x"=>x,"z"=>z,"w"=>w,"d"=>10,"h"=>7,"roof"=>"sawtooth","material"=>"metal","color"=>"#7b8581","trim"=>"#2e7c58","court"=>"paddock","pri"=>6});
     }
     for x in [-48.0, -32.0, -16.0, 16.0, 32.0, 48.0] {
-        p.push(obj!{"type"=>"wall","x"=>x,"z"=>42,"x2"=>x+10,"z2"=>42,"h"=>2,"t"=>0.5,"color"=>"#9f8650","pri"=>3});
+        p.push(obj!{"type"=>"wall","x"=>x,"z"=>42,"x2"=>x+10.0,"z2"=>42,"h"=>2,"t"=>0.5,"color"=>"#9f8650","pri"=>3});
     }
     obj! {"title"=>"The Wheat Front","motto"=>"Machine guns met twenty thousand emus.","palette"=>obj!{"primary"=>c,"secondary"=>"#c8a64b","accent"=>"#205c42"},"sky"=>obj!{"time"=>"day","top"=>"#6fa3c0","horizon"=>"#ebd58f","fog"=>0.2},"ground"=>obj!{"kind"=>"grass","color"=>"#789044","open"=>true},"pieces"=>p}
 }
