@@ -388,6 +388,7 @@ fn a_full_think_runs_every_third_second_while_nothing_presses() {
 fn funded_recovery_resumes_below_current_income_and_clears_its_marker() {
     let (mut world,mut me,units)=fixture();
     world.set("seconds",6);world.set("units",units);
+    me.entry("compute").set("thinkPeak",32000);
     me.set("ramCapital",ram_pages(&obj! {"ram"=>mem::put(244,&obj! {"r"=>true,"s"=>0},"local",None,1).unwrap()}));
     let cpu=me.entry("rts").entry("cpu");
     cpu.set("income",146177);cpu.set("bank",18600000);cpu.set("capacity",20000000);
@@ -403,6 +404,50 @@ fn funded_recovery_resumes_below_current_income_and_clears_its_marker() {
     assert_ne!(orders.get("memo").str(),"Recovering production");
     assert!(orders.get("compute").get("cpu").get("limits").get("fabrication").num()>0.0);
     assert!(orders.get("ram").items().iter().any(|op|op.get("free").num_or(-1.0)==244.0),"the successful strategy clears the old recovery marker");
+}
+
+#[test]
+fn recovery_raises_an_exhausted_allowance_before_retrying_the_house() {
+    for (income,remaining,peak) in [(49534.0,23100.0,23000.0),(41140.0,23900.0,23979.0)] {
+        let (mut world,mut me,units)=fixture();
+        world.set("seconds",6);world.set("units",units);
+        me.entry("compute").set("thinkPeak",peak);
+        me.set("ramCapital",ram_pages(&obj! {"ram"=>mem::put(244,&obj! {"r"=>true,"s"=>0},"local",None,1).unwrap()}));
+        let cpu=me.entry("rts").entry("cpu");
+        cpu.set("income",income);cpu.set("bank",7000000);cpu.set("capacity",20000000);
+        cpu.set("limits",obj! {"think"=>remaining});cpu.set("available",obj! {"think"=>remaining});
+        let args=views(&[world.clone(),me.clone()]);
+        let orders=common::govern(args[0],args[1],0.4,|| panic!("an exhausted allowance must be raised before retrying the house"));
+        assert_eq!(orders.get("memo").str(),"Recovering production");
+        let next=orders.get("compute").get("cpu").get("limits").get("think").num();
+        assert!(next>remaining && next<=income*1.25,"recovery must fund a larger callback within the hard spend cap");
+        assert!(!orders.get("ram").items().iter().any(|op|op.get("free").num_or(-1.0)==244.0));
+
+        me.set("ramCapital",ram_pages(&orders));
+        let cpu=me.entry("rts").entry("cpu");
+        cpu.set("limits",orders.get("compute").get("cpu").get("limits").clone());
+        cpu.set("available",obj! {"think"=>next});
+        world.set("seconds",9);
+        let args=views(&[world,me]);let mut ran=false;
+        let resumed=common::govern(args[0],args[1],0.4,|| {ran=true;obj! {}});
+        assert!(ran,"the returned allowance must permit another house attempt");
+        assert!(resumed.get("ram").items().iter().any(|op|op.get("free").num_or(-1.0)==244.0));
+    }
+}
+
+#[test]
+fn recovery_admits_a_funded_lean_house_after_income_falls_below_its_peak() {
+    let (mut world,mut me,units)=fixture();
+    world.set("seconds",6);world.set("units",units);
+    me.entry("compute").set("thinkPeak",32000);
+    me.set("ramCapital",ram_pages(&obj! {"ram"=>mem::put(244,&obj! {"r"=>true,"s"=>0},"local",None,1).unwrap()}));
+    let cpu=me.entry("rts").entry("cpu");
+    cpu.set("income",19000);cpu.set("bank",7000000);cpu.set("capacity",20000000);
+    cpu.set("limits",obj! {"think"=>23750});cpu.set("available",obj! {"think"=>23750});
+    let args=views(&[world,me]);let mut ran=false;
+    let orders=common::govern(args[0],args[1],0.4,|| {ran=true;obj! {}});
+    assert!(ran,"a lower income must not make admission exceed a funded lean callback");
+    assert!(orders.get("ram").items().iter().any(|op|op.get("free").num_or(-1.0)==244.0));
 }
 
 #[test]

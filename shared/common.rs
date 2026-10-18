@@ -1806,9 +1806,13 @@ use super::{air, theme};
         if shortage || (was.get("r").truthy() && bank < income * 2.0) {
             return recover(world, me, shortage);
         }
-        // Resume on a funded callback; cargo income can outgrow a standing limit without making planning dearer.
-        if was.get("r").truthy() && cycles_left() < 18000.0 {
-            return recovery(world, me);
+        if was.get("r").truthy() {
+            // A failed think's peak is a lower bound. Raise a short allowance before retrying the planner.
+            // Cap admission at income so a house's bounded lean path can still run after income falls.
+            let need = income.min((me.path("compute.thinkPeak").num_or(0.0) * 1.25 + 6000.0).max(18000.0));
+            if cycles_left().min(me.path("rts.cpu.available.think").num_or(f64::INFINITY)) < need {
+                return recovery(world, me);
+            }
         }
         let mut orders = strategy();
         // A short strategy can itself have chosen recovery; its positive miner allocation must survive this wrapper.
