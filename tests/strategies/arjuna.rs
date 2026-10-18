@@ -55,3 +55,33 @@ fn fresh_home_launch_carries_the_sdk_core_plan_with_its_sky_sortie() {
     assert_eq!(orders[0].get("target").num(), 1.0, "the sky sortie can differ from the ground attack");
     assert!(!orders[0].get("ram").is_empty(), "a home launch must carry the SDK's core plan");
 }
+
+fn arjuna_research_choice(powered: f64) -> String {
+    let mut techs = Value::obj();
+    for t in ["extraction", "dash", "ranged", "antiAir", "turbines", "flight", "artillery", "airWeapons"] {
+        techs.set(t, obj! { "offer" => 1000, "requires" => arr![] });
+    }
+    let world = obj! { "provinces" => arr![], "techs" => techs };
+    let me = obj! {
+        "id" => 1,
+        "energy" => obj! { "powered" => powered },
+        "techs" => obj! { "extraction"=>true,"dash"=>true,"ranged"=>true,"antiAir"=>true },
+        "compute" => obj! { "cycles"=>100000,"thinkPeak"=>1000,"used"=>obj!{} },
+        "units" => obj! { "total"=>0,"queued"=>0,"cap"=>100 },
+        "costs" => obj! { "unit"=>100,"upkeep"=>1 }, "bank"=>0
+    };
+    let args = views(&[world, me]);
+    let (world_view, me_view) = (args[0], args[1]);
+    let list = super::doctrine(me_view, false);
+    let mut orders = obj! {};
+    super::common::budget(&mut orders, world_view, me_view, &super::common::Budget {
+        research: 0.12, code: 0.72, techs: list, types: None,
+    });
+    orders.get("research").str().to_string()
+}
+
+#[test]
+fn turbines_take_priority_only_during_a_real_power_shortfall() {
+    assert_eq!(arjuna_research_choice(0.8), "turbines");
+    assert_eq!(arjuna_research_choice(0.96), "flight");
+}

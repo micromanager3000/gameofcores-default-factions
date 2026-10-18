@@ -39,6 +39,24 @@ const TECHS: [&str; 23] = [
     "mountainTraversal", "transmission", "cooling", "gate",
 ];
 
+// In a dim grid, buy turbines after the basic archer and anti-air defenses, before Flight. Once power is stable,
+// Arjuna keeps its usual rush to the sky.
+const POWER_SHORT_TECHS: [&str; 23] = [
+    "extraction", "dash", "ranged", "antiAir", "turbines", "flight", "artillery", "airWeapons", "armor",
+    "capture", "storage", "computeBoost", "scan", "repair", "pierce", "influence", "cloak", "stealth",
+    "seaTraversal", "mountainTraversal", "transmission", "cooling", "gate",
+];
+
+fn doctrine(me: View, emu: bool) -> &'static [&'static str] {
+    if emu {
+        &EMU_TECHS
+    } else if me.get("energy").get("powered").num_or(1.0) < 0.92 && !me.get("techs").get("turbines").truthy() {
+        &POWER_SHORT_TECHS
+    } else {
+        &TECHS
+    }
+}
+
 // Emu High Command shares the campaign controller but invests in fast ground raids.
 const EMU_TECHS: [&str;19] = ["extraction","dash","ranged","armor","capture","repair","artillery","antiAir","pierce","seaTraversal","mountainTraversal","scan","influence","computeBoost","cloak","stealth","flight","airWeapons","gate"];
 const EMU_SCREEN: Build = &[("hp",3.0),("speed",4.0),("strength",3.0),("carry",0.0),("vision",0.0)];
@@ -399,7 +417,7 @@ fn recovery_policy(me: View) -> Value {
 
 fn strategy(world: View, me: View) -> Value {
     let emu=me.get("seat").num_or(-1.0)==8.0;
-    let doctrine: &[&str] = if emu { &EMU_TECHS } else { &TECHS };
+    let doctrine = doctrine(me, emu);
     let rts = me.get("rts");
     if rts.truthy() && cycles_left() < 3000.0 {
         return common::recovery(world, me);
