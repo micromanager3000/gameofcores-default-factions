@@ -1,24 +1,14 @@
-// The Quiet Fleet: Zheng He's treasure fleet as a CPU RTS faction, the naval power of the founders.
-// It mines and sways on land as the Ghosts of the Cache did (porters, marines, lantern guards, Jinyiwei), and makes
-// the sea its game: Sea traversal comes second, and the Longjiang yard lays down three kinds of junk.
-// - warjunks (hull + armor, range 1): the battle fleet. It sails where the fight is (a rival fleet, a coast the
-//   army is landing on or defending) and fires broadsides across the beam.
-// - pickets (hull + armor, range 1, vision 2): relay junks that keep station on the crossings to land overseas, so
-//   the capital's orders reach the marines there, and rake whatever rows or sails through the strait.
-// - corsairs (hull + dash, speed 4, range 1): raiders that hunt rival ships, relay ships above all, and take the
-//   code pages of what they sink as prizes. think reads each prize for the rival's plan and acts on it.
-// Marines (runners) cross to coastal land overseas once a picket holds the crossing (common::can_hold with ships).
-//
-// Built on the SDK in the gameofcores crate (docs part sdk), with the strategy the founders share in the `common`
-// module at the end: targets, spawning room, cycles and research, deals and pacts, scouting and the puzzle solver.
+// The Quiet Fleet mines and sways on land, then carries its marines overseas.
+// Warjunks fight, pickets hold crossings, and corsairs hunt ships and prizes.
+// Shared founding strategy lives in `common`.
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
 use shared::common::{hauler, freighter, escort};
 
-program!(think, hauler, freighter, escort, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, warjunk, picket, corsair, reflex, research, duel, challenge, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, warjunk, picket, corsair, carrier, reflex, research, duel, challenge, look, build3d, live3d);
 
-// The bodies: points in hp, speed, strength, carry and vision, and for some in range and wings.
+// Unit bodies use ten build points across combat, carry and vision stats.
 fn miner_body() -> Value {
     obj! { "hp" => 2, "speed" => 2, "strength" => 0, "carry" => 5, "vision" => 1 }
 }
@@ -40,8 +30,7 @@ fn scout_body() -> Value {
 fn spire_body() -> Value {
     obj! { "hp" => 1, "speed" => 1, "strength" => 2, "carry" => 0, "vision" => 2, "range" => 2 }
 }
-// Kites, once Flight allows wings: fliers that ground units can't hit without anti-air, sent at the rivals' miners.
-// With Air weapons they shoot.
+// Flight unlocks kites; Air weapons let them attack rival miners.
 fn kite_body() -> Value {
     obj! { "hp" => 2, "speed" => 3, "strength" => 2, "carry" => 0, "vision" => 0, "wings" => 1 }
 }
@@ -49,8 +38,7 @@ fn kite_shot_body() -> Value {
     obj! { "hp" => 2, "speed" => 2, "strength" => 1, "carry" => 0, "vision" => 0, "wings" => 1, "range" => 1 }
 }
 
-// The junks: every build is 10 points, and range costs 2 a step. Each carries the hull and one more module.
-// Warjunks carry a small hold for recovered cargo. Pickets hold crossings; corsairs carry more loot.
+// Each junk spends ten build points on a hull and one module; range costs two per step.
 fn warjunk_body() -> Value {
     obj! { "hp" => 3, "speed" => 2, "strength" => 2, "carry" => 0, "vision" => 1, "range" => 1 }
 }
@@ -65,16 +53,20 @@ fn corsair_body(cargo: bool) -> Value {
     if cargo { return obj! { "hp"=>2,"speed"=>2,"strength"=>2,"carry"=>1,"vision"=>1,"range"=>1 }; }
     obj! { "hp" => 2, "speed" => 4, "strength" => 2, "carry" => 0, "vision" => 0, "range" => 1 }
 }
+// One carrier transports two kites and gains armor when researched.
+fn carrier_body() -> Value {
+    obj! { "hp" => 3, "speed" => 2, "strength" => 1, "carry" => 2, "vision" => 1 }
+}
 
 const FAITHS: [&str; 4] = ["The Silent Cache", "The Order of the Dark Fibre", "The Church of the Idle Loop", "The Brotherhood of the Hidden Bit"];
 
 const TECHS: [&str; 21] = [
     "extraction", "seaTraversal", "turbines", "ranged", "armor", "dash", "cloak", "scan", "influence", "faith",
-    "pierce", "artillery", "antiAir", "repair", "mountainTraversal", "flight", "airWeapons", "storage", "transmission",
+    "pierce", "artillery", "antiAir", "repair", "flight", "airWeapons", "mountainTraversal", "storage", "transmission",
     "subseaCable", "gate",
 ];
 
-// ---- JavaScript's arithmetic, where this program follows it ----
+// ---- JavaScript arithmetic compatibility ----
 
 /// `Math.max(a, b)`: NaN when either is.
 fn max(a: f64, b: f64) -> f64 {
@@ -171,8 +163,7 @@ fn short(me: View, cycles: f64, lane: f64) -> bool {
 
 // ---- Clocks ----
 
-// Trade and sway run on timers with a random gap, so no two worlds repeat: each fires `base` seconds after the last,
-// give or take 60%. The next second of each lives in capital RAM page 224, written only when one fires.
+// Trade and sway timers vary by 60%; their next due second is stored in RAM page 224.
 const CLOCK: u32 = 224;
 
 struct Clock {
@@ -239,10 +230,8 @@ fn fleet_hold(world: View, me: View) -> impl Fn(View) -> bool {
     }
 }
 
-// The frontier province to press: cores, a rival's land and its units there count for it, a capital against, and land
-// the army couldn't hold on to (over the water with no junk of ours on station: common::can_hold) is marked down. A
-// landing the fleet already covers counts a little more: the marines go where the junks are. `bonus` adds points to
-// provinces the prizes point at (their owner's home, left empty by its own attack).
+// Prefer cores, rival land and prize targets; discount capitals and land we can't hold.
+// A covered landing gets a small bonus because the marines can reach it.
 fn frontline(world: View, me: View, bonus: &[f64]) -> Option<View> {
     let me_id = me.get("id").num();
     let hold = fleet_hold(world, me);
@@ -255,7 +244,7 @@ fn frontline(world: View, me: View, bonus: &[f64]) -> Option<View> {
         let enemy = owner >= 0.0 && owner != me_id;
         let held = hold(q);
         let landing = held && !q.get("adj").iter().any(|a| by_id.at(a).get("owner").num() == me_id);
-        let s = q.get("cores").or(0.0) * 3.0 + if enemy { 9.0 } else { 2.0 } + hostile * 2.0 - if q.get("capital").truthy() { 5.0 } else { 0.0 }
+        let s = q.get("cores").or(0.0) * 3.0 + if enemy { 9.0 } else { 2.0 } + hostile * 2.0 - if q.get("capital").truthy() { 1.0 } else { 0.0 }
             - if held { 0.0 } else { common::OVER_WATER }
             + if landing { 2.0 } else { 0.0 }
             + if bonus.contains(&q.get("id").num()) { 4.0 } else { 0.0 };
@@ -284,10 +273,7 @@ struct Threats {
     rowing: Vec<(f64, f64)>,
 }
 
-// This information is bounded by normal faction vision.  It is composition
-// guidance, not target selection: targets remain reflex-local under fog.
-// One pass, about 50 cycles a unit in sight: rivals' fliers, shooters and all, and their miners at work by province
-// (where the kites go).
+// Bounded by faction vision; this guides composition, while reflex selects targets.
 fn seen_threats(world: View, me: View, since: f64) -> Threats {
     let me_id = me.get("id").num();
     let mut t = Threats::default();
@@ -375,6 +361,23 @@ fn add_spawn(orders: &mut Value, me: View, ty: &str, build: Value, modules: &[&s
     true
 }
 
+/// Establish a small Flight wing once the opening mines can sustain the house.
+/// The first two aircraft unlock the carrier order in `naval_spawn`; limiting
+/// replacements to this same pair avoids filling the yard with unsupported air.
+fn starter_kite(orders: &mut Value, me: View, miners: f64, room: f64, enemy_air: f64, specialist_bank: bool) -> bool {
+    let have = me.get("units").get("byType");
+    if !specialist_bank
+        || !me.path("techs.flight").truthy()
+        || enemy_air > 0.0
+        || miners < min(room, 4.0)
+        || have.get("kite").or(0.0) >= 2.0
+    {
+        return false;
+    }
+    let frame = common::airframe(me, have.get("kite").or(0.0));
+    add_spawn(orders, me, "kite", frame.build(), if me.path("techs.dash").truthy() { &["dash"][..] } else { &[][..] })
+}
+
 /// `bytes.length`: a RAM op's bytes, as a byte string or a list.
 fn byte_len(b: &Value) -> f64 {
     match b {
@@ -422,9 +425,7 @@ fn payable(mut orders: Value, me: View) -> Value {
     orders
 }
 
-// The spawns the bank can still pay once think is over. The game charges fabrication after think and its RAM writes,
-// under the new CPU policy: what think spent and the other lanes' reserves come off the bank first. A spawn it can't
-// pay is only an error, so it waits a second. start: cycles_left() when think began.
+// Fabrication follows think and RAM billing, after other lane reserves.
 fn affordable(mut orders: Value, me: View, start: f64) -> Value {
     orders = payable(orders, me);
     let c = me.get("rts").get("cpu");
@@ -477,12 +478,8 @@ fn affordable(mut orders: Value, me: View, start: f64) -> Value {
     orders
 }
 
-// One route search in think instead of one per unit type each second: the plan carries a field toward where the army
-// goes (the province to defend, else the attack), cut to the steps from our land and the free or allied land next to
-// it (where a unit stepping out stands), and path::to routes along it. None when path::home already leads there from
-// all our land; it can't from an exclave or land over the sea. The last plan's field to the same place serves for 10 s.
-// A search costs up to about 300 cycles a province, so it runs only when think can pay for it and still have `after`
-// cycles to finish; until then the last field to the same place serves, however old.
+// Think shares one costly route field across unit types. Reuse it until the
+// destination changes; skip a search unless its cost and `after` runway fit.
 fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     if to.is_nan() || to < 0.0 {
         return None;
@@ -541,12 +538,8 @@ fn cpu_policy(me: View, offer: f64, under_attack: bool) -> Value {
     // Keep a planner/reflex runway rather than reserving the whole balance and
     // waiting forever for a research call that cannot start yet.
     let research_cap = max(0.0, capacity - 18000.0);
-    // Build toward the next real research offer while quiet. A threat releases
-    // that protection, making the same shared bank available to movement,
-    // shooting, cloak and scans instead of granting a separate research pool.
-    // An offer past what the bank can hold reserves nothing, and the reserve
-    // stays small next to the bank: holding the whole offer starved think and
-    // the miners whose income research needs.
+    // Reserve a modest research runway while quiet; threats release it for combat.
+    // Never hold a full offer that would starve planning or the miners funding it.
     let offered = offer != 0.0 && !offer.is_nan();
     let research = if under_attack || !offered || offer > research_cap {
         0.0
@@ -568,21 +561,87 @@ fn cpu_policy(me: View, offer: f64, under_attack: bool) -> Value {
             "abilities" => 0.28, "fabrication" => round(max(income * 0.34, common::fabrication(me, 2.0) + 300.0 * common::price_level(me))), "gate" => 0.08, "duel" => 0.14, "challenge" => 0.08, "visuals" => 0.03,
         },
         "reserve" => obj! { "think" => 3500, "reflex" => 7000, "research" => research },
-        "upkeepOrder" => vec!["miner", "picket", "sentry", "warjunk", "spire", "shade", "corsair", "kite", "needle", "scout", "runner"],
+        "upkeepOrder" => vec!["miner", "picket", "sentry", "warjunk", "carrier", "spire", "shade", "corsair", "kite", "needle", "scout", "runner"],
     }
 }
 
 // A damaged faction keeps accepted orders and local reflexes rather than
 // consuming its last shared CPU on map searches and new fabrication.
-fn conserve(world: View, me: View) -> Value {
-    common::recovery(world, me)
+fn full_think_need(world: View, me: View) -> f64 {
+    // The complete plan costs up to about 35k cycles before the world fills.
+    // Scale the floor with the map and the visible unit roster, and leave margin
+    // above the most recent peak so growth cannot strand the planner at its cap.
+    let size = 40000.0 + world.get("provinces").len() as f64 * 180.0 + world.get("units").len() as f64 * 90.0;
+    size.max(me.get("compute").get("thinkPeak").or(0.0) * 1.25 + 6000.0)
+}
+
+fn lean_think_need(world: View, me: View) -> f64 {
+    // The opening plan (local frontier, mine room, and recruitment policy) starts
+    // around 13k cycles on a small realm. Census, field routes, and naval search
+    // already have separate cycle guards below, so this lower budget still makes
+    // expansion decisions without starting those optional scans.
+    10000.0 + world.get("provinces").len() as f64 * 40.0 + me.get("units").get("total").or(0.0) * 60.0
+}
+
+fn budgeted_think_need(world: View, me: View, spend_cap: f64) -> f64 {
+    let full = full_think_need(world, me);
+    if spend_cap >= full + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD {
+        full
+    } else {
+        lean_think_need(world, me)
+    }
+}
+
+fn plan_fuel_ready(allowance: f64, remaining: f64, need: f64) -> bool {
+    allowance >= need && remaining >= need + 4000.0
+}
+
+const PLAN_REMAINING_MARGIN: f64 = 4000.0;
+const PLAN_CALLBACK_OVERHEAD: f64 = 2500.0;
+
+fn affordable_plan_limit(me: View, need: f64) -> Option<f64> {
+    let cpu = me.path("rts.cpu");
+    let funded = cpu.get("bank").or(0.0) + cpu.get("income").or(20000.0).max(1.0);
+    let spend_cap = cpu.get("spendCap").or(cpu.get("burst").or(funded));
+    let required = need + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD;
+    let ceiling = required.min(funded).min(spend_cap);
+    (ceiling >= required).then_some(ceiling)
+}
+
+fn recovery_for_plan(world: View, me: View, need: f64) -> Value {
+    let mut orders = common::recovery(world, me);
+    let cpu = me.path("rts.cpu");
+    let income = cpu.get("income").or(20000.0).max(1.0);
+    let bank = cpu.get("bank").or(0.0);
+    let spend_cap = cpu.get("spendCap").or(cpu.get("burst").or(bank + income));
+    // Even the cheap recovery ceiling must respect the second's hard spend cap.
+    let cheap_ceiling = orders.get("compute").get("cpu").get("limits").get("think").num().min(spend_cap);
+    orders.entry("compute").entry("cpu").entry("limits").set("think", cheap_ceiling);
+    // Thin banks keep the shared recovery policy. With a healthy bank, grant
+    // the selected full or lean planning pass only when its complete runway fits.
+    if bank >= income * 2.0 {
+        if let Some(ceiling) = affordable_plan_limit(me, need) {
+            orders.entry("compute").entry("cpu").entry("limits").set("think", ceiling);
+        }
+    }
+    orders
+}
+
+fn retirement_ready(world: View, me: View, remaining: f64) -> bool {
+    if !world.get("logistics").truthy() || me.path("units.byType.corsair").num_or(0.0) <= 0.0 || remaining < 5000.0 { return false; }
+    let bytes = me.get("ramCapital").key(0.0).get("bytes");
+    let read = if bytes.is_bytes() && bytes.len() >= 2 {
+        let b=bytes.bytes(); 4.0*f64::from(u16::from_le_bytes([b[0],b[1]]))
+    } else {0.0};
+    remaining >= 5000.0 + read
 }
 
 fn think(world: View, me: View) -> Value {
     let mut out=common::govern(world, me, 0.4, || strategy(world, me));
     // Retire an empty corsair when neither a paying target, a reachable wreck nor hunting water remains.
+    if !retirement_ready(world,me,cycles_left()) {return out;}
     let hunting = !mem::get(me.get("ramCapital"), 0).get("nv").get("rw").is_empty();
-    if !hunting && world.get("logistics").truthy() && me.path("units.byType.corsair").num_or(0.0)>0.0 && cycles_left()>5000.0 {
+    if !hunting && cycles_left()>5000.0 {
         for u in world.get("units").iter() {
             if cycles_left()<3500.0 {break;}
             if u.get("owner").num()!=me.get("id").num() || u.get("type").str()!="corsair" {continue;}
@@ -599,15 +658,21 @@ fn think(world: View, me: View) -> Value {
 fn strategy(world: View, me: View) -> Value {
     // (from 3,000 cycles the short path below still sets the CPU policy: a think that sets none keeps a limit that may
     // be too small for it every second after)
+    let cpu = me.path("rts.cpu");
+    let spend_cap = cpu.get("spendCap").or(cpu.get("burst").or(0.0));
+    let need = budgeted_think_need(world, me, spend_cap);
     if rts(me) && cycles_left() < 3000.0 {
-        return common::recovery(world, me);
+        return recovery_for_plan(world, me, need);
     }
     let start = cycles_left();
-    // A full think costs 13,000 to 35,000 cycles as the world fills: under 20,000, keep standing orders rather than run
-    // out halfway (the census below and the trade at the end also wait for a fuller second).
+    // Skip planning before it can exceed this second's think lane. In a smaller
+    // funded lane the existing guards below limit census, field, and naval scans.
     let available = me.get("rts").get("cpu").get("available");
-    if rts(me) && (cycles_left() < 20000.0 || (available.truthy() && available.get("think").num() < 5000.0)) {
-        return conserve(world, me);
+    if rts(me) {
+        let allowance = if available.truthy() { available.get("think").num_or(0.0) } else { cycles_left() };
+        if !plan_fuel_ready(allowance, cycles_left(), need) {
+            return recovery_for_plan(world, me, need);
+        }
     }
     let me_id = me.get("id").num();
     let techs = me.get("techs");
@@ -667,7 +732,7 @@ fn strategy(world: View, me: View) -> Value {
         "policy" => obj! { "extraction" => 0.42, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true },
         "provinces" => Value::arr(),
     };
-    plan::share(&mut orders, &plan, me);
+    common::share(&mut orders, &plan, world, me);
 
     // Fabrication is paid from the combat bank.  Leave it alone until it can
     // afford a useful field unit instead of repeatedly queuing a rejected spawn.
@@ -690,20 +755,23 @@ fn strategy(world: View, me: View) -> Value {
         && miners >= min(room, 4.0)
         && (miners >= room || shade_ready || have.get("runner").or(0.0) >= 3.0)
         && naval_spawn(&mut orders, world, me, &naval, rival_ships, threatened);
-    if miners < room {
+    let urgent_air_defense = specialist_bank && has("ranged") && has("dash") && has("antiAir") && enemy.air > 0.0 && needles < max(2.0, enemy.air);
+    if urgent_air_defense {
+        add_spawn(&mut orders, me, "needle", needle_body(), &["dash", "antiAir"]);
+    } else if starter_kite(&mut orders, me, miners, room, enemy.air, specialist_bank) {
+        // Keep a two-aircraft opening while the rest of the mining quota is built.
+    } else if miners < room {
         add_spawn(&mut orders, me, "miner", miner_body(), &[]);
     } else if !shade_ready {
         add_spawn(&mut orders, me, "runner", runner_body(), &[]);
     }
     // A sighted air wing takes precedence, then a scan anchor if opponents can
     // cloak, then short-range cloaked pressure against ranged screens.
-    else if specialist_bank && has("ranged") && has("dash") && has("antiAir") && enemy.air > 0.0 && needles < max(2.0, enemy.air) {
-        add_spawn(&mut orders, me, "needle", needle_body(), &["dash", "antiAir"]);
-    } else if specialist_bank && has("scan") && has("armor") && sentries < max(1.0, ((enemy.ranged + shades) / 5.0).ceil()) {
+    else if specialist_bank && has("scan") && has("armor") && sentries < max(1.0, ((enemy.ranged + shades) / 5.0).ceil()) {
         add_spawn(&mut orders, me, "sentry", sentry_body(), &["armor", "scan"]);
     } else if specialist_bank && has("artillery") && has("scan") && enemy.total >= 4.0 && spires < max(1.0, (enemy.ranged / 3.0).ceil()) {
         add_spawn(&mut orders, me, "spire", spire_body(), &["artillery", "scan"]);
-    } else if specialist_bank && has("flight") && have.get("kite").or(0.0) < min(6.0, max(2.0, (total / 10.0).floor())) {
+    } else if specialist_bank && has("flight") && have.get("carrier").or(0.0) >= 1.0 && have.get("kite").or(0.0) < min(6.0, max(2.0, (total / 10.0).floor())) {
         let frame=common::airframe(me,have.get("kite").or(0.0));
         add_spawn(&mut orders, me, "kite", frame.build(), if has("dash") { &["dash"][..] } else { &[][..] });
     } else if specialist_bank && has("pierce") && have.get("lancer").or(0.0) < max(2.0, (shades / 3.0).ceil()) {
@@ -725,7 +793,7 @@ fn strategy(world: View, me: View) -> Value {
         let book = obj! { "b" => broadsides, "p" => prizes, "pt" => intel.newest, "tk" => tk, "js" => js };
         concat(&mut orders, "ram", mem::put(LOG, &book, "local", None, 1).unwrap_or_default());
     }
-    let junks = have.get("warjunk").or(0.0) + have.get("picket").or(0.0) + have.get("corsair").or(0.0);
+    let junks = have.get("warjunk").or(0.0) + have.get("picket").or(0.0) + have.get("corsair").or(0.0) + have.get("carrier").or(0.0);
     let doing = if let Some(l) = &intel.line {
         l.clone()
     } else if naval.landing >= 0.0 && naval.landing == target_id {
@@ -742,17 +810,12 @@ fn strategy(world: View, me: View) -> Value {
     let memo = format!("Quiet Fleet: {} junks, {} broadsides, {} prizes; {doing}", text(junks), text(broadsides), text(prizes));
     orders.set("memo", memo.chars().take(90).collect::<String>());
     let _ = naval.fleet;
-    // Before its first API composition is legal, research gets a clear runway.
-    // Once cloak+ranged Shades are legal, reserve enough unit time to rebuild a
-    // combat bank for fabrication and actual tactical reflexes.
+    // Fund research early; later reserve combat cycles for fabrication and reflexes.
     let available_control = if available.truthy() { available.get("control").num() * 0.8 } else { f64::INFINITY };
     let types = common::calls(
         world,
-        // Standing orders persist.  Fewer strategic controller calls leave their
-        // unused allocation in the combat bank for paid movement and abilities;
-        // reflex remains the fast local combat path.
-        // Absolute call budgets keep one route search viable. Fractions looked
-        // generous but became sub-3600 calls as more types woke together.
+        // Standing orders persist; local reflexes keep the fast combat path.
+        // Absolute budgets leave room for route search as more types wake.
         &[
             ("miner", 6000.0, 6.0),
             ("runner", 5000.0, 4.0),
@@ -766,6 +829,7 @@ fn strategy(world: View, me: View) -> Value {
             ("warjunk", 8000.0, 3.0),
             ("picket", 6000.0, 6.0),
             ("corsair", 8000.0, 3.0),
+            ("carrier", 8000.0, 3.0),
         ],
         me.get("rts").get("cpu").get("income").or(0.0),
         available_control,
@@ -780,19 +844,15 @@ fn strategy(world: View, me: View) -> Value {
         };
         let tech = if studying.is_empty() { View::undefined() } else { world.get("techs").get(&studying) };
         let offer = if tech.truthy() { tech.get("offer").num() } else { 0.0 };
-        // A real contact is a battle too, even when it is beyond our owned rim.
-        // Release the growing research reservation then so a Shade strike can pay
-        // for its movement, cloak and shots from the one shared bank.
+        // Any visible contact releases the research reserve for combat actions.
         let mut policy = cpu_policy(me, offer, threatened || enemy.total >= 2.0);
         common::fit_cpu(&mut policy, me);
         orders.entry("compute").set("cpu", policy);
     }
     let pact_leader = realm::leader(world).map(|l| l.get("id").num());
     let now = world.get("seconds").or(0.0).floor();
-    // A short second keeps what's decided so far (the plan, spawns and the CPU policy): the diplomats, spies and priests
-    // wait a second rather than run think out of cycles and lose it all. So does the second after a think that ran out
-    // of its limit: orders that run out save nothing, the limit and the trade timers included, so the same costly step
-    // would fail again every second.
+    // Keep accepted orders on a short or exhausted second; CPU limits and
+    // trade timers need a completed think to persist.
     let limits = me.get("rts").get("cpu").get("limits");
     let limit = if limits.truthy() { limits.get("think").or(0.0) } else { 0.0 };
     let ran_out = limit > 1.0 && me.get("compute").get("used").get("think").or(0.0) >= limit * 0.97;
@@ -908,10 +968,8 @@ fn intrigue(orders: &mut Value, world: View, me: View, clock: &mut Clock, now: f
     }
 }
 
-// Mercenaries: with 700◆ or more and a fight on (rivals in our land, or four or more in sight), four soldiers for five
-// minutes from the faction with the most units in sight that isn't the leader and holds less than a fifth of the world
-// (allies count double, with a little chance in close calls), paid twice what common::worth prices it at so it says yes. One hire
-// at a time, every 3 minutes or so.
+// During a fight, hire four soldiers for five minutes, paying twice their value.
+// Choose a non-leader with fewer than a fifth of the world; allow one hire at a time.
 fn mercenaries(orders: &mut Value, world: View, me: View, clock: &mut Clock, now: f64, fight: bool) {
     if !fight
         || me.get("bank").num() < 700.0
@@ -1116,6 +1174,11 @@ fn prey(world: View, me: View, n: &[(f64, f64)]) -> f64 {
 
 // Kites defend at home, else raid the prey (a raid takes ◆, not land), else join the push on the target.
 fn kite(units: View, world: View, me: View) {
+    if common::air_recovery(units,me) { return; }
+    if !me.path("rts.air.decks").is_empty() {
+        common::fly(units, world, me);
+        return;
+    }
     // a flier a minute up comes down on your nearest land before anything else, even short of cycles: its burn climbs
     // the longer it flies, and an unpaid one crashes
     land_hot(units);
@@ -1517,13 +1580,13 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
         return false;
     }
     let have = me.get("units").get("byType");
-    let (pickets, war, corsairs) = (have.get("picket").or(0.0), have.get("warjunk").or(0.0), have.get("corsair").or(0.0));
+    let (pickets, war, corsairs, carriers) = (have.get("picket").or(0.0), have.get("warjunk").or(0.0), have.get("corsair").or(0.0), have.get("carrier").or(0.0));
     let income = me.get("rts").get("cpu").get("income").or(0.0);
     // Income bounds affordable hulls; an actual crossing, escort or target must justify each one.
     let fleet_max = max(3.0, (income / 20000.0).floor()).min(12.0);
     // (two junks put to sea whatever the army; past them, a soldier ashore for every two junks, since the land is what
     // feeds the yard)
-    let junks = pickets + war + corsairs;
+    let junks = pickets + war + corsairs + carriers;
     let ashore = common::fighters(me) - junks;
     if junks >= fleet_max || (threatened && junks >= 2.0) || (junks >= 2.0 && ashore < 1.0 + (junks / 2.0).floor()) {
         return false;
@@ -1552,8 +1615,11 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
     let escorts: f64 = if have.get("freighter").num_or(0.0) > 0.0 { 1.0 } else { 0.0 };
     let contested = rival_ships.min(3.0) + naval.blockade.min(1) as f64;
     let want_war = if guns { escorts.max(contested).max(if prospects > 0 { 1.0 } else { 0.0 }).min(4.0) } else { 0.0 };
+    let want_carrier = has("flight") && have.get("kite").or(0.0) >= 2.0 && carriers < 1.0;
     let pick: Option<(&str, Value, Vec<&str>)> = if pickets < want_pick {
         Some(("picket", picket_body(guns), armor("armor")))
+    } else if want_carrier {
+        Some(("carrier", carrier_body(), armor("armor")))
     } else if war < want_war.min(1.0) {
         Some(("warjunk", warjunk_body(), armor("armor")))
     } else if corsairs < want_cors {
@@ -1791,6 +1857,11 @@ fn picket(units: View, world: View, me: View) -> Value {
 
 fn corsair(units: View, world: View, me: View) -> Value {
     junks(units, world, me, 2)
+}
+
+fn carrier(units: View, world: View, me: View) -> Value {
+    // Keep the deck with the battle fleet; the flight controller handles its riders.
+    junks(units, world, me, 0)
 }
 
 /// A junk in contact: a broadside at whatever is at sea in its arc (the side with more; a broadside with nothing at
@@ -2031,7 +2102,8 @@ fn reflex(units: View, near: View) -> Value {
             }
             // Finish damaged targets, but also prefer exposed ranged and air threats
             // over a healthy nearby melee screen.
-            let score = t.get("hp").or(1.0) + d * 0.12 - if t.get("range").truthy() { 0.32 } else { 0.0 } - if air { 0.20 } else { 0.0 };
+            let score = t.get("hp").or(1.0) + d * 0.12 - if t.get("range").truthy() { 0.32 } else { 0.0 }
+                - if air { if common::air_defender(u) { 100.0 } else { 0.20 } } else { 0.0 };
             if score < best_score {
                 best = Some(t);
                 best_score = score;
@@ -2123,7 +2195,7 @@ fn look(budget: View, info: View) -> Value {
     let mut l = house.map_or(Value::Null, |t| t.look(budget.num(), info));
     // the junks wear the house's bodies and names ashore (at sea every ship wears the fleet's junk)
     if l.truthy() {
-        for (ship, ashore) in [("warjunk", ["lancer", "shade", "runner"]), ("picket", ["sentry", "spire", "runner"]), ("corsair", ["needle", "shade", "runner"])] {
+        for (ship, ashore) in [("warjunk", ["lancer", "shade", "runner"]), ("picket", ["sentry", "spire", "runner"]), ("corsair", ["needle", "shade", "runner"]), ("carrier", ["kite", "kite", "runner"])] {
             // Its kin ashore, or the house's main body when borrowing a style with different land functions.
             let body = ashore.iter().find(|t| l.get("units").get(t).truthy())
                 .map_or_else(|| l.get("units").get("guard").clone(), |kin| l.get("units").get(kin).clone());
@@ -2138,7 +2210,7 @@ fn look(budget: View, info: View) -> Value {
                 o.remove("envoy");
                 o.remove("sailor");
                 while o.0.len() > 20 {
-                    let unused = o.0.iter().position(|(k, _)| !matches!(k.as_str(), "miner" | "hauler" | "freighter" | "guard" | "scout" | "longbow" | "spy" | "runner" | "lancer" | "shade" | "sentry" | "spire" | "needle" | "kite" | "warjunk" | "picket" | "corsair"));
+                    let unused = o.0.iter().position(|(k, _)| !matches!(k.as_str(), "miner" | "hauler" | "freighter" | "guard" | "scout" | "longbow" | "spy" | "runner" | "lancer" | "shade" | "sentry" | "spire" | "needle" | "kite" | "warjunk" | "picket" | "corsair" | "carrier"));
                     let Some(i) = unused else { break };
                     o.0.remove(i);
                 }

@@ -2,9 +2,9 @@
 // deliberately plain: mine CPU, keep a guard in the capital's ring, take the best neighbouring land it can hold, scout
 // a little, field longbows once it has ranged fire and a spy once it can cloak, and answer research and duel puzzles
 // with its own solver. The founding seats wear their house style (shared faction code: look, anthem, 3D capital and, where
-// it names them, unit names); every other seat a plain one. In a world with energy it runs on its house generator alone,
-// and it ships cargo without escorts: the house programs' grid planner (shared/energy.rs) and escorts are left out of
-// it, since a program pays for its length in memory.
+// it names them, unit names); every other seat a plain one. In a world with energy it shares the founders' grid planner:
+// it builds local power, stores a reserve and, after transmission research, can sell genuine surplus to a neighbour. It
+// ships cargo without escorts, keeping its code focused on a balanced opening.
 //
 // It's written on the SDK in the gameofcores crate (docs part sdk). Its strategy is the `common` module at the end,
 // which the house programs share: picking targets, mustering, spawning, splitting cycles, deals and pacts, and the
@@ -17,7 +17,7 @@ program!(think, hauler, freighter, miner, guard, longbow, spy, scout, reflex, re
 
 // What to research, in order: a CPU RTS world's ids, then a classic world's (archery is ranged there, espionage is
 // cloak). Ids the world lacks are skipped.
-const TECHS: [&str; 14] = ["extraction", "ranged", "dash", "repair", "turbines", "seaTraversal", "mountainTraversal", "storage", "cloak", "mining", "archery", "boats", "alpine", "espionage"];
+const TECHS: [&str; 15] = ["extraction", "ranged", "dash", "repair", "turbines", "transmission", "seaTraversal", "mountainTraversal", "storage", "cloak", "mining", "archery", "boats", "alpine", "espionage"];
 
 fn think(world: View, me: View) -> Value {
     common::govern(world, me, 0.4, || strategy(world, me))
@@ -38,6 +38,7 @@ fn strategy(world: View, me: View) -> Value {
     if ready > 0.0 && ready >= plan.get("need").num() {
         plan.set("ready", ready);
     }
+    common::front_snapshot(&mut plan, world, me);
     plan::share(&mut orders, &plan, me);
     let techs = me.get("techs");
     let has = |a: &str, b: &str| techs.get(a).truthy() || techs.get(b).truthy();
@@ -213,7 +214,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
     let mut classic_turn_cost=120.0_f64;
     for u in units.iter() {
         let seen = near.key(n(u.get("id")));
-        if cycles_left() < if u.get("rts").truthy() {turn_cost}else{classic_turn_cost.max(280.0 + 50.0 * seen.len() as f64)} {
+        if cycles_left() < if u.get("rts").truthy() { turn_cost } else { classic_turn_cost.max(280.0 + 50.0 * seen.len() as f64) } {
             break;
         }
         let began=cycles_left();
@@ -230,7 +231,7 @@ fn reflex(units: View, near: View) -> Vec<Value> {
             o.set("hold", true);
         }
         order(o.clone());
-        out.push(o);
+        if r.truthy() { out.push(o); }
         turn_cost=turn_cost.max(1.5*(began-cycles_left()));
         classic_turn_cost=classic_turn_cost.max(1.5*(began-cycles_left()));
     }

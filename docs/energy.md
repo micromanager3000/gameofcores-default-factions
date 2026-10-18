@@ -4,9 +4,8 @@ The default factions plan a power grid in CPU RTS worlds with energy enabled (`w
 The planner is `shared/energy.rs`. Every house program calls it each second through `common::govern`. In a world
 without energy it returns at once.
 
-The default program runs on its house generator alone. `tools/source.mjs` gives it `shared/energy_plain.rs`, which plans
-nothing, in place of the planner, since a program pays for its length in memory: the planner is about 220 pages of the
-4,096 a program's code may fill.
+The default program uses the same planner. `tools/source.mjs` includes `shared/energy.rs` in every default export, so an
+unclaimed seat can build local generation, set a battery reserve and trade power after it unlocks transmission.
 The engine's rules for plants, grids and batteries are in the game's `docs/rts/energy.md`.
 
 ## Doctrines
@@ -14,17 +13,17 @@ The engine's rules for plants, grids and batteries are in the game's `docs/rts/e
 Each house plans for its draw times a margin. It builds the kinds it likes in order of preference, once their research
 is done. Kinds it can't build yet are skipped.
 
-| Faction | Plant kinds, best liked first | Margin | Battery store | Reserve kept | Darkens outlying land first | Sells power |
+| Faction | Plant kinds, best liked first | Margin | Battery store | Reserve kept | Darkens outlying land first | Minimum spare to sell |
 | --- | --- | ---: | ---: | ---: | --- | --- |
-| Kublai Khan's Alt | hydro, boiler, wind, geo, solar | 1.1 | none | 10% | yes | no |
-| Arjuna's Halting Problem | solar, wind, tidal | 1.2 | 150 s | 45% | yes | no |
-| Knights Templated | wind, hydro, solar, tidal | 1.15 | 90 s | 25% | yes | no |
-| New Atlantis | fusion, reactor, geo, hydro, solar | 1.1 | 60 s | 20% | yes | no |
-| Quiet Fleet | tidal, boiler, wind, solar | 1.1 | 60 s | 20% | yes | no |
-| The Kernel Manifesto | hydro, boiler, wind, geo, solar | 1.2 | none | none | no | no |
-| Null Pointer Society | solar, wind, geo | 1.0 | 100 s | 30% | yes | no |
-| Compute of Nations | wind, hydro, solar, tidal, reactor | 1.25 | 120 s | 20% | yes | yes |
-| Other seats | solar, wind, hydro, boiler, geo, reactor | 1.1 | 60 s | 20% | yes | no |
+| Kublai Khan's Alt | hydro, boiler, wind, geo, solar | 1.1 | none | 10% | yes | 3 MW |
+| Arjuna's Halting Problem | solar, wind, tidal | 1.2 | 150 s | 45% | yes | 3 MW |
+| Knights Templated | wind, hydro, solar, tidal | 1.15 | 90 s | 25% | yes | 3 MW |
+| New Atlantis | fusion, reactor, geo, hydro, solar | 1.1 | 60 s | 20% | yes | 3 MW |
+| Quiet Fleet | tidal, boiler, wind, solar | 1.1 | 60 s | 20% | yes | 3 MW |
+| The Kernel Manifesto | hydro, boiler, wind, geo, solar | 1.2 | none | none | no | 3 MW |
+| Null Pointer Society | solar, wind, geo | 1.0 | 100 s | 30% | yes | 3 MW |
+| Compute of Nations | wind, hydro, solar, tidal, reactor | 1.25 | 120 s | 20% | yes | 1.5 MW |
+| Other seats | solar, wind, hydro, boiler, geo, reactor | 1.1 | 60 s | 20% | yes | 1.5 MW |
 
 Battery store is seconds of the house's draw. Arjuna keeps its 45% reserve only while the sun is up over its capital,
 and 40% of it at night. Every other house keeps 40% of its reserve.
@@ -96,9 +95,23 @@ Every twelve seconds the house sends `grid` orders:
   shortfall. The Kernel Manifesto sends no list, so all its provinces dim alike.
 - `reserve` is the house's reserve share of its battery storage.
 
-Compute of Nations offers spare power once a minute after `transmission` research. It offers to the bordering faction
-whose grid meets the least of its draw, when that grid is below 90%. The offer is up to 6 MW for 180 seconds, at
-0.12 ◆ a second for each MW. It keeps a tenth of its own draw spare.
+Every house offers spare power once a minute after `transmission` research. It offers to the bordering faction whose
+grid meets the least of its draw, when that grid is below 95%. Compute of Nations and unclaimed default seats need at
+least 1.5 MW spare. The other house doctrines need at least 3 MW spare.
+
+A deal uses the first grid link the engine finds, reported in `me.energy.exportLinks`. Each entry is
+`{ "with": factionId, "at": provinceId }`: the first live link to that faction and its own province. The planner makes
+no power offer until that observation is available. It uses the linked island only.
+
+`energy::export_spare(me, buyer)` returns the deliverable surplus in MW for one buyer. It returns zero without
+`transmission`, a live export link, or the linked island. It counts the capital island's house generator and whole native
+plants on that island. It excludes imports, batteries, boilers, and a mixed plant whose output cannot be separated. It
+keeps 115% of the island's local demand and reserves every current outgoing export before returning the remaining
+amount, floored at zero.
+
+`common::fair` applies the same accounting to an incoming buyer request. It rejects a request whose asked MW exceeds
+`energy::export_spare(me, from)`, even when its price is otherwise fair. The offer is up to 6 MW for 180 seconds, at
+0.125 ◆ a second for each MW.
 
 ## War
 

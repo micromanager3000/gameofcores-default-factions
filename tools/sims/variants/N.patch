@@ -1,0 +1,14 @@
+diff --git a/shared/energy.rs b/shared/energy.rs
+index d4170ef..08f804b 100644
+--- a/shared/energy.rs
++++ b/shared/energy.rs
+@@ -106,7 +106,8 @@ pub fn prize(world: View, me: View, q: View) -> f64 {
+     let w = q.get("power");
+     let room = w.get("hydro").num_or(0.0) + 0.5 * w.get("tidal").num_or(0.0) + 1.5 * w.get("geo").num_or(0.0);
+     let plants = plants_seen(world, me).iter().find(|e| e.0 == q.get("id").num()).map_or(0.0, |e| e.1);
+-    weak + (room * 0.12).min(1.0) + (plants * 0.35).min(3.0)
++    let _ = plants;
++    weak + (room * 0.12).min(1.0)
+ }
+
+ /// One plant the planner could order next.

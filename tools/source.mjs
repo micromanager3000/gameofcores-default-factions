@@ -2,8 +2,8 @@ import {readFileSync, writeFileSync, realpathSync, existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 const root=new URL('../',import.meta.url);
 export const manifest=JSON.parse(readFileSync(new URL('manifest.json',root),'utf8'));
-// The default program runs plain, since a program pays for its length in memory: it leaves out shared code fenced
-// `// @house` … `// @end`, and carries shared/energy_plain.rs as its `energy` module.
+// The default program leaves out shared code fenced `// @house` … `// @end`, but carries the same grid planner as
+// the founders so unclaimed factions can build, store and trade power.
 export function fence(text,house){
   let drop=false;
   return text.split('\n').filter(line=>{
@@ -22,8 +22,7 @@ export function source(name){
   const seat=manifest.programs.indexOf(name), own=name==='default'?arts.join(', '):arts[seat];
   const art=seat<0?'':`pub fn art(style: usize) -> String { let a = [${own}]; a[style.min(a.len() - 1)].to_string() }\n`;
   const house=name!=='default';
-  const file=m=>!house&&m==='energy'?'energy_plain':m;
-  const shared='\n#[allow(dead_code, unused_imports)]\nmod shared {\n'+modules.map(m=>`pub mod ${m} {\n${fence(readFileSync(new URL(`shared/${file(m)}.rs`,root),'utf8'),house)}\n}\n`).join('')+art+'}\n';
+  const shared='\n#[allow(dead_code, unused_imports)]\nmod shared {\n'+modules.map(m=>`pub mod ${m} {\n${fence(readFileSync(new URL(`shared/${m}.rs`,root),'utf8'),house)}\n}\n`).join('')+art+'}\n';
   return readFileSync(new URL(path,root),'utf8')+shared;
 }
 if(process.argv[1]&&existsSync(process.argv[1])&&realpathSync(process.argv[1])===fileURLToPath(import.meta.url)){

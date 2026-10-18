@@ -1,0 +1,112 @@
+diff --git a/shared/common.rs b/shared/common.rs
+index 104e382..a5d652e 100644
+--- a/shared/common.rs
++++ b/shared/common.rs
+@@ -2113,7 +2113,8 @@ use super::{air, theme};
+
+     /// The default rule for deal `m` in your inbox: yes when what you'd get is worth at least what you'd give
+     /// ([`value`], with your land at [`price`]), and only when your bank holds every ◆ you'd give (all of a stream) and
+-    /// the units you'd get fit under your unit limit. A tech you hold, or that isn't in `techs` (what you research), is
++    /// the units you'd get fit under your unit limit. It gives power only from what its grid makes beyond its own
++    /// draw (`energy::spare`). A tech you hold, or that isn't in `techs` (what you research), is
+     /// worth nothing to you, and so are passage, sight and relay rights you hold from the same faction for more than
+     /// another minute: it buys none of them twice. It sells no passage to a faction whose units stand in your land, unless it renews passage
+     /// that faction has from you (passage ends the moment its holder attacks). It takes no mine lease in a province
+@@ -2134,6 +2135,10 @@ use super::{air, theme};
+         if held("passage") || held("sight") || held("relay") {
+             return false;
+         }
++        // power only from what your grid makes beyond its own draw
++        if ask.path("power.mw").num_or(0.0) > super::energy::spare(me) {
++            return false;
++        }
+         let hire = give.get("hire");
+         let units = give.get("units").len() as f64 + if hire.get("units").truthy() { hire.get("units").len() as f64 } else { hire.get("count").or(0.0) };
+         let mu = me.get("units");
+diff --git a/shared/energy.rs b/shared/energy.rs
+index d4170ef..8ce4b73 100644
+--- a/shared/energy.rs
++++ b/shared/energy.rs
+@@ -125,7 +125,8 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
+     if now % 6.0 != 3.0 { return; }
+     if cycles_left() > 30000.0 { build(orders, world, me, &d, now); }
+     if now % 12.0 == 9.0 && cycles_left() > 10000.0 { settings(orders, world, me, &d); }
+-    if d.sell && now % 60.0 == 3.0 && cycles_left() > 10000.0 { sell(orders, world, me); }
++    if now % 60.0 == 3.0 && cycles_left() > 10000.0 { sell(orders, world, me, &d); }
++    if now % 60.0 == 33.0 && cycles_left() > 10000.0 { buy(orders, world, me); }
+ }
+
+ /// A plant going up is charged a twelfth of its build cost a second through the fabrication lane, which recruits share,
+@@ -313,13 +314,16 @@ fn price(me: View) -> f64 { me.path("rts.costs.priceLevel").num_or(1.0).max(0.01
+ fn seat_style(me: View) -> usize { me.get("seat").num_or(9.0).max(0.0) as usize }
+
+ /// Offers spare power to the neighbour that's shortest of it, for ◆ a second.
+-fn sell(orders: &mut Value, world: View, me: View) {
++/// What the grid makes beyond its draw (and a tenth more) and the power it has sold already, in MW.
++pub fn spare(me: View) -> f64 {
+     let e = me.get("energy");
+-    if !me.get("techs").get("transmission").truthy() { return; }
+-    let spare = e.get("supply").num_or(0.0) - e.get("demand").num_or(0.0) * 1.1 - e.path("deals").iter().filter(|x| x.get("give").truthy()).map(|x| x.get("mw").num_or(0.0)).sum::<f64>();
+-    if spare < 1.5 { return; }
++    e.get("supply").num_or(0.0) - e.get("demand").num_or(0.0) * 1.1
++        - e.path("deals").iter().filter(|x| x.get("give").truthy()).map(|x| x.get("mw").num_or(0.0)).sum::<f64>()
++}
++
++/// The factions whose land borders ours.
++fn neighbours(world: View, me: View) -> Vec<f64> {
+     let id = me.get("id").num();
+-    // neighbours: factions whose land borders ours
+     let mut near: Vec<f64> = Vec::new();
+     let by = realm::index(world);
+     for p in world.get("provinces").iter().filter(|p| p.get("owner").num_or(-1.0) == id) {
+@@ -328,8 +332,18 @@ fn sell(orders: &mut Value, world: View, me: View) {
+             if o >= 0.0 && o != id && !near.contains(&o) { near.push(o); }
+         }
+     }
++    near
++}
++
++/// Offers spare power to the neighbour whose grid runs shortest, three minutes at a time, at 0.12 ◆ a MW a second. A
++/// house that sells (`Doctrine::sell`) offers from 1.5 MW spare; any other only once it has 3 MW it doesn't use.
++fn sell(orders: &mut Value, world: View, me: View, d: &Doctrine) {
++    if !me.get("techs").get("transmission").truthy() { return; }
++    let spare = spare(me);
++    if spare < if d.sell { 1.5 } else { 3.0 } { return; }
++    let near = neighbours(world, me);
+     let buyer = world.get("factions").iter()
+-        .filter(|f| f.get("alive").truthy() && near.contains(&f.get("id").num()) && f.get("powered").num_or(1.0) < 0.9)
++        .filter(|f| f.get("alive").truthy() && near.contains(&f.get("id").num()) && f.get("powered").num_or(1.0) < 0.95)
+         .min_by(|a, b| a.get("powered").num_or(1.0).total_cmp(&b.get("powered").num_or(1.0)));
+     let Some(buyer) = buyer else { return };
+     let mw = (spare * 0.6).min(6.0).floor().max(1.0);
+@@ -338,6 +352,30 @@ fn sell(orders: &mut Value, world: View, me: View) {
+     diplomacy::send(orders, buyer.get("id").num(), "power for sale", obj! { "give" => give, "ask" => ask });
+ }
+
++/// Asks for power when the grid runs short and no plant is going up to cover it: up to 4 MW for three minutes, at 0.15 ◆
++/// a MW a second, from the neighbour whose plants make the most. A seller weighs it like any deal (`common::fair`), and
++/// gives only power it has spare.
++fn buy(orders: &mut Value, world: View, me: View) {
++    let e = me.get("energy");
++    let (demand, powered) = (e.get("demand").num_or(0.0), e.get("powered").num_or(1.0));
++    if powered >= 0.9 || demand < 2.0 || e.path("deals").iter().any(|x| !x.get("give").truthy()) { return; }
++    let id = me.get("id").num();
++    let sites = me.path("rts.structures");
++    if sites.iter().any(|s| same(s.get("owner"), me.get("id")) && s.get("state").str() == "building" && s.get("power").truthy()) { return; }
++    let mw = (demand * (1.0 - powered)).ceil().clamp(1.0, 4.0);
++    let rate = (mw * 0.15 * 100.0).round() / 100.0;
++    if me.get("bank").num_or(0.0) < rate * 180.0 { return; }
++    let mut made: Vec<(f64, f64)> = neighbours(world, me).into_iter().map(|f| (f, 0.0)).collect();
++    for s in sites.iter().filter(|s| s.get("owner").num_or(id) != id) {
++        if let Some(m) = made.iter_mut().find(|m| m.0 == s.get("owner").num_or(-1.0)) { m.1 += s.path("power.mw").num_or(0.0).max(0.0); }
++    }
++    let Some(&(seller, mw_made)) = made.iter().max_by(|a, b| a.1.total_cmp(&b.1)) else { return };
++    if mw_made < mw + 1.0 { return; }
++    let give = obj! { "coinPerSecond" => rate, "seconds" => 180 };
++    let ask = obj! { "power" => obj! { "mw" => mw, "seconds" => 180 } };
++    diplomacy::send(orders, seller, "power wanted", obj! { "give" => give, "ask" => ask });
++}
++
+ // ---------------------------------------------------------------------------------------------------------------------
+ // How plants look. Pieces are in cells from the site's centre (x east, y north, z up), as in `structures`.
+

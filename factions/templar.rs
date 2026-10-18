@@ -10,7 +10,7 @@ use shared::common::{hauler, freighter, escort};
 
 use std::rc::Rc;
 
-program!(think, hauler, freighter, escort, miner, line, bulwark, artillery, medic, interceptor, piercer, scout, reflex, research, duel, challenge, guard, longbow, spy, look, build3d, live3d);
+program!(think, hauler, freighter, escort, miner, line, bulwark, artillery, medic, interceptor, piercer, scout, wing, reflex, research, duel, challenge, guard, longbow, spy, look, build3d, live3d);
 
 fn build(hp: f64, speed: f64, strength: f64, carry: f64, vision: f64, range: Option<f64>) -> Value {
     let mut b = obj! { "hp" => hp, "speed" => speed, "strength" => strength, "carry" => carry, "vision" => vision };
@@ -36,6 +36,11 @@ fn interceptor_body() -> Value {
 }
 fn scout_body() -> Value {
     build(2.0, 4.0, 0.0, 0.0, 4.0, None)
+}
+fn wing_body(armed: bool) -> Value {
+    let mut b = build(2.0, 2.0, if armed { 1.0 } else { 3.0 }, 0.0, 0.0, if armed { Some(1.0) } else { None });
+    b.set("wings", 1.0);
+    b
 }
 
 // Extraction and armor equip the first line. Influence and faith support expansion
@@ -254,9 +259,12 @@ fn short(me: View) -> bool {
 
 // ---- think ----
 
-fn pick_target(world: View, me: View) -> Option<View> {
+fn targets(world: View, me: View) -> Vec<View> {
     // land the army couldn't hold on to (over the water, no ship of ours on station) counts for less: common::can_hold
-    let hold = common::can_hold(world, me, false);
+    let hold = common::can_hold(world, me, true);
+    let campaign = mem::get(me.get("ramCapital"), 0).get("campaign").num_or(-1.0);
+    let by_id = realm::index(world);
+    let fighters = common::fighters(me);
     let ranked = realm::rank(world, me, common::frontier(world, me), |w, m, q| {
         let owner = num(q.get("owner"));
         let enemy = if owner >= 0.0 && realm::is_rival(w, m, owner) { 7.0 } else { 0.0 };
@@ -270,12 +278,21 @@ fn pick_target(world: View, me: View) -> Option<View> {
         } else {
             0.0
         };
-        enemy + or(q.get("cores"), 0.0) * 2.0 - or(q.get("garrison"), 0.0) * 1.6 - if q.get("capital").truthy() { 3.0 } else { 0.0 }
+        // Follow a crusade through the same realm and take a capital when the army can muster for it.
+        let capital = enemy > 0.0 && q.get("capital").truthy() && common::muster_for(q) <= fighters;
+        let approach = enemy > 0.0 && q.get("adj").iter().any(|id| {
+            let next = by_id.at(id);
+            next.get("owner").num_or(-2.0) == owner && next.get("capital").truthy()
+        });
+        enemy + or(q.get("cores"), 0.0) * 2.0 - q.get("townGarrison").num_or(or(q.get("garrison"), 0.0)) * 1.6
+            + if capital { 12.0 } else if q.get("capital").truthy() { -3.0 } else { 0.0 }
+            + if approach { 5.0 } else { 0.0 }
+            + if enemy > 0.0 && owner == campaign { 4.0 } else { 0.0 }
             + crusade
             + min(sway::favour(m, num(q.get("id"))), 300.0) / 60.0
             - if hold(q) { 0.0 } else { common::OVER_WATER }
     });
-    ranked.first().copied()
+    common::rally(world, me, ranked)
 }
 
 // The type furthest below its share of the mix. Miners stop at `room`, what our mines can use (common::miner_room):
@@ -513,9 +530,9 @@ fn cpu_policy(world: View, me: View, orders: &Value, pressure: f64) -> Value {
         // During a siege the screen has to remain alive; at peace miners protect
         // future income, then specialized bodies follow.
         "upkeepOrder" => if urgent {
-            vec!["artillery", "bulwark", "medic", "interceptor", "miner", "line", "scout"]
+            vec!["artillery", "bulwark", "medic", "interceptor", "wing", "miner", "line", "scout"]
         } else {
-            vec!["miner", "artillery", "bulwark", "medic", "interceptor", "line", "scout"]
+            vec!["miner", "artillery", "bulwark", "medic", "interceptor", "wing", "line", "scout"]
         },
     }
 }
@@ -575,6 +592,137 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     Some(field)
 }
 
+// A planner that starts with more call cycles than the think lane can actually
+// spend still loses all of its orders. Keep a peak-aware full estimate, while a
+// capped faction can resume with the guarded lean pass below.
+const PLAN_REMAINING_MARGIN: f64 = 6000.0;
+const PLAN_CALLBACK_OVERHEAD: f64 = 2500.0;
+
+fn full_think_need(world: View, me: View) -> f64 {
+    let measured = me.get("compute").get("thinkPeak").num_or(0.0);
+    (26000.0 + world.get("provinces").len() as f64 * 220.0 + world.get("units").len() as f64 * 120.0)
+        .max(measured * 1.25 + PLAN_REMAINING_MARGIN)
+}
+
+fn lean_think_need(world: View, me: View) -> f64 {
+    10000.0 + world.get("provinces").len() as f64 * 40.0 + me.get("units").get("total").num_or(0.0) * 60.0
+}
+
+fn hard_think_cap(me: View) -> f64 {
+    let cpu = me.path("rts.cpu");
+    cpu.get("spendCap").num_or(cpu.get("burst").num_or(cpu.get("bank").num_or(0.0) + cpu.get("income").num_or(20000.0)))
+}
+
+fn budgeted_think_need(world: View, me: View) -> f64 {
+    let full = full_think_need(world, me);
+    if hard_think_cap(me) >= full + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD { full } else { lean_think_need(world, me) }
+}
+
+fn full_plan_selected(world: View, me: View) -> bool {
+    hard_think_cap(me) >= full_think_need(world, me) + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD
+}
+
+fn plan_fuel_ready(allowance: f64, remaining: f64, need: f64) -> bool {
+    allowance >= need && remaining >= need + PLAN_REMAINING_MARGIN
+}
+
+fn recovery_for_plan(world: View, me: View, need: f64) -> Value {
+    let mut orders = common::recovery(world, me);
+    let cpu = me.path("rts.cpu");
+    let income = cpu.get("income").num_or(20000.0).max(1.0);
+    let bank = cpu.get("bank").num_or(0.0);
+    let cap = hard_think_cap(me);
+    let limit = orders.get("compute").get("cpu").get("limits").get("think").num_or(0.0).min(cap);
+    orders.entry("compute").entry("cpu").entry("limits").set("think", limit);
+    let retry = need + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD;
+    if bank >= income * 2.0 && retry <= cap && retry <= bank + income {
+        orders.entry("compute").entry("cpu").entry("limits").set("think", retry);
+    }
+    orders
+}
+
+// A local land frontier needs no unit census, route field, or trade graph. Rotate the bounded province window so
+// a large realm still reviews each district, keeping the capital first and leaving the tail enough cycles to publish.
+fn lean_plan(world: View, me: View) -> Value {
+    let by = realm::index(world);
+    let ours = me.get("id").num();
+    let capital = me.get("capital").num();
+    let last = mem::get(me.get("ramCapital"), 0);
+    let old_attack = last.get("attack").num_or(-1.0);
+    let campaign = last.get("campaign").num_or(-1.0);
+    let hosts: Vec<f64> = me.get("contracts").iter().take(32)
+        .filter(|c| !c.get("ended").truthy() && c.path("get.passage").truthy())
+        .map(|c| c.get("with").num()).collect();
+    let provinces = world.get("provinces");
+    let count = provinces.len();
+    let offset = (world.get("seconds").num_or(0.0) / 3.0) as usize;
+    let (mut attack, mut stage, mut need, mut best) = (-1.0, capital, 0.0, f64::NEG_INFINITY);
+    let (mut defend, mut threat) = (-1.0, 0.0);
+    let mut mines = Vec::new();
+    for i in 0..count.min(48) + 1 {
+        if cycles_left() < 10000.0 { break; }
+        let p = if i == 0 { by.get(capital) } else { provinces.at((offset + i - 1) % count) };
+        let id = p.get("id").num_or(-1.0);
+        if p.get("owner").num_or(-1.0) != ours || (i > 0 && id == capital) { continue; }
+        let enemies: f64 = p.get("units").entries().filter_map(|(owner, count)| {
+            let owner=owner.parse::<f64>().ok()?;
+            (owner != ours && realm::is_rival(world,me,owner)).then_some(count.num_or(0.0))
+        }).sum();
+        if (defend != capital && enemies > threat) || (id == capital && enemies > 0.0) { defend = id; threat = enemies; }
+        for (k, value) in p.get("mines").iter().enumerate().take(8) {
+            if value.num_or(0.0) <= 0.0 || realm::worker(p, k as f64) != ours { continue; }
+            let staff = p.get("staff").at(k).num_or(0.0).max(0.0) as usize;
+            for _ in staff..2 { if mines.len() < 12 { mines.push(arr![id, k]); } }
+        }
+        for adjacent in p.get("adj").iter().take(12) {
+            if cycles_left() < 10000.0 { break; }
+            let q = by.at(adjacent);
+            let owner = q.get("owner").num_or(-1.0);
+            if !q.truthy() || owner == ours || (owner >= 0.0 && (!q.get("visible").truthy()
+                || me.get("contracts").len() > 32 || !realm::is_rival(world, me, owner))) || hosts.contains(&owner)
+                || q.get("leased").iter().take(16).any(|l| l.get("to").num_or(-1.0) == ours)
+                || common::hopeless(me, q) { continue; }
+            let target = q.get("id").num_or(-1.0);
+            let faith=q.get("faith");
+            let zeal=faith.get("zeal").num_or(0.0);
+            let crusade=if faith.get("by").num_or(-1.0)==ours {zeal/12.0} else {zeal/30.0};
+            let score = crusade + q.get("cores").num_or(0.0) * 2.0 - q.get("townGarrison").num_or(q.get("garrison").num_or(0.0)) * 1.6
+                + if owner >= 0.0 { 7.0 } else { 0.0 }
+                + if target == old_attack { 10000.0 } else { 0.0 }
+                + if campaign >= 0.0 && owner == campaign { 4.0 } else { 0.0 }
+                + if q.get("capital").truthy() && common::muster_for(q) <= common::fighters(me) { 12.0 } else { 0.0 };
+            if target >= 0.0 && score > best { attack = target; stage = id; need = common::muster_for(q); best = score; }
+        }
+    }
+    let owner = by.get(attack).get("owner").num_or(-1.0);
+    let mut plan = obj! {"home"=>capital,"attack"=>attack,"target"=>attack,"stage"=>stage,"need"=>need,
+        "defend"=>defend,"threat"=>threat,"campaign"=>if realm::is_rival(world,me,owner) {owner} else {-1.0},
+        "mines"=>mines,"fresh"=>(world.get("seconds").num_or(0.0)/15.0).floor()*15.0};
+    if last.get("pilgrims").truthy() {plan.set("pilgrims",last.get("pilgrims").clone());}
+    plan
+}
+
+fn lean_research(orders: &mut Value, world: View, me: View) {
+    let all = world.get("techs");
+    let mine = me.get("techs");
+    if !me.path("research.tech").str().is_empty() { return; }
+    for &want in &TECHS {
+        if cycles_left() < 7000.0 { break; }
+        let mut pick = want;
+        for _ in 0..8 {
+            let tech = all.get(pick);
+            let missing = tech.get("requires").iter().find(|t| !mine.get(t.str()).truthy());
+            match missing { Some(t) => pick = t.str(), None => break }
+        }
+        let tech = all.get(pick);
+        if !mine.get(pick).truthy() && tech.truthy()
+            && tech.get("requires").iter().all(|t| mine.get(t.str()).truthy())
+            && tech.get("offer").num_or(0.0) <= me.path("rts.cpu.capacity").num_or(f64::INFINITY) {
+            orders.set("research", pick); break;
+        }
+    }
+}
+
 fn think(world: View, me: View) -> Value {
     // A nearly empty slice cannot afford govern's scans. Open the next allowance,
     // keep miners first for upkeep, and leave type schedules and standing orders alone.
@@ -595,31 +743,37 @@ fn strategy(world: View, me: View) -> Value {
     let rts = me.get("rts");
     // (from 3,000 cycles the short path below still sets the CPU policy: a think that sets none keeps a limit that may
     // be too small for it every second after)
-    if rts.truthy() && cycles_left() < 3000.0 {
-        return common::recovery(world, me);
-    }
+    let need = budgeted_think_need(world, me);
+    let full_plan = full_plan_selected(world, me);
+    if rts.truthy() && cycles_left() < 3000.0 { return recovery_for_plan(world, me, need); }
     let start = cycles_left();
     if !rts.truthy() {
         return legacy_think(world, me);
     }
-    // A full think costs about 20,000 cycles: with less, keep the standing orders and set only the CPU policy, which
-    // leaves think more room next second, rather than run out halfway.
-    if cycles_left() < 20000.0 {
-        return common::recovery(world, me);
-    }
+    let available = rts.get("cpu").get("available");
+    let allowance = if available.truthy() { available.get("think").num_or(0.0) } else { cycles_left() };
+    if !plan_fuel_ready(allowance, cycles_left(), need) { return recovery_for_plan(world, me, need); }
     let mut orders = obj! { "policy" => obj! { "extraction" => 0.47, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true } };
-    let target = pick_target(world, me);
-    let mut survey = common::survey(world, me, &target.into_iter().collect::<Vec<View>>(), 2.0);
+    // Survey needs every candidate to retain an active siege or bypass an unwinnable one.
+    let mut survey = if full_plan {
+        let ranked = targets(world, me);
+        common::survey(world, me, &ranked, 2.0)
+    } else {lean_plan(world, me)};
+    let owner = realm::index(world).get(survey.get("attack").num_or(-1.0)).get("owner").num_or(-1.0);
+    survey.set("campaign", if realm::is_rival(world, me, owner) { owner } else { -1.0 });
     survey.set("home", me.get("capital"));
-    // the road goes where the army goes: the province everyone defends, else the attack (a picket's guard is near it)
-    let defend = vnum(survey.get("defend"));
-    let to = if defend >= 0.0 { defend } else { vnum(survey.get("attack")) };
-    if let Some(field) = road(world, me, to, 18000.0) {
-        survey.set("field", field);
+    if full_plan {
+        // The road goes where the army goes: the province everyone defends, else the attack.
+        let defend = vnum(survey.get("defend"));
+        let to = if defend >= 0.0 { defend } else { vnum(survey.get("attack")) };
+        if let Some(field) = road(world, me, to, 18000.0) {
+            survey.set("field", field);
+        }
+        // The pilgrims' holy sites travel in the plan to the scouts at home.
+        survey.set("pilgrims", pilgrim_sites(world, me));
     }
-    // the pilgrims' holy sites travel in the plan to the scouts at home
-    survey.set("pilgrims", pilgrim_sites(world, me));
-    plan::share(&mut orders, &survey, me);
+    if full_plan {common::share(&mut orders, &survey, world, me);}
+    else {plan::share(&mut orders, &survey, me);}
 
     let techs = me.get("techs");
     let has = |t: &str| techs.get(t).truthy();
@@ -628,7 +782,7 @@ fn strategy(world: View, me: View) -> Value {
     // actually seen, rather than to a hidden global composition. The census costs
     // about 50 cycles a unit, so it runs only when think can still finish after it.
     let seen = world.get("units");
-    let census = cycles_left() > 55.0 * seen.len() as f64 + 12000.0;
+    let census = full_plan && cycles_left() > 55.0 * seen.len() as f64 + 12000.0;
     if census {
         let me_id = me.get("id");
         for u in seen.iter() {
@@ -671,6 +825,10 @@ fn strategy(world: View, me: View) -> Value {
     if has("antiAir") && has("ranged") && !strained {
         set(&mut mix, "interceptor", if air != 0.0 { 0.17 } else { 0.06 });
     }
+    // The order keeps a small air wing after Flight; it does not displace the ground line while the bank is tight.
+    if has("flight") && !strained {
+        set(&mut mix, "wing", 0.10);
+    }
     let kind = choose_spawn(me, &mix, common::miner_room(me, &survey));
     let pick = |t: &'static str, m: &'static str| if has(t) { Some(m) } else { None };
     let mods = |a: Option<&'static str>, b: Option<&'static str>| a.into_iter().chain(b).collect::<Vec<&str>>();
@@ -682,6 +840,7 @@ fn strategy(world: View, me: View) -> Value {
         Some("medic") => spawn_one(&mut orders, me, kind, medic_body(), mods(pick("repair", "repair"), pick("scan", "scan"))),
         Some("piercer") => spawn_one(&mut orders, me, kind, interceptor_body(), if has("dash") { vec!["pierce", "dash"] } else { vec!["pierce"] }),
         Some("interceptor") => spawn_one(&mut orders, me, kind, interceptor_body(), mods(pick("antiAir", "antiAir"), pick("dash", "dash"))),
+        Some("wing") => spawn_one(&mut orders, me, kind, wing_body(has("airWeapons")), vec![]),
         _ => spawn_one(&mut orders, me, Some("scout"), scout_body(), vec![]),
     }
 
@@ -704,6 +863,7 @@ fn strategy(world: View, me: View) -> Value {
             ("piercer", 6000.0, 5.0),
             ("medic", 6000.0, 6.0),
             ("interceptor", 6000.0, 5.0),
+            ("wing", 4200.0, 3.0),
             ("line", 6000.0, 4.0),
             ("scout", 4000.0, 6.0),
         ],
@@ -711,12 +871,18 @@ fn strategy(world: View, me: View) -> Value {
         room,
         me.get("units").get("byType"),
     );
-    common::budget(&mut orders, world, me, &common::Budget { research: 0.13, code: 0.66, techs: &TECHS, types: Some(&types) });
+    if full_plan {
+        common::budget(&mut orders, world, me, &common::Budget { research: 0.13, code: 0.66, techs: &TECHS, types: Some(&types) });
+    } else {
+        orders.set("compute",obj! {"types"=>types});
+        lean_research(&mut orders,world,me);
+    }
     let mut policy = cpu_policy(world, me, &orders, pressure);
     common::fit_cpu(&mut policy, me);
     orders.entry("compute").set("cpu", policy);
     orders.set("memo", format!("Knights Templated: {} · pressure {}", if strained { "banking CPU" } else { "combined arms" }, jstr(pressure)));
     sermon_memo(&mut orders, me);
+    if !full_plan {return affordable(orders,me,start);}
     // A short second keeps what's decided so far (the plan, spawns and the CPU policy): diplomacy and the faith wait a
     // second rather than run think out of cycles and lose it all.
     if cycles_left() < 6000.0 {
@@ -1087,7 +1253,7 @@ fn line(units: View, world: View, me: View) {
 // in its RAM (orders::carry) on its order, or on a RAM-only order when its order stands. Without it, a unit that
 // crosses the border forgets its target and walks home.
 fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
-    let Some(ops) = orders::carry(u, p, me) else { return o };
+    let Some(ops) = common::carry(u, p, me) else { return o };
     let mut x = o.unwrap_or_else(|| obj! { "id" => u.get("id") });
     x.set("ram", ops);
     Some(x)
@@ -1196,6 +1362,10 @@ fn interceptor(units: View, world: View, me: View) {
 
 fn piercer(units: View, world: View, me: View) {
     interceptor(units, world, me)
+}
+
+fn wing(units: View, world: View, me: View) {
+    common::fly(units, world, me);
 }
 
 fn scout(units: View, world: View, me: View) -> Vec<Value> {
@@ -1448,7 +1618,8 @@ fn reflex(units: View, near: View) -> Vec<Value> {
             if d > num(u.get("reach")) || (air && !u.get("air").truthy() && !mods.has_str("antiAir")) {
                 continue;
             }
-            let s = num(t.get("hp")) / num(t.get("hpMax")) - if range.truthy() { 0.18 } else { 0.0 } - if air { 0.11 } else { 0.0 };
+            let s = num(t.get("hp")) / num(t.get("hpMax")) - if range.truthy() { 0.18 } else { 0.0 }
+                - if air { if common::air_defender(u) { 2.0 } else { 0.11 } } else { 0.0 };
             if s < score {
                 score = s;
                 best = Some(t);
@@ -1644,7 +1815,7 @@ fn legacy_think(world: View, me: View) -> Value {
     if ready > 0.0 && ready >= survey.get("need").num() {
         survey.set("ready", ready);
     }
-    plan::share(&mut orders, &survey, me);
+    common::share(&mut orders, &survey, world, me);
     let techs = me.get("techs");
     let mut mix: Vec<(&str, f64)> = if techs.get("archery").truthy() {
         vec![("miner", 0.6), ("guard", 0.22), ("longbow", 0.13), ("scout", 0.05)]

@@ -21,7 +21,7 @@ pub struct Doctrine {
     pub reserve: f64,
     /// Whether it darkens its outlying land first in a shortfall (otherwise every province dims alike).
     pub shed: bool,
-    /// Whether it sells spare power to its neighbours.
+    /// Whether it offers power from 1.5 MW spare; other houses wait for 3 MW.
     pub sell: bool,
 }
 
@@ -45,7 +45,7 @@ pub fn doctrine(seat: usize) -> Doctrine {
         6 => d(&["solar", "wind", "geo"], 1.0, 100.0, 0.3, true, false),
         // Compute of Nations: spare capacity, batteries, and power for sale
         7 => d(&["wind", "hydro", "solar", "tidal", "reactor"], 1.25, 120.0, 0.2, true, true),
-        _ => d(&["solar", "wind", "hydro", "boiler", "geo", "reactor"], 1.1, 60.0, 0.2, true, false),
+        _ => d(&["solar", "wind", "hydro", "boiler", "geo", "reactor"], 1.1, 60.0, 0.2, true, true),
     }
 }
 
@@ -125,7 +125,7 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     if now % 6.0 != 3.0 { return; }
     if cycles_left() > 30000.0 { build(orders, world, me, &d, now); }
     if now % 12.0 == 9.0 && cycles_left() > 10000.0 { settings(orders, world, me, &d); }
-    if d.sell && now % 60.0 == 3.0 && cycles_left() > 10000.0 { sell(orders, world, me); }
+    if now % 60.0 == 3.0 && cycles_left() > 10000.0 { sell(orders, world, me, &d); }
 }
 
 /// A plant going up is charged a twelfth of its build cost a second through the fabrication lane, which recruits share,
@@ -312,29 +312,40 @@ fn place(orders: &mut Value, me: View, sites: View, units: &[View], mut picks: V
 fn price(me: View) -> f64 { me.path("rts.costs.priceLevel").num_or(1.0).max(0.01) }
 fn seat_style(me: View) -> usize { me.get("seat").num_or(9.0).max(0.0) as usize }
 
-/// Offers spare power to the neighbour that's shortest of it, for ◆ a second.
-fn sell(orders: &mut Value, world: View, me: View) {
+/// Native MW available on the engine's export route to `buyer`, after local demand and existing sales.
+/// Returns zero without Transmission or a live route. Imports, battery discharge and boiler output are excluded.
+pub fn export_spare(me: View, buyer: f64) -> f64 {
+    let e = me.get("energy");
+    if !me.get("techs").get("transmission").truthy() { return 0.0; }
+    // Only the engine can identify the active crossing and the island supplying this buyer.
+    let Some(link) = e.get("exportLinks").iter().find(|l| l.get("with").num_or(-1.0) == buyer) else { return 0.0 };
+    let Some(island) = e.get("islands").iter().find(|i| i.get("provinces").has_num(link.get("at").num_or(-1.0))) else { return 0.0 };
+    // Imports, batteries and boiler fuel cannot be exported. A mixed plant's split is unavailable, so omit it.
+    let native = e.get("plants").iter().filter(|p| island.get("provinces").has_num(p.get("p").num()))
+        .filter(|p| p.get("ports").iter().all(|q| !matches!(q.get("kind").str(), "battery" | "boiler")))
+        .map(|p| p.get("mw").num_or(0.0)).sum::<f64>()
+        + if island.get("capital").truthy() { e.get("house").num_or(3.0) } else { 0.0 };
+    // Reserve all current exports, including those whose other end is temporarily short of demand.
+    let committed = e.get("deals").iter().filter(|d| d.get("give").truthy()).map(|d| d.get("mw").num_or(0.0)).sum::<f64>();
+    (native - island.get("demand").num_or(0.0) * 1.15 - committed).max(0.0)
+}
+
+/// Offers power to one short neighbour. Houses with a trade doctrine keep a smaller surplus before offering.
+fn sell(orders: &mut Value, world: View, me: View, d: &Doctrine) {
     let e = me.get("energy");
     if !me.get("techs").get("transmission").truthy() { return; }
-    let spare = e.get("supply").num_or(0.0) - e.get("demand").num_or(0.0) * 1.1 - e.path("deals").iter().filter(|x| x.get("give").truthy()).map(|x| x.get("mw").num_or(0.0)).sum::<f64>();
-    if spare < 1.5 { return; }
-    let id = me.get("id").num();
-    // neighbours: factions whose land borders ours
-    let mut near: Vec<f64> = Vec::new();
-    let by = realm::index(world);
-    for p in world.get("provinces").iter().filter(|p| p.get("owner").num_or(-1.0) == id) {
-        for q in p.get("adj").iter() {
-            let o = by.at(q).get("owner").num_or(-1.0);
-            if o >= 0.0 && o != id && !near.contains(&o) { near.push(o); }
-        }
-    }
-    let buyer = world.get("factions").iter()
-        .filter(|f| f.get("alive").truthy() && near.contains(&f.get("id").num()) && f.get("powered").num_or(1.0) < 0.9)
-        .min_by(|a, b| a.get("powered").num_or(1.0).total_cmp(&b.get("powered").num_or(1.0)));
-    let Some(buyer) = buyer else { return };
+    let buyer = world.get("factions").iter().filter_map(|f| {
+        let buyer = f.get("id").num();
+        if !f.get("alive").truthy() || buyer == me.get("id").num() || f.get("powered").num_or(1.0) >= 0.95
+            || e.path("deals").iter().any(|d| d.get("give").truthy() && d.get("with").num_or(-1.0) == buyer) { return None; }
+        let spare = export_spare(me, buyer);
+        (spare >= if d.sell { 1.5 } else { 3.0 }).then_some((f, spare))
+    }).min_by(|a, b| a.0.get("powered").num_or(1.0).total_cmp(&b.0.get("powered").num_or(1.0)));
+    let Some((buyer, spare)) = buyer else { return };
     let mw = (spare * 0.6).min(6.0).floor().max(1.0);
     let give = obj! { "power" => obj! { "mw" => mw, "seconds" => 180 } };
-    let ask = obj! { "coinPerSecond" => (mw * 0.12 * 100.0).round() / 100.0, "seconds" => 180 };
+    // `common::fair` values a MW at one eighth of a ◆ per second, so this remains a fair default offer.
+    let ask = obj! { "coinPerSecond" => mw / 8.0, "seconds" => 180 };
     diplomacy::send(orders, buyer.get("id").num(), "power for sale", obj! { "give" => give, "ask" => ask });
 }
 
