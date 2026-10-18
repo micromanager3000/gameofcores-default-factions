@@ -266,3 +266,19 @@ fn funded_lancer_routes_a_fresh_capture() {
     assert_eq!(orders[0].get("do").str(),"capture");
     assert_eq!(orders[0].get("target").num(),1.0);
 }
+
+#[test]
+fn funded_shades_keep_their_local_plan_and_resume_an_idle_guard() {
+    let plan=pages(&obj! {"attack"=>1,"stage"=>0,"defend"=>-1,"picket"=>0,"guard"=>arr![10]});
+    let world=Value::parse(r#"{"tick":1,"seconds":1,"factions":[null,{"id":1,"alive":true},{"id":2,"alive":true}],"provinces":[{"id":0,"owner":1,"adj":[1]},{"id":1,"owner":2,"adj":[0]}]}"#);
+    let me=obj! {"id"=>1,"capital"=>0,"allies"=>arr![],"ramProvince"=>obj! {"0"=>plan},
+        "rts"=>obj! {"cpu"=>obj! {"available"=>obj! {"control"=>10000}}}};
+    let units=Value::parse(r#"[{"id":10,"owner":1,"type":"shade","at":0,"doing":"idle","target":-1,"to":-1,"build":{}}]"#);
+    let args=views(&[units,world,me]);
+    shade(args[0],args[1],args[2]);
+    let orders=emitted();
+    assert_eq!(orders.len(),1,"{orders:?}");
+    assert_eq!(orders[0].get("do").str(),"fight");
+    assert_eq!(orders[0].get("target").num(),0.0);
+    assert!(orders[0].get("cloak").truthy());
+}

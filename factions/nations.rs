@@ -1688,12 +1688,30 @@ fn carry_order(o: Option<Value>, u: View, pl: &std::rc::Rc<Value>, me: View) -> 
     Some(o)
 }
 
-// Under 3,000 cycles a call cannot both decode a cold plan and preserve an order: units keep standing orders until their next funded turn.
+fn infantry_plan(units: View, me: View) -> Option<std::rc::Rc<Value>> {
+    if !rts(me) {return Some(plan::for_units(me,units,View::undefined()));}
+    let mut core=None;
+    for u in units.iter() {
+        let home=plan::here(me,u);
+        if !home&&core.is_some(){continue;}
+        let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
+        let read=if plan::known(me,u).is_none()&&bytes.is_bytes()&&bytes.len()>=2 {
+            let b=bytes.bytes();4.0*f64::from(u16::from_le_bytes([b[0],b[1]]))
+        }else{0.0};
+        if cycles_left()<read+2200.0{return None;}
+        let pl=plan::of(me,u);
+        if home&&(!pl.get("attack").is_undef()||pl.get("mines").truthy()||!pl.get("raid").is_undef()){return Some(pl);}
+        if !home&&!pl.get("attack").is_undef(){core=Some(pl);}
+    }
+    Some(core.unwrap_or_else(||std::rc::Rc::new(Value::obj())))
+}
+
+// Cold plans must leave room for an order; standing orders survive a deferred lookup.
 fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
     if short(me, 3000.0, 1200.0) {
         return Value::arr();
     }
-    let pl = plan::for_units(me, units, View::undefined());
+    let Some(pl)=infantry_plan(units,me) else {return Value::arr();};
     for turn in 0..units.len() {
         if rts(me) && cycles_left() < 2200.0 {
             break;

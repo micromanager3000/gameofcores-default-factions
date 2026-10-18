@@ -313,6 +313,24 @@ use super::{air, theme};
     pub const LOGISTICS_MINER_FALLBACK_RUNWAY: f64 = 2600.0;
     pub const LOGISTICS_MINER_REMOTE_FALLBACK_RUNWAY: f64 = 3600.0;
 
+    fn miner_gather(u: View, world: View, me: View) -> Option<Value> {
+        let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
+        let read=if plan::known(me,u).is_none()&&bytes.is_bytes()&&bytes.len()>=2 {
+            let b=bytes.bytes();4.0*f64::from(u16::from_le_bytes([b[0],b[1]]))
+        }else{0.0};
+        if cycles_left()<read+2600.0 {
+            let p=realm::index(world).get(u.get("at").num());
+            if p.get("owner").num_or(-1.0)==me.get("id").num() {
+                if let Some((slot,_))=p.get("mines").iter().enumerate().find(|(k,v)|v.num_or(0.0)>0.0
+                    &&realm::worker(p,*k as f64)==me.get("id").num()&&p.get("staff").at(*k).num_or(0.0)<2.0) {
+                    return Some(obj!{"id"=>u.get("id"),"do"=>"gather","target"=>u.get("at"),"slot"=>slot});
+                }
+            }
+            return None;
+        }
+        orders::gather(u,world,me)
+    }
+
     fn logistics_miners(units: View, world: View, me: View) {
         // Full local assignment reads cargo and route state for each body.  Below this runway the
         // bounded delivery retry can still free a loaded miner without losing the callback.
@@ -365,7 +383,7 @@ use super::{air, theme};
             let slot=p.get("mines").iter().enumerate().find(|(k,v)|v.num_or(0.0)>0.0 && realm::worker(p,*k as f64)==me.get("id").num() && p.get("staff").at(*k).num_or(0.0)<2.0);
             if let Some((k,_))=slot {
                 if let Some(mut o)=orders::to(u,"gather",cap,world,me,()){o.set("slot",k);order(o);}
-            }else if let Some(o)=orders::gather(u,world,me){order(o);}
+            }else if let Some(o)=miner_gather(u,world,me){order(o);}
         }
     }
     fn receiving_dock(world:View,me:View)->Option<f64>{

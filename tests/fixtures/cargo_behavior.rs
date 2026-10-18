@@ -173,3 +173,23 @@ fn ordinary_miner_budget_can_route_one_idle_worker_to_its_planned_remote_mine() 
     assert_eq!(orders[0].get("target").num(), 18.0);
     assert_eq!(orders[0].get("via"), &arr![18]);
 }
+
+#[test]
+fn a_funded_miner_routes_remote_work_without_replacing_existing_gather_jobs() {
+    let mut pages=Value::obj();
+    for op in mem::put(0,&obj! {"mines"=>arr![arr![1,0]]},"shared",None,1).unwrap() {
+        pages.set(&op.get("write").num().to_string(),obj! {"bytes"=>op.get("bytes").clone(),"t"=>1});
+    }
+    let units=arr![obj! {"id"=>1,"owner"=>2,"at"=>0,"doing"=>"gather","target"=>0},
+        obj! {"id"=>2,"owner"=>2,"at"=>0,"to"=>-1,"doing"=>"idle","rts"=>obj! {"cargo"=>obj! {"cycles"=>0}}}];
+    let world=obj! {"tick"=>1,"logistics"=>obj! {},"provinces"=>arr![
+        obj! {"id"=>0,"owner"=>2,"adj"=>arr![1],"mines"=>arr![1],"staff"=>arr![2]},
+        obj! {"id"=>1,"owner"=>2,"adj"=>arr![0],"mines"=>arr![1],"staff"=>arr![0]}]};
+    let me=obj! {"id"=>2,"capital"=>0,"ramProvince"=>obj! {"0"=>pages}};
+    let args=views(&[units,world,me]);
+    assert!(common::recover_miners(args[0],args[1],args[2]));
+    let out:Vec<Value>=abi::TEST_ORDERS.with(|o|o.take()).iter().map(|o|Value::parse(o)).collect();
+    assert_eq!(out.len(),1,"{out:?}");
+    assert_eq!(out[0].get("id").num(),2.0);
+    assert_eq!(out[0].get("target").num(),1.0);
+}
