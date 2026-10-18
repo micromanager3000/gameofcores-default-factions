@@ -14,6 +14,9 @@ export class Sculpt {
   return this.capsule(a.map((x,i)=>(x+b[i])/2),[r*1.45,len+r*.35,r*1.45],c,m,pivot,[Math.atan2(dz,Math.hypot(dx,dy)),0,-Math.atan2(dx,dy)]);
  }
  poly(at,points,depth,c,m='',pivot=at,rot=[0,0,0]){const p=this.part('poly',at,[.1,.1,depth],c,m,pivot,rot);p.points=points;return p;}
+ // Closed oval sections around the local Y axis: [height, x radius, z radius].
+ // Authored profiles form robes, helmets and organic trunks without box extrusion.
+ lathe(at,profile,c,m='',pivot=at,rot=[0,0,0]){const p=this.part('lathe',at,[1,1,1],c,m,pivot,rot);p.profile=profile;return p;}
  // Closed longitudinal hull: rings are [x, height, half-beam].  This stays an
  // internal retained primitive; callers cannot submit it through model normalization.
  loft(rings,c,pivot=[0,0,0]){const p=this.part('loft',pivot,[1,1,1],c,'',pivot);p.rings=rings;return p;}
@@ -24,5 +27,5 @@ export class Sculpt {
   for(const a of [0,Math.PI/2])this.box([at[0],at[1],z+Math.sign(z)*.02],[r*1.7,.035,.035],c,'roll',at,[0,0,a]);
   return wheel;
  }
- transform(start,scale,offset){for(const p of this.parts.slice(start)){p.at=p.at.map((x,i)=>x*scale+offset[i]);p.size=p.size.map(x=>x*scale);p.pivot=p.pivot.map((x,i)=>x*scale+offset[i]);if(p.kneeDrop)p.kneeDrop*=scale;if(p.points)p.points=p.points.map(x=>x*scale);}}
+ transform(start,scale,offset){for(const p of this.parts.slice(start)){p.at=p.at.map((x,i)=>x*scale+offset[i]);p.size=p.size.map(x=>x*scale);p.pivot=p.pivot.map((x,i)=>x*scale+offset[i]);if(p.kneeDrop)p.kneeDrop*=scale;if(p.points)p.points=p.points.map(x=>x*scale);if(p.profile)p.profile=p.profile.map(r=>r.map(x=>x*scale));}}
 }
