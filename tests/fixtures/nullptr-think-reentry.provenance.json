@@ -1,0 +1,69 @@
+{
+  "source": "/tmp/long199-nullptr-think-args.json, captured from C2 long-199 final owner observation",
+  "fixtureSha256": "646625a8876f4c813986a88d22e9ac7685443c5d13f7644e4fa03eb446a062b7",
+  "engineRevision": "10e5b5e2",
+  "factionBaselineRevision": "2078d11",
+  "factionFixCommit": "0b687f2",
+  "faction": 6,
+  "function": "think",
+  "seconds": 21600,
+  "rate": 64,
+  "context": "Exact own think arguments for Null Pointer Society: 33 units (17 miners, 11 haulers, 2 freighters, 2 escorts, 1 sentry), no stalled or queued units, 379960.6599822266 CPU bank, 36694.09532854977 CPU income, recovery page 244 marked, and fabrication limit zero.",
+  "wasm": {
+    "sourceSha256": "fff5d4545f3edeaaafcb5a63f3f94d030a5a8943ce01b11c1ba40c4d003ae2c9",
+    "sourceBytes": 519369,
+    "sdk": "Rust 1.97.0; candidate1-sdk target",
+    "meterRate": 64
+  },
+  "sweep": {
+    "budgets": [
+      3000,
+      3001,
+      3400,
+      3432,
+      3433,
+      3500,
+      4000,
+      8000,
+      12000,
+      18000,
+      25000,
+      41249,
+      41250,
+      42888,
+      42889
+    ],
+    "safeRecoveryBelow": 3001,
+    "reentryFirstFits": 3433,
+    "reentryUsed": 3432.71875,
+    "fundedScreen": {
+      "fabrication": 9656,
+      "type": "screen",
+      "modules": [
+        "dash",
+        "armor"
+      ]
+    }
+  },
+  "resume": {
+    "simulator": "/tmp/gameplay-depth-cargo-resume/hypercycle-sim",
+    "runtime": "RUSTUP_TOOLCHAIN=1.97.0 CARGO_TARGET_DIR=.../candidate1-sdk",
+    "engineNote": "current helper includes post-C2 active-verb changes; faction source was the C2 baseline plus only the Null reentry change",
+    "durationSeconds": 1800,
+    "start": {
+      "nullOwned": 6,
+      "neutral": 29,
+      "spawned": 226
+    },
+    "fixedEnd": {
+      "nullOwned": 9,
+      "neutral": 26,
+      "spawned": 235
+    },
+    "controlEnd": {
+      "nullOwned": 6,
+      "neutral": 26,
+      "spawned": 226
+    }
+  }
+}
