@@ -68,7 +68,7 @@ fn a_healthy_cargo_policy_keeps_its_normal_reserves_and_miner_controllers(){
     assert_eq!(cpu.get("reserve").get("think").num(),0.25);
     assert_eq!(cpu.get("reserve").get("duel").num(),0.05);
     assert_eq!(cpu.get("upkeepOrder").at(0).str(),"miner");
-    assert_eq!(out.get("compute").get("types").get("miner").get("cycles").num(),4500.0);
+    assert_eq!(out.get("compute").get("types").get("miner").get("cycles").num(),6000.0);
 }
 #[test]
 fn a_funded_planner_retry_keeps_normal_reserves_and_working_recovery_keeps_miner_priority(){
@@ -81,7 +81,7 @@ fn a_funded_planner_retry_keeps_normal_reserves_and_working_recovery_keeps_miner
         let out=common::govern(args[0],args[1],0.4,||common::recovery(args[0],args[1]));
         let cpu=out.get("compute").get("cpu");
         assert_eq!(cpu.get("upkeepOrder").at(0).str(),"miner");
-        assert_eq!(out.get("compute").get("types").get("miner").get("cycles").num(),4500.0);
+        assert_eq!(out.get("compute").get("types").get("miner").get("cycles").num(),6000.0);
         if rich {
             assert_eq!(cpu.get("reserve").get("upkeep").num(),0.1);
             assert_eq!(cpu.get("reserve").get("think").num(),0.25);

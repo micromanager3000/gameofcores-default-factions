@@ -729,7 +729,7 @@ use super::{air, theme};
         let income=me.path("rts.cpu.income").num_or(20000.0);
         let recovering=out.get("memo").str()=="Recovering production";
         let bridge=recovering && delivery_bridge(world,me,5000.0);
-        for (ty,cycles) in [("miner",4500),("hauler",10000),("freighter",12000)]{out.entry("compute").entry("types").set(ty,obj!{"cycles"=>cycles,"every"=>2});}
+        for (ty,cycles) in [("miner",6000),("hauler",10000),("freighter",12000)]{out.entry("compute").entry("types").set(ty,obj!{"cycles"=>cycles,"every"=>2});}
         if bridge {out.entry("compute").entry("types").set("miner",obj!{"share"=>0,"every"=>2});}
         let cpu=out.entry("compute").entry("cpu");
         for (lane,floor) in [("think",14000.0),("control",22000.0),("drive",8000.0)]{
