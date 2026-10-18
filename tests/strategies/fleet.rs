@@ -198,13 +198,17 @@ fn fleet_lean_rebuild_requires_paid_unstalled_crew() {
 fn fleet_lean_rebuild_only_replaces_a_hard_cap_that_cannot_fund_the_planner() {
     let mut provinces = Value::arr();
     for _ in 0..44 { provinces.push(Value::obj()); }
-    let world = obj! { "provinces" => provinces, "units" => Value::arr() };
+    let mut waters = Value::arr();
+    for _ in 0..71 { waters.push(Value::obj()); }
+    let world = obj! { "provinces" => provinces, "waters" => waters, "units" => Value::arr() };
     let capped = Value::parse(r#"{"units":{"total":6,"stalled":0},"compute":{"thinkPeak":32000},
         "rts":{"cpu":{"income":12130,"bank":3145458,"spendCap":15163}}}"#);
     let lean_cap = Value::parse(r#"{"units":{"total":6,"stalled":0},"compute":{"thinkPeak":32000},
         "rts":{"cpu":{"income":12130,"bank":3145458,"spendCap":18000}}}"#);
     let funded = Value::parse(r#"{"units":{"total":6,"stalled":0},"compute":{"thinkPeak":32000},
         "rts":{"cpu":{"income":12130,"bank":3145458,"spendCap":20000}}}"#);
+    let full = Value::parse(r#"{"units":{"total":6,"stalled":0},"compute":{"thinkPeak":32000},
+        "rts":{"cpu":{"income":12130,"bank":3145458,"spendCap":24000}}}"#);
     let args = views(&[world, capped]);
     assert!(super::rich_rebuild_is_capped(args[0], args[1]),
         "the C8 cap cannot carry planner work plus its protected return tail");
@@ -212,8 +216,11 @@ fn fleet_lean_rebuild_only_replaces_a_hard_cap_that_cannot_fund_the_planner() {
     assert!(super::rich_rebuild_is_capped(args[0], args[1]),
         "an 18k cap still cannot retain the selected plan's protected return tail");
     let args = views(&[args[0].value(), funded]);
+    assert!(super::rich_rebuild_is_capped(args[0], args[1]),
+        "a broad visible sea map needs more than 20k before the planner's return tail");
+    let args = views(&[args[0].value(), full]);
     assert!(!super::rich_rebuild_is_capped(args[0], args[1]),
-        "once the cap can fund the planner, retain the normal planner/retry path");
+        "24k restores the normal planner/retry path for the captured coast");
 }
 
 #[test]

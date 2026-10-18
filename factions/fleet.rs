@@ -607,8 +607,12 @@ fn full_think_need(world: View, me: View) -> f64 {
 }
 
 fn lean_think_need(world: View, me: View) -> f64 {
-    // Optional census, route and naval scans have separate guards below.
-    10000.0 + world.get("provinces").len() as f64 * 40.0 + me.get("units").get("total").or(0.0) * 60.0
+    // Optional census and naval scans have separate guards below.  The normal
+    // pass still indexes visible sea lanes for its frontier, prize, and route
+    // work, so a broad coast needs runway even with a small own crew.
+    10000.0 + world.get("provinces").len() as f64 * 40.0
+        + world.get("waters").len() as f64 * 50.0
+        + me.get("units").get("total").or(0.0) * 60.0
 }
 
 fn budgeted_think_need(world: View, me: View, spend_cap: f64) -> f64 {
