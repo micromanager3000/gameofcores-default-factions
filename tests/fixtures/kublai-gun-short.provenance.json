@@ -64,5 +64,91 @@
     },
     "sourceTests": "10 Kublai strategy fixtures and five source checks pass, plus Rust package tests.",
     "limits": "This fixes the observed artillery callback error. It does not address separate planning interruptions or establish improved match outcomes."
+  },
+  "cheapSetupCorrection": {
+    "sourceFixture": "kublai-gun-deployed.json",
+    "sourceFixtureSha256": "80422e9e26082f6c566b4cb4b99980e8a271b3d565e3d00229d5c8a911574a5d",
+    "newFixture": "kublai-gun-setup.json",
+    "newFixtureSha256": "482440b67f7ab6ed08da7bde9599c750f9198df88aebf92bde79c056374a669f",
+    "transformation": "Only units[0].rts.deployed changes from true to false; all other fields are unchanged.",
+    "regression": "The first cold-plan admission blocked a useful deployment at 2000 cycles. The existing engine test kublai_short_gun_calls_preserve_plan_handoffs_and_cheap_setup detected this; its assertion remains unchanged.",
+    "before": {
+      "frozenC3Setup2000": {
+        "used": 1896.921875,
+        "deploy": true
+      },
+      "integrated3328Setup2000": {
+        "used": 82.03125,
+        "deploy": false
+      }
+    },
+    "correction": "Before strategic plan decoding, a short callback may finish a standing fight order when the gun is stationary at that order target and is neither deployed nor deploying. New routes still require the cold-plan admission. Each iteration also preserves an 800-cycle floor.",
+    "afterSetup2000": {
+      "used": 206.359375,
+      "deploy": true
+    },
+    "afterRoute4000": {
+      "used": 2630.21875,
+      "orders": "fight 11 via 11, carrying plan and front pages"
+    },
+    "afterOldLow4000": {
+      "used": 3273.28125,
+      "orders": "carried plan retained"
+    },
+    "moduleSha256": "5650ef38b6fa7b54bce59ec5b0b2e8a9622c0d66feef7e9aaa6600bb8a757bfc",
+    "sourceSha256": "cbfab63d4cc5b5811d79bd051850244d75e724e14dcd0050371dcb78548b21c0",
+    "sourceBytes": 501424,
+    "rate": 64,
+    "sdkToolchain": "1.97.0",
+    "calls": 144,
+    "errors": 0,
+    "livenessFailures": 0,
+    "budgets": [
+      100,
+      149,
+      209,
+      400,
+      799,
+      800,
+      801,
+      858,
+      1000,
+      1200,
+      1500,
+      1800,
+      1999,
+      2000,
+      2200,
+      2243,
+      2500,
+      3000,
+      3500,
+      3900,
+      4000,
+      5000,
+      6000,
+      8000
+    ],
+    "inputs": [
+      "kublai-gun-low.json",
+      "kublai-gun-setup.json",
+      "kublai-gun-deployed.json",
+      "kublai-gun-route.json",
+      "kublai-gun-short.json",
+      "kublai-gun-short113.json"
+    ],
+    "usefulnessAssertions": "At every tested allowance of 2000 or more, the setup fixture deploys. At every tested allowance of 4000 or more, the low fixture carries its plan and the route fixture emits fight toward province 11.",
+    "checks": "10 Kublai strategy fixtures, five source checks and Rust package tests pass under Rust 1.97.0. Existing engine deployment assertions are unchanged.",
+    "short113Capture": {
+      "source": "gameplay-depth-candidate3-67274b9/short-113.errors/error-19-faction-0-gun.json",
+      "seed": 113,
+      "tick": 14410,
+      "fuel": 209,
+      "fixtureSha256": "b24ff19f3292035905122ac47899664551c0882b2f9bafbed8df21b4ce28673e",
+      "transformation": "Exact captured arguments; no fields changed.",
+      "frozenModuleSha256": "f658c47a4d42bb7a2cd117c7d0ed59b5a057c3a478d4437ac68d4b3fc8e35556",
+      "frozenUsed": 209,
+      "frozenOk": false
+    }
   }
 }

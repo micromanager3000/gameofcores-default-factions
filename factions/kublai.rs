@@ -1520,10 +1520,18 @@ fn gun(units: View, world: View, me: View) {
     if cycles_left()<800.0 {return;}
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
+        if rts && cycles_left()<800.0 {break;}
         // Keep this before the plan read: the admission covers its cold decoding cost too. A gun can still cheaply
         // deploy, pack, or retain a standing target after the read when there is not enough fuel to find a new route.
         let can_route = !rts || gun_has_route_runway(cycles_left());
         let u = turn(units, i, world);
+        // Finish an accepted local fire order without decoding a new strategic plan.
+        if !can_route && is_str(u.get("doing"),"fight") && n(u.get("to"))<0.0
+            && n(u.get("at"))==n(u.get("target"))
+            && !u.path("rts.deployed").truthy() && !u.path("rts.deploying").truthy() {
+            order(obj!{"id"=>u.get("id"),"deploy"=>true,"alert"=>8});
+            continue;
+        }
         if rts {
             let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
             let read=if bytes.is_bytes() && bytes.len()>=2 {
