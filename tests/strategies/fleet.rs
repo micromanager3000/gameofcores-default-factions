@@ -82,6 +82,39 @@ fn fleet_keeps_its_opening_air_wing_small_until_a_carrier_is_fielded() {
 }
 
 #[test]
+fn fleet_rebuild_uses_the_posted_fabrication_policy_not_the_recovery_lane() {
+    let me = Value::parse(r#"{"id":1,"seat":4,"bank":100000,"costs":{"unit":100},
+        "units":{"cap":28,"total":13,"queued":0,"spawned":20,"byType":{}},
+        "rts":{"bank":8000000,"costs":{"fabrication":{"base":4728,"module":2364}},
+        "cpu":{"income":65000,"bank":8000000,"spendCap":85000,
+        "available":{"fabrication":0},"spent":{}}}}"#);
+    let args = views(&[me]);
+    let mut orders = obj! {"compute"=>obj! {"cpu"=>obj! {
+        "limits"=>obj! {"fabrication"=>27938},"reserve"=>obj! {}}}};
+    assert!(super::add_spawn(&mut orders, args[0], "miner", obj! {}, &[]),
+        "a productive policy must not inherit recovery's zero fabrication lane");
+    let kept = super::affordable(orders, args[0], cycles_left());
+    assert_eq!(kept.get("spawn").len(), 1,
+        "the posted 27,938-cycle lane and bank reserve pay for the rebuild: {kept:?}");
+}
+
+#[test]
+fn fleet_rebuild_still_rejects_an_unfunded_posted_fabrication_policy() {
+    let me = Value::parse(r#"{"id":1,"seat":4,"bank":100000,"costs":{"unit":100},
+        "units":{"cap":28,"total":13,"queued":0,"spawned":20,"byType":{}},
+        "rts":{"bank":8000000,"costs":{"fabrication":{"base":4728,"module":2364}},
+        "cpu":{"income":65000,"bank":8000000,"spendCap":85000,
+        "available":{"fabrication":0},"spent":{}}}}"#);
+    let args = views(&[me]);
+    let mut orders = obj! {"compute"=>obj! {"cpu"=>obj! {
+        "limits"=>obj! {"fabrication"=>4000},"reserve"=>obj! {}}}};
+    assert!(super::add_spawn(&mut orders, args[0], "miner", obj! {}, &[]));
+    let kept = super::affordable(orders, args[0], cycles_left());
+    assert!(kept.get("spawn").is_empty(),
+        "the final proposed policy still blocks an unpaid 4,728-cycle rebuild: {kept:?}");
+}
+
+#[test]
 fn fleet_kite_callback_routes_a_hot_wing_to_an_adjacent_carrier_deck() {
     let units = Value::parse(r#"[{"id":101,"owner":1,"type":"kite","air":true,"at":5,
         "build":{"vision":0,"range":0,"wings":1},"rts":{"air":{"heat":30,"aloft":true},"sea":{}}}]"#);

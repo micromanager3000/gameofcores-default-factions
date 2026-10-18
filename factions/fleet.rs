@@ -376,13 +376,9 @@ fn add_spawn(orders: &mut Value, me: View, ty: &str, build: Value, modules: &[&s
     if army_room(me) <= 0.0 || me.get("bank").num() < me.get("costs").get("unit").num() + 4.0 {
         return false;
     }
-    // Leave room for fabrication and intervening reflex costs.
-    let fabrication = common::fabrication(me, modules.len() as f64);
-    let available = me.get("rts").get("cpu").get("available");
-    let available = if available.truthy() { available.get("fabrication").num() } else { me.get("rts").get("bank").num() };
-    if available < fabrication + 300.0 * common::price_level(me) {
-        return false;
-    }
+    // `compute.cpu` applies before same-think fabrication. Its final policy is
+    // checked by `affordable` below, rather than rejecting a zero lane left by
+    // the recovery policy from the preceding second.
     if !orders.get("spawn").truthy() {
         orders.set("spawn", Value::arr());
     }
