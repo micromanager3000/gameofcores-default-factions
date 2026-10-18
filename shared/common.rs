@@ -311,6 +311,7 @@ use super::{air, theme};
     /// Miners unload locally. Haulers connect remote town depots to the capital or a dock.
     pub const LOGISTICS_MINER_FULL_RUNWAY: f64 = 5000.0;
     pub const LOGISTICS_MINER_FALLBACK_RUNWAY: f64 = 2600.0;
+    pub const LOGISTICS_MINER_REMOTE_FALLBACK_RUNWAY: f64 = 3600.0;
 
     fn logistics_miners(units: View, world: View, me: View) {
         // Full local assignment reads cargo and route state for each body.  Below this runway the
@@ -324,11 +325,12 @@ use super::{air, theme};
                 let at=u.get("at").num();let dest=if logistics::land_route(world,me,at,cap).is_some(){E::town(cap)}else{E::town(at)};
                 if let Some(o)=transfer(u,world,me,dest,false,None){order(o);transferred=true;}
             }
-            // An empty recovery miner still needs one local gather assignment.  Do this only after
-            // the cargo retry finds no transfer, and never replace an established cargo job.  A local
-            // slot avoids decoding the capital plan on this deliberately short callback.
+            // An empty recovery miner still needs one local gather assignment. Do this only after
+            // the cargo retry finds no transfer, and never replace an established cargo job. One
+            // bounded plan-routed attempt can fill a remote slot when there is no local work; the SDK
+            // declines it if its route cannot leave a safe order reserve.
             if !transferred && cycles_left()>LOGISTICS_MINER_FALLBACK_RUNWAY {
-                let index=realm::index(world);let ours=me.get("id").num();
+                let index=realm::index(world);let ours=me.get("id").num();let mut gathered=false;
                 if let Some(u)=units.iter().find(|u| {
                     if u.get("doing").str()=="gather" || cargo_working(*u) || cargo(*u)>0.0 {return false;}
                     let p=index.get(u.get("at").num());
@@ -336,7 +338,12 @@ use super::{air, theme};
                 }) {
                     let p=index.get(u.get("at").num());
                     if let Some((slot,_))=p.get("mines").iter().enumerate().find(|(k,v)|v.num_or(0.0)>0.0&&realm::worker(p,*k as f64)==ours&&p.get("staff").at(*k).num_or(0.0)<2.0) {
-                        order(obj! {"id"=>u.get("id"),"do"=>"gather","target"=>u.get("at"),"slot"=>slot});
+                        order(obj! {"id"=>u.get("id"),"do"=>"gather","target"=>u.get("at"),"slot"=>slot});gathered=true;
+                    }
+                }
+                if !gathered && cycles_left()>LOGISTICS_MINER_REMOTE_FALLBACK_RUNWAY {
+                    if let Some(u)=units.iter().find(|u|u.get("doing").str()!="gather"&&!cargo_working(*u)&&cargo(*u)<=0.0) {
+                        if let Some(o)=orders::gather(u,world,me){order(o);}
                     }
                 }
             }

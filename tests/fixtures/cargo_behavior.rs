@@ -150,3 +150,26 @@ fn a_delivery_bridge_preserves_fielded_aircraft_landing_control() {
     assert_eq!(types.get("freighter").get("cycles").num(),12000.0);
     assert_eq!(out.get("compute").get("cpu").get("upkeepOrder"),&arr!["hauler","freighter","miner"]);
 }
+
+#[test]
+fn ordinary_miner_budget_can_route_one_idle_worker_to_its_planned_remote_mine() {
+    let mut pages = Value::obj();
+    for op in mem::put(0, &obj! { "mines" => arr![arr![18, 0]] }, "shared", None, 1).unwrap() {
+        pages.set(&op.get("write").num().to_string(), obj! { "bytes" => op.get("bytes").clone(), "t" => 1 });
+    }
+    let units = arr![obj! { "id" => 1410, "owner" => 2, "type" => "miner", "at" => 0,
+        "to" => -1, "doing" => "idle", "rts" => obj! { "cargo" => obj! { "cycles" => 0 } } }];
+    let world = obj! { "tick" => 1, "logistics" => obj! {}, "provinces" => arr![
+        obj! { "id" => 0, "owner" => 2, "adj" => arr![18], "mines" => arr![1], "staff" => arr![2] },
+        obj! { "id" => 18, "owner" => 2, "adj" => arr![0], "mines" => arr![1], "staff" => arr![0] }
+    ] };
+    let me = obj! { "id" => 2, "capital" => 0, "ramProvince" => obj! { "0" => pages } };
+    let args = views(&[units, world, me]);
+    assert!(common::recover_miners(args[0], args[1], args[2]));
+    let orders: Vec<Value> = abi::TEST_ORDERS.with(|o| o.take()).iter().map(|o| Value::parse(o)).collect();
+    assert_eq!(orders.len(), 1, "{orders:?}");
+    assert_eq!(orders[0].get("id").num(), 1410.0);
+    assert_eq!(orders[0].get("do").str(), "gather");
+    assert_eq!(orders[0].get("target").num(), 18.0);
+    assert_eq!(orders[0].get("via"), &arr![18]);
+}

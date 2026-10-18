@@ -1,0 +1,11 @@
+{
+  "source": "derived C4 candidate4 Templar miner callback",
+  "parentFixture": "templar-miner-recovery-gather-low.json",
+  "derivation": "preserves its 45-province public callback and carried plan; selects one idle empty miner at capital 0, fills its local mine, and makes planned mine 18 an owned one-hop open slot.",
+  "purpose": "ordinary scaled 4500-cycle miner callbacks must retain one safe plan-routed remote mining assignment after cargo and local-slot fallback.",
+  "rate": 64,
+  "compiler": "Rust 1.97.0 guest Wasm",
+  "module": "templar exported source via tools/source.mjs",
+  "meteredResult": "Rust 1.97.0 guest Wasm at rate 64: with the bounded remote fallback, remote fixture 3000 and 4100 return cleanly without an order; 4200, 4324, 4500, 4999, 5000 and 6000 emit gather to planned owned mine 18. The 4200-5000 calls use 3866.34375 cycles; 6000 enters the full path and uses 3770.59375. The existing local fixture keeps its gather at 3000-5000; the loaded fixture keeps its transfer at 3000-5000.",
+  "meterReport": "/tmp/miner-routing-budget-contract-2026-10-18.json"
+}
