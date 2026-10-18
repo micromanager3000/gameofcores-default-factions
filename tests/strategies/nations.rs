@@ -239,3 +239,13 @@ fn a_short_naval_search_keeps_land_targets_without_claiming_an_unchecked_crossin
     assert!(!naval_rank_case(84,20000.0,false));
     assert!(naval_rank_case(84,20000.0,true));
 }
+
+#[test]
+fn escort_reserves_a_full_route_for_each_ship() {
+    assert!(!escort_funded(4309.0,3));
+    assert!(!escort_funded(4160.0,4));
+    assert!(!escort_funded(5150.0,2));
+    assert!(!escort_funded(8006.0,3));
+    assert!(escort_funded(8006.0,1));
+    assert!(escort_funded(12000.0,4));
+}
