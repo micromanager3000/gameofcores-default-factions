@@ -1691,7 +1691,7 @@ fn junk_goal(nv: &Value, role: u8, k: usize, now: f64) -> f64 {
 /// True when a visible merchant can pay for a healthy corsair's round trip.  Spawn and chase
 /// share this exact gate so Fleet never launches a hull that its controller immediately rejects.
 fn paying_corsair_prey(c: View, contacts: View, me: View, capacity: f64, healthy: bool) -> bool {
-    if !healthy || !c.get("ship").truthy() || c.get("build").get("range").num_or(0.0)>0.0 || !world_logistics(me) { return false; }
+    if !healthy || !c.get("ship").truthy() || c.get("build").get("range").num_or(0.0)>0.0 { return false; }
     let load=c.path("cargo.load").num_or(0.0);
     if load<2.0 || c.get("build").get("carry").num_or(0.0)<2.0 { return false; }
     let water=c.get("water").num_or(-1.0);
@@ -1699,7 +1699,6 @@ fn paying_corsair_prey(c: View, contacts: View, me: View, capacity: f64, healthy
     let prize=c.path("build.carry").num_or(0.0)*160000.0*common::price_level(me)*if load>=3.0 {1.0}else{0.5};
     (prize*0.7).min(capacity) >= 1.5*(55.0* (600.0*common::price_level(me)+1500.0))
 }
-fn world_logistics(me: View) -> bool { me.path("rts.logistics.rules").truthy() || me.path("rts.logistics").truthy() }
 
 /// A rival ship for junk `u` to go after (me.rts.sea.contacts): on its water or one next to it, the weakest first; a
 /// corsair looks two waters out and prefers ships without guns (relays, pickets, carriers) and lone ones.
