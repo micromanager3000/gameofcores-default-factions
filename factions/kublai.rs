@@ -211,7 +211,7 @@ fn cpu_policy(me: View, plan: &Value, type_calls: &Value) -> Value {
             // think grows with the army, income and its own recent peak (with room to spare: a think that runs out sets
             // no new policy, so the limit has to be there before it's needed)
             // (the court's work doesn't shrink with income, so the floor is higher than the founders' 24,000)
-            "think" => round(jmin(jmax(60000.0, income * 0.5), jmax(jmax(34000.0 + me.get("units").get("total").or(0.0) * 200.0, income * 0.4), me.get("compute").get("thinkPeak").or(0.0) * 1.7)).max(planning_allowance(me))),
+            "think" => round(jmin(jmax(60000.0, income * 0.5), jmax(jmax(34000.0 + me.get("units").get("total").or(0.0) * 200.0, income * 0.4), me.get("compute").get("thinkPeak").or(0.0) * 1.7))),
             // Three active combat controllers can each need several thousand cycles to route a squad. Keep a real shared
             // ceiling instead of splitting a sub-4k purse across them, and grow it with income as the calls grow.
             "control" => round(jmax(jmax(pick(50000.0, 42000.0), income * 0.6), fielded)),
@@ -295,20 +295,6 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     Some(field)
 }
 
-// Cheap recovery calls can lower the recent peak while the full court still needs its usual runway.
-fn full_planning_need(me: View) -> f64 {
-    (34000.0 + 200.0 * me.path("units.total").num_or(0.0))
-        .max(1.25 * me.path("compute.thinkPeak").num_or(0.0) + 6000.0)
-}
-
-fn planning_allowance(me: View) -> f64 {
-    full_planning_need(me) + 4000.0
-}
-
-fn full_planning_fits(me: View, remaining: f64) -> bool {
-    remaining.min(me.path("rts.cpu.available.think").num_or(f64::INFINITY)) >= full_planning_need(me)
-}
-
 fn think(world: View, me: View) -> Value {
     if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
         return emergency_recovery_policy(me);
@@ -318,7 +304,7 @@ fn think(world: View, me: View) -> Value {
         && me.path("rts.cpu.income").num_or(0.0) < 30000.0 {
         return common::govern(world, me, 0.55, || strategy(world, me));
     }
-    if me.path("rts.cpu").truthy() && !full_planning_fits(me, cycles_left()) {
+    if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
         return common::govern(world, me, 0.55, || recovery_policy(me));
     }
     common::govern(world, me, 0.55, || strategy(world, me))
@@ -338,8 +324,9 @@ fn emergency_recovery_policy(me: View) -> Value {
     } } }
 }
 
-// Below the cost of a full strategy, fund its next admission, keep miners working and write a one-page marker.
-// The shared governor keeps the marker until a full strategy resumes.
+// Below the cost of a full strategy, leave enough cycles for the next think, keep miners working, and record only a
+// one-page recovery marker. This runs before common::govern so its economy scan cannot consume the budget needed to
+// return a safe policy. Once a full think fits again, think() clears the marker and normal planning resumes.
 fn recovery_policy(me: View) -> Value {
     let income = me.path("rts.cpu.income").num_or(20000.0).max(1.0);
     let mut types = obj! {};
@@ -349,7 +336,7 @@ fn recovery_policy(me: View) -> Value {
     types.set("miner", obj! { "cycles" => jmax(4000.0, income * 0.4), "every" => 1 });
     let mut cpu = obj! {
         "limits" => obj! {
-            "think" => (me.path("compute.thinkPeak").num_or(0.0) * 1.5 + 2000.0).max(planning_allowance(me)),
+            "think" => (me.path("compute.thinkPeak").num_or(0.0) * 1.5 + 2000.0).max(24000.0),
             "control" => 0.5, "upkeep" => 0.65, "research" => 0, "influence" => 0,
             "fabrication" => 0, "visuals" => 0, "reflex" => 0.15, "duel" => 0.08,
             "challenge" => 0.02, "drive" => 0.08, "armor" => 0.05, "weapon" => 0.08,
@@ -363,7 +350,7 @@ fn recovery_policy(me: View) -> Value {
     recovery.set("r", true);
     obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
         "ram" => mem::put(RECOVERY_PAGE, &recovery, "local", None, 1).unwrap_or_default(),
-        "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0, "memo" => "Recovering production" }
+        "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0 }
 }
 
 fn strategy(world: View, me: View) -> Value {
@@ -371,9 +358,10 @@ fn strategy(world: View, me: View) -> Value {
     if rts.truthy() && cycles_left() < 3000.0 {
         return common::recovery(world, me);
     }
-    // Check again after the economic governor, before any court or route scans.
-    if rts.truthy() && !full_planning_fits(me, cycles_left()) {
-        return recovery_policy(me);
+    // Short of a full think (12,000 cycles, or three quarters of its recent peak), set only the CPU policy: a think that
+    // runs out sets none, and its limit, a share of income, stays too small when income falls, every second after.
+    if rts.truthy() && cycles_left() < jmax(12000.0, 0.75 * me.get("compute").get("thinkPeak").or(0.0)) {
+        return common::recovery(world, me);
     }
     let t = me.get("techs");
     let has = |k: &str| t.get(k).truthy();
