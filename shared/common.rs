@@ -1806,10 +1806,8 @@ use super::{air, theme};
         if shortage || (was.get("r").truthy() && bank < income * 2.0) {
             return recover(world, me, shortage);
         }
-        // A short bank's recovery leaves the think 70% of income, too little for a whole strategy. One more recovery
-        // think raises it (to 1.2 × income, the bank now holding two seconds) and the strategy resumes next second.
-        let limit = me.path("rts.cpu.limits.think").num_or(f64::INFINITY);
-        if was.get("r").truthy() && (if limit <= 1.0 { limit * income } else { limit }) < income {
+        // Resume on a funded callback; cargo income can outgrow a standing limit without making planning dearer.
+        if was.get("r").truthy() && cycles_left() < 18000.0 {
             return recovery(world, me);
         }
         let mut orders = strategy();

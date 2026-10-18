@@ -385,6 +385,27 @@ fn a_full_think_runs_every_third_second_while_nothing_presses() {
 }
 
 #[test]
+fn funded_recovery_resumes_below_current_income_and_clears_its_marker() {
+    let (mut world,mut me,units)=fixture();
+    world.set("seconds",6);world.set("units",units);
+    me.set("ramCapital",ram_pages(&obj! {"ram"=>mem::put(244,&obj! {"r"=>true,"s"=>0},"local",None,1).unwrap()}));
+    let cpu=me.entry("rts").entry("cpu");
+    cpu.set("income",146177);cpu.set("bank",18600000);cpu.set("capacity",20000000);
+    cpu.set("limits",obj! {"think"=>127693});
+    cpu.set("available",obj! {"think"=>127000});
+    cpu.set("last",obj! {"upkeep"=>62000});
+    let args=views(&[world,me]);let mut ran=false;
+    let orders=common::govern(args[0],args[1],0.4,|| {
+        ran=true;
+        obj! {"compute"=>obj! {"cpu"=>obj! {"limits"=>obj! {"think"=>127693,"fabrication"=>20000}}}}
+    });
+    assert!(ran,"a healthy funded callback reaches house admission even when its limit is below current cargo income");
+    assert_ne!(orders.get("memo").str(),"Recovering production");
+    assert!(orders.get("compute").get("cpu").get("limits").get("fabrication").num()>0.0);
+    assert!(orders.get("ram").items().iter().any(|op|op.get("free").num_or(-1.0)==244.0),"the successful strategy clears the old recovery marker");
+}
+
+#[test]
 fn timed_jobs_come_due_on_full_thinks_for_every_house() {
     // a job every 8 s comes due every 9 s on a full-think second, whatever the stagger
     for id in 0..12 {
