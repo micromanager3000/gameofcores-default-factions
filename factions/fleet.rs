@@ -665,11 +665,11 @@ fn retirement_ready(world: View, me: View, remaining: f64) -> bool {
 
 fn think(world: View, me: View) -> Value {
     if cycles_left()<800.0 {return obj!{};}
-    let mut out=common::govern(world, me, 0.4, || strategy(world, me));
-    // Retire corsairs with no paying target, wreck or hunting water.
-    if !retirement_ready(world,me,cycles_left()) {return out;}
-    let hunting = !mem::get(me.get("ramCapital"), 0).get("nv").get("rw").is_empty();
-    if !hunting && cycles_left()>5000.0 {
+    let mut hunting=None;
+    let mut out=common::govern(world, me, 0.4, || strategy(world, me, &mut hunting));
+    // Only a fresh naval decision can retire a hull; recovery and resting preserve it.
+    if hunting!=Some(false) || !retirement_ready(world,me,cycles_left()) {return out;}
+    if cycles_left()>5000.0 {
         for u in world.get("units").iter() {
             if cycles_left()<3500.0 {break;}
             if u.get("owner").num()!=me.get("id").num() || u.get("type").str()!="corsair" {continue;}
@@ -683,7 +683,7 @@ fn think(world: View, me: View) -> Value {
     out
 }
 
-fn strategy(world: View, me: View) -> Value {
+fn strategy(world: View, me: View, hunting: &mut Option<bool>) -> Value {
     // Leave this callback runway for recovery policy.
     let cpu = me.path("rts.cpu");
     let spend_cap = cpu.get("spendCap").or(cpu.get("burst").or(0.0));
@@ -734,7 +734,9 @@ fn strategy(world: View, me: View) -> Value {
     let enemy = if census { seen_threats(world, me, logbook.get("tk").num_or(0.0)) } else { Threats::default() };
     // Keep standing orders when little think fuel remains.
     let naval = if cycles_left() > 26000.0 {
-        naval_plan(world, me, &mut plan, target_id, defend, &enemy.rowing)
+        let naval=naval_plan(world, me, &mut plan, target_id, defend, &enemy.rowing);
+        *hunting=Some(naval.raid>0);
+        naval
     } else {
         let last = mem::get(me.get("ramCapital"), 0).get("nv").clone();
         let n = Naval {
