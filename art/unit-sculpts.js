@@ -70,7 +70,14 @@ function human(s,{coat=P,skin='#d6a17e',legs=DARK,hat='cap',trim=S,armor=false,r
  if(!customHead){s.capsule([lean+.03,1.40,0],[.29,.34,.28],skin);s.box([lean+.193,1.40,0],[.075,.09,.11],skin);s.box([lean+.174,1.46,0],[.035,.035,.24],DARK);}
  for(const z of [-.31,.31]){
   const m=z<0?'strideR':'strideL',pivot=[lean,1.15,z];
-  if(frame==='garden'){s.taper([lean,1.12,z],[lean+.36,.72,z*1.25],.055,'#587450','sway',pivot);s.poly([lean+.39,.69,z*1.28],[-.12,0,.12,0,.20,.07,.04,.12,-.13,.06],.024,'#91aa75','sway',pivot);}else{s.taper([lean,1.15,z],[.17,.84,z],frame==='fleet'?.09:.135,coat,m,pivot);s.orb([.18,.84,z],[.15,.16,.16],skin,m,pivot);}
+  if(frame==='garden'){s.taper([lean,1.12,z],[lean+.36,.72,z*1.25],.055,'#587450','sway',pivot);s.poly([lean+.39,.69,z*1.28],[-.12,0,.12,0,.20,.07,.04,.12,-.13,.06],.024,'#91aa75','sway',pivot);}else{
+   s.taper([lean,1.15,z],[.17,.84,z],frame==='fleet'?.09:.135,coat,m,pivot);s.orb([.18,.84,z],[.15,.16,.16],skin,m,pivot);
+   // A cuff and two fingers give a weapon hand a readable grip at inspection
+   // scale; they are omitted from the overview LOD with the other close detail.
+   const hand=s.parts.length;s.box([.14,.88,z],[.12,.07,.19],armor?IRON:trim,m,pivot);
+   for(const dz of [-.045,.045])s.box([.28,.84,z+dz],[.10,.035,.025],skin,m,pivot);
+   s.tag(hand,{material:armor?'iron':'cloth',detail:2});
+  }
  }
  if(!customHead)headwear(s,hat,lean,trim);
  // Belts, collar plates, and a visible nose make the shared frame read as a
@@ -117,7 +124,10 @@ function tool(s,kind,{x=.25,y=.9,z=.37}={}){
  else if(kind==='mace'){s.rod([x,y-.20,z],[x+.16,y+.46,z],.075,WOOD,'strike',[x,y,z]);s.orb([x+.16,y+.48,z],[.31,.30,.31],GOLD,'strike',[x,y,z]);}
  else if(kind==='book'){s.box([x+.10,y,z],[.30,.08,.39],WOOD);s.box([x+.10,y+.04,z],[.25,.045,.33],IVORY);}
  else if(kind==='lantern'){s.rod([x,y,z],[x,y+.5,z],.045,DARK);s.box([x,y-.12,z],[.22,.30,.22],GOLD,'sway',[x,y+.3,z]);s.box([x+.12,y-.10,z],[.025,.18,.13],'#fff1b4','sway',[x,y+.3,z]);}
- const ranged=['bow','crossbow','rifle','musket'].includes(kind);s.tag(first,{detail:0,aim:ranged?'weapon':undefined});
+ const ranged=['bow','crossbow','rifle','musket'].includes(kind);
+ // Every piece of a weapon turns as one rigid assembly. Its socket uses the
+ // same pivot, so the muzzle and visible barrel cannot separate while aiming.
+ s.tag(first,{detail:0,aim:ranged?'weapon':undefined,pivot:ranged?[x,y,z]:undefined});
 }
 function shield(s,c=P,cross=false){
  s.poly([.10,.92,-.46],[-.27,.25,.27,.25,.23,-.13,0,-.35,-.23,-.13],.10,c);
@@ -152,9 +162,9 @@ function cart(s,{tank=false,truck=false,cannon=false,rockets=false,culture=0}={}
  const c=tank?'#60704c':culture===3?'#947855':WOOD;
  const turret=(pivot,build,muzzle)=>{const first=s.parts.length;build();s.tag(first,{joint:'turret',pivot});if(muzzle){s.muzzle=muzzle;s.muzzleJoint='turret';s.muzzlePivot=[...pivot];}};
  if(tank){
-  const start=s.parts.length;for(const z of [-.45,.45]){s.box([0,.28,z],[1.65,.43,.28],DARK);for(const x of [-.60,-.20,.20,.60])s.wheel([x,.27,z+(z<0?-.15:.15)],.15,IRON);for(const x of [-.61,-.40,-.19,.02,.23,.44,.65])s.box([x,.14,z+(z<0?-.31:.31)],[.11,.09,.06],IRON,'roll',[0,.27,z]);}
+  const start=s.parts.length;for(const z of [-.45,.45]){s.box([0,.28,z],[1.65,.43,.28],DARK);for(const x of [-.60,-.20,.20,.60]){s.wheel([x,.27,z+(z<0?-.15:.15)],.15,IRON);s.part('cylinder',[x,.27,z+(z<0?-.31:.31)],[.095,.095,.035],GOLD,'roll',[0,.27,z],[Math.PI/2,0,0]);}for(const x of [-.61,-.40,-.19,.02,.23,.44,.65])s.box([x,.14,z+(z<0?-.31:.31)],[.11,.09,.06],IRON,'roll',[0,.27,z]);s.rod([-.64,.33,z],[.64,.33,z],.045,IRON,'roll',[0,.27,z]);}
   s.poly([0,.42,0],[-.83,0,.83,0,.57,.38,-.64,.38],.85,c);s.tag(start,{material:'iron'});
-  turret([-.12,.89,0],()=>{s.poly([-.1,.79,0],[-.39,0,.44,0,.27,.28,-.25,.28],.64,c);s.box([.67,.99,0],[1.05,.09,.11],IRON,'recoil',[-.12,.89,0]);s.box([-.12,1.10,0],[.30,.035,.29],DARK);s.box([.04,.89,-.33],[.16,.12,.02],P);s.box([-.13,.91,.34],[.24,.14,.04],DARK);},[1.19,1.03,0]);return;
+  turret([-.12,.89,0],()=>{const detail=s.parts.length;s.poly([-.1,.79,0],[-.39,0,.44,0,.27,.28,-.25,.28],.64,c);s.box([.67,.99,0],[1.05,.09,.11],IRON,'recoil',[-.12,.89,0]);s.box([-.12,1.10,0],[.30,.035,.29],DARK);s.box([.04,.89,-.33],[.16,.12,.02],P);s.box([-.13,.91,.34],[.24,.14,.04],DARK);s.part('cylinder',[-.24,1.11,0],[.20,.20,.035],IRON,'',[-.12,.89,0],[Math.PI/2,0,0]);s.box([-.25,1.15,0],[.13,.035,.04],GOLD);s.tag(detail,{material:'iron',detail:1});},[1.19,1.03,0]);return;
  }
  s.box([0,.30,0],[1.48,.16,.80],c);
  for(const x of [-.48,.48])for(const z of [-.47,.47])s.wheel([x,.22,z],.22,DARK);
@@ -297,10 +307,12 @@ function garden(s,body){
 }
 function vessel(s,style,role='hull'){s.parts.push(...navalSculpt(style,role).parts);}
 function landRig(seat,body){
- if(['archer','keshig','horseman','camel','chariot','elephant','marshal','turcopole','cavalry','dragoon'].includes(body))return 'rider';
+ // Names recur between factions: Arjuna's archer is on foot while Kublai's is
+ // mounted.  Bind the locomotion class to the authored chassis, never a name alone.
+ if((seat===0&&['archer','keshig','horseman','camel'].includes(body))||(seat===1&&['chariot','elephant'].includes(body))||(seat===2&&['turcopole','marshal'].includes(body))||(seat===5&&body==='cavalry')||(seat===7&&body==='dragoon'))return 'rider';
  if(['trebuchet','ballista','engine','tank','katyusha','rockets','collector','carronade','truck'].includes(body))return 'vehicle';
  if(['ship','junk','merchantman'].includes(body))return 'ship';
- if(['qilin','emu','tree','thorn','bug'].includes(body))return 'beast';
+ if(['qilin','tree','thorn','bug'].includes(body))return 'beast';
  if(['watch','bomb','eye','flyer'].includes(body))return 'hover';
  return 'biped';
 }
