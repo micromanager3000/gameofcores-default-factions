@@ -571,7 +571,7 @@ fn lean_plan(world: View, me: View) -> (Value, f64) {
         let id = p.get("id").num_or(-1.0);
         if p.get("owner").num_or(-1.0) != ours || (i > 0 && id == capital) { continue; }
         let enemies = rival_in(p, me);
-        if enemies > threat || (id == capital && enemies > 0.0) { defend = id; threat = enemies; }
+        if (defend != capital && enemies > threat) || (id == capital && enemies > 0.0) { defend = id; threat = enemies; }
         for (k, value) in p.get("mines").iter().enumerate().take(8) {
             if value.num_or(0.0) <= 0.0 || realm::worker(p, k as f64) != ours { continue; }
             mine_room += 2.0;

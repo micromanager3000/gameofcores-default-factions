@@ -199,3 +199,17 @@ fn lean_frontier_keeps_allies_passage_hosts_and_leased_land_safe() {
     assert_eq!(room,2.0);
     assert_eq!(plan.get("mines").len(),2);
 }
+
+#[test]
+fn lean_defense_keeps_the_threatened_capital_ahead_of_a_larger_remote_invasion() {
+    for capital_threat in [1,0] {
+        let world=obj! {"seconds"=>6,"factions"=>arr![Value::Null,obj! {"id"=>1,"alive"=>true},obj! {"id"=>2,"alive"=>true}],
+            "provinces"=>arr![obj! {"id"=>0,"owner"=>1,"adj"=>arr![1],"units"=>obj! {"2"=>capital_threat}},
+                obj! {"id"=>1,"owner"=>1,"adj"=>arr![0],"units"=>obj! {"2"=>2}}]};
+        let me=obj! {"id"=>1,"capital"=>0,"allies"=>arr![],"contracts"=>arr![],"ramCapital"=>obj! {}};
+        let args=views(&[world,me]);let (plan,_)=lean_plan(args[0],args[1]);
+        assert_eq!(plan.get("defend").num(),if capital_threat>0 {0.0} else {1.0},
+            "one invader at the capital outranks two elsewhere; without a capital threat the remote invasion is defended");
+        assert_eq!(plan.get("threat").num(),if capital_threat>0 {1.0} else {2.0});
+    }
+}

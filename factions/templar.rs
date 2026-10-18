@@ -668,7 +668,7 @@ fn lean_plan(world: View, me: View) -> Value {
             let owner=owner.parse::<f64>().ok()?;
             (owner != ours && realm::is_rival(world,me,owner)).then_some(count.num_or(0.0))
         }).sum();
-        if enemies > threat || (id == capital && enemies > 0.0) { defend = id; threat = enemies; }
+        if (defend != capital && enemies > threat) || (id == capital && enemies > 0.0) { defend = id; threat = enemies; }
         for (k, value) in p.get("mines").iter().enumerate().take(8) {
             if value.num_or(0.0) <= 0.0 || realm::worker(p, k as f64) != ours { continue; }
             let staff = p.get("staff").at(k).num_or(0.0).max(0.0) as usize;
