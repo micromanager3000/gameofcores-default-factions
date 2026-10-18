@@ -913,7 +913,13 @@ fn wing_full_path_need(units: View, world: View) -> f64 {
 fn wing(units: View, world: View, me: View) {
     if common::air_recovery(units, me) { return; }
     let rts = me.get("rts").truthy();
-    if rts && cycles_left() < 800.0 {
+    if rts && cycles_left() < 2000.0 {
+        for u in units.iter().take_while(|_| cycles_left() > 400.0) {
+            let air = u.path("rts.air");
+            if air.get("aloft").truthy() && n(air.get("heat")) >= 45.0 {
+                order(obj! { "id" => u.get("id"), "land" => true });
+            }
+        }
         return;
     }
     if rts && cycles_left() < wing_full_path_need(units, world) {
