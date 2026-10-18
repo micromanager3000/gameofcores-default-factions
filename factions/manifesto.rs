@@ -640,7 +640,7 @@ fn strategy(world: View, me: View) -> Value {
     if let Some(f) = field {
         survey.set("field", f);
     }
-    plan::share(&mut orders, &survey, me);
+    common::share(&mut orders, &survey, world, me);
 
     let pressure = invaded_n;
     let cpu = me.get("rts").get("cpu");

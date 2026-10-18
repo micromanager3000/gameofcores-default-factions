@@ -247,6 +247,33 @@ fn cpu_policy(me: View, plan: &Value, type_calls: &Value) -> Value {
     }
 }
 
+// The engine applies this think's CPU policy before its spawns. Recovery's old zero limit must not block that transition.
+fn fabrication_budget(me: View, policy: &Value) -> f64 {
+    let cpu = rts_cpu(me);
+    if !cpu.truthy() { return 1_000_000_000.0; }
+    let peak = me.path("compute.thinkPeak").num_or(0.0);
+    if peak <= 0.0 { return 0.0; }
+    let income = cpu.get("income").num_or(0.0).max(1.0);
+    let amount = |v: f64| if v <= 1.0 { v * income } else { v };
+    let think = peak * 1.5 + 1000.0;
+    let spent = cpu.get("spent");
+    let outstanding = |lane: &str, reserve: f64| {
+        (amount(reserve) - spent.get(lane).num_or(0.0) - if lane == "think" { think } else { 0.0 }).max(0.0)
+    };
+    let old: f64 = cpu.get("reserve").entries().filter(|(lane, _)| *lane != "fabrication")
+        .map(|(lane, reserve)| outstanding(lane, reserve.num_or(0.0))).sum();
+    let new = match policy.get("reserve") {
+        Value::Obj(reserves) => reserves.0.iter().filter(|(lane, _)| lane.as_str() != "fabrication")
+            .map(|(lane, reserve)| outstanding(lane, reserve.num_or(0.0))).sum::<f64>(),
+        _ => 0.0,
+    };
+    // Preserve existing lane commitments and the cargo wrapper's half-income reserve as well as the new policy's.
+    let bank = (cpu.get("bank").num_or(0.0) - think - old.max(new).max(income * 0.5)).max(0.0);
+    let lane = (amount(policy.get("limits").get("fabrication").num_or(0.0))
+        - spent.get("fabrication").num_or(0.0)).max(0.0);
+    bank.min(lane)
+}
+
 // One route search in think instead of one per unit type each second: the plan carries a field toward where the army
 // goes (the province to defend, else the attack), cut to the steps from our land and the free or allied land next to
 // it (where a unit stepping out stands), and path::to routes along it. None when path::home already leads there from
@@ -415,10 +442,32 @@ fn strategy(world: View, me: View) -> Value {
     let t = me.get("techs");
     let has = |k: &str| t.get(k).truthy();
     let bt = me.get("units").get("byType");
+    let spies = nullptr_ext::census(world, me);
+    let mark = spies.saboteur.map(|(_, p)| p).or_else(|| spies.first.map(|(_, _, p)| p));
+    let campaign = mem::get(me.get("ramCapital"), 0).get("campaign").num_or(-1.0);
+    let by_id = realm::index(world);
+    let fighters = common::fighters(me);
     let rim = common::frontier(world, me);
     // the best land first, marked down where the army couldn't hold on to it (common::can_hold)
-    let hold = common::can_hold(world, me, false);
-    let ranked = realm::rank(world, me, rim, |w, m, q| common::score(w, m, q) - if hold(q) { 0.0 } else { common::OVER_WATER });
+    let hold = common::can_hold(world, me, true);
+    let ranked = realm::rank(world, me, rim, |w, m, q| {
+        let owner = q.get("owner").num_or(-1.0);
+        let rival = realm::is_rival(w, m, owner);
+        let capital = rival && q.get("capital").truthy() && common::muster_for(q) <= fighters;
+        let approach = rival && q.get("adj").iter().any(|id| {
+            let next = by_id.at(id);
+            next.get("owner").num_or(-2.0) == owner && next.get("capital").truthy()
+        });
+        // The army exploits the capital its spies have reached using their ordinary faction observations.
+        let infiltrated = mark.is_some_and(|p| q.get("id").num() == p || q.get("adj").has_num(p));
+        common::score(w, m, q)
+            + if capital { 18.0 } else { 0.0 }
+            + if approach { 5.0 } else { 0.0 }
+            + if rival && infiltrated { 7.0 } else { 0.0 }
+            + if rival && owner == campaign { 4.0 } else { 0.0 }
+            - if hold(q) { 0.0 } else { common::OVER_WATER }
+    });
+    let ranked = common::rally(world, me, ranked);
     // Survey scans provinces for mines and defense, and may scan visible fighters for a picket.
     // Admit that work before it starts, retaining the CPU policy and finalization allowance.
     // At five fighters or fewer, even one invader mobilizes everyone without a picket census.
@@ -426,6 +475,8 @@ fn strategy(world: View, me: View) -> Value {
         + if common::fighters(me) > 5.0 { 40.0 * world.get("units").len() as f64 } else { 0.0 };
     if rts.truthy() && cycles_left() < survey + 7000.0 { return think_recovery(me); }
     let mut plan = common::survey(world, me, &ranked, 2.0);
+    let owner = by_id.get(plan.get("attack").num_or(-1.0)).get("owner").num_or(-1.0);
+    plan.set("campaign", if realm::is_rival(world, me, owner) { owner } else { -1.0 });
     // the hunt's census is budgeted at about 50 cycles a unit in sight: only when think can still finish after it
     if has("flight") {
         let seen = world.get("units");
@@ -438,15 +489,15 @@ fn strategy(world: View, me: View) -> Value {
     if let Some(field) = road(world, me, if defend >= 0.0 { defend } else { vn(plan.get("attack")) }, 16000.0) {
         plan.set("field", field);
     }
-    // the exploits abroad: who's copying what where (think sees its own units in full)
-    let spies = nullptr_ext::census(world, me);
     // ◆ the spies hold: 25 a second for each one at work this second
     let held = 25.0 * (spies.stealing.len() + spies.sabotaging) as f64;
     let cpu = rts_cpu(me);
-    // Think spends the shared bank. The fabrication lane keeps its own remaining allowance.
-    let fabrication = if !rts.truthy() { 1_000_000_000.0 } else {
-        common::fabrication_room(me).unwrap_or_else(|| rts.get("bank").num_or(0.0))
-    };
+    let income = cpu.get("income").or(0.0);
+    let control = if cpu.truthy() && cpu.get("available").truthy() { n(cpu.get("available").get("control")) * 0.8 } else { f64::INFINITY };
+    let type_calls = common::calls(world, &TYPES, income, control, bt);
+    let mut policy = cpu_policy(me, &plan, &type_calls);
+    common::fit_cpu(&mut policy, me);
+    let fabrication = fabrication_budget(me, &policy);
     let mut orders = obj! {
         "policy" => obj! { "extraction" => if defend >= 0.0 { 0.38 } else { 0.5 }, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true },
         "spawn" => Value::arr(),
@@ -457,7 +508,7 @@ fn strategy(world: View, me: View) -> Value {
         "slots" => army_room(me),
         "priceLevel" => common::price_level(me),
     };
-    plan::share(&mut orders, &plan, me);
+    common::share(&mut orders, &plan, world, me);
     if rts.truthy() && cycles_left() < 7000.0 {
         let mut recovery = if cycles_left() < 3000.0 { think_emergency() } else { think_recovery(me) };
         recovery.set("memo", "Recovering production");
@@ -523,9 +574,6 @@ fn strategy(world: View, me: View) -> Value {
     }
     // Absolute controller allowances keep an unlocked specialist viable after miners and screens have consumed their
     // ordinary route passes. A war unit's call fits one route search for the units abroad (march).
-    let income = cpu.get("income").or(0.0);
-    let control = if cpu.truthy() && cpu.get("available").truthy() { n(cpu.get("available").get("control")) * 0.8 } else { f64::INFINITY };
-    let type_calls = common::calls(world, &TYPES, income, control, bt);
     // common::budget keeps its useful research choice, rent choice and type schedules. In CPU RTS the old split is
     // ignored; cpu_policy below atomically installs caps and reserves for the one shared balance. A tech a spy is
     // copying now is left to the spy.
@@ -535,8 +583,6 @@ fn strategy(world: View, me: View) -> Value {
     if spies.count > 0 && n(me.get("bank")) < 1200.0 {
         orders.set("rent", 0);
     }
-    let mut policy = cpu_policy(me, &plan, &type_calls);
-    common::fit_cpu(&mut policy, me);
     orders.entry("compute").set("cpu", policy);
     if rts.truthy() && !think_room(&orders, 3000.0) { return orders; }
     // the ledger: techs stolen so far, counted when a tech a spy was copying arrives (page 225)
@@ -737,7 +783,7 @@ fn miner(units: View, world: View, me: View) {
 // in its RAM (orders::carry) on its order, or on a RAM-only order when its order stands. Without it, a unit that
 // crosses the border forgets its target and walks home.
 fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
-    let Some(ops) = orders::carry(u, p, me) else { return o };
+    let Some(ops) = common::carry(u, p, me) else { return o };
     let mut x = o.unwrap_or_else(|| obj! { "id" => u.get("id") });
     x.set("ram", ops);
     Some(x)
@@ -1668,7 +1714,10 @@ mod nullptr_ext {
             let mut stay = false;
             if capital_of {
                 let cap = n(here.get("id"));
-                let ours_in = here.get("units").key(me_id).or(0.0) > 0.0 || same_v(here.get("siege").get("by"), &Value::Num(me_id));
+                // Our spies count in our province view. Their presence alone must not interrupt a theft.
+                let spies_here = units.iter().filter(|s| n(s.get("at")) == cap && n(s.get("to")) < 0.0).count() as f64;
+                let ours_in = here.get("units").key(me_id).or(0.0) >= spies_here + 2.0
+                    || same_v(here.get("siege").get("by"), &Value::Num(me_id));
                 let theirs = spy::read(me, u);
                 let marching = theirs.get("attack").num_or(-1.0) >= 0.0 && theirs.get("attack").num() == n(me.get("capital"));
                 let spot = hide_spot(here);
