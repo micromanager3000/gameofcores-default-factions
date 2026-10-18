@@ -3295,10 +3295,10 @@ fn scene7(info: View, _: f64) -> Value {
     let mut p = vec![
         obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"obelisk","tiers"=>3,"h"=>44,"r"=>5,"glow"=>true,"spin"=>false,"material"=>"metal","color"=>"#d8d2b8","trim"=>"#c9a14a","court"=>"market","pri"=>9},
     ];
-    for i in 0..7 {
-        p.push(obj!{"type"=>"tower","x"=>-50.0+i as f64*15.0,"z"=>8,"r"=>3,"h"=>7,"sides"=>4,"roof"=>"sawtooth","material"=>"wood","color"=>"#4a3a2a","trim"=>"#c9a14a","pri"=>6});
+    for (x,z) in [(-38.0,-26.0),(-38.0,0.0),(-38.0,26.0),(38.0,-26.0),(38.0,0.0),(38.0,26.0)] {
+        p.push(obj!{"type"=>"hall","x"=>x,"z"=>z,"w"=>12,"d"=>10,"h"=>7,"roof"=>"sawtooth","material"=>"stone","color"=>"#9b806b","trim"=>"#536368","court"=>"market","pri"=>6});
     }
-    p.push(obj!{"type"=>"screen","id"=>"prices","x"=>-42,"z"=>-22,"y"=>3,"w"=>15,"h"=>7,"show"=>"stats","title"=>"PRICE TICKER","pri"=>7});
+    p.push(obj!{"type"=>"screen","id"=>"prices","x"=>0,"z"=>-39,"y"=>3,"w"=>15,"h"=>7,"show"=>"stats","title"=>"PRICE TICKER","pri"=>7});
     obj! {"title"=>"The Pin Works","motto"=>"Division of labour, in sequence.","palette"=>obj!{"primary"=>c,"secondary"=>"#6c7374","accent"=>"#c9a14a"},"sky"=>obj!{"time"=>"day","top"=>"#7695a8","horizon"=>"#d9c28d","fog"=>0.2},"ground"=>obj!{"kind"=>"metal","color"=>"#4b5358"},"pieces"=>p}
 }
 fn scene8(info: View, _: f64) -> Value {
