@@ -450,6 +450,10 @@ fn strategy(world: View, me: View) -> Value {
     let rim = common::frontier(world, me);
     // the best land first, marked down where the army couldn't hold on to it (common::can_hold)
     let hold = common::can_hold(world, me, true);
+    // Keep reachable fronts ahead of unsupported sea crossings even when survey rejects a well-defended town.
+    // Without this filter, a cheaper overseas capital can leave the ground army waiting at home indefinitely.
+    let supported: Vec<View> = rim.iter().copied().filter(|q| hold(*q)).collect();
+    let rim = if rts.truthy() && !supported.is_empty() { supported } else { rim };
     let ranked = realm::rank(world, me, rim, |w, m, q| {
         let owner = q.get("owner").num_or(-1.0);
         let rival = realm::is_rival(w, m, owner);
