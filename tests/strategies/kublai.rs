@@ -42,6 +42,26 @@ fn at_target_gun_can_still_set_up_without_route_fuel() {
 }
 
 #[test]
+fn a_funded_gun_reads_a_cold_home_plan_and_starts_its_route() {
+    let mut me=obj!{"id"=>0,"capital"=>25,"allies"=>arr![],"rts"=>obj!{},"ramProvince"=>obj!{}};
+    let mut cold=Value::obj();
+    for op in mem::put(0,&obj!{"attack"=>11,"stage"=>25,"home"=>25,"detail"=>"x".repeat(512)},"local",None,16).unwrap(){
+        cold.set(&op.get("write").num().to_string(),obj!{"bytes"=>op.get("bytes").clone(),"t"=>1});
+    }
+    me.entry("ramProvince").set("25",cold);
+    let units=arr![obj!{"id"=>733,"owner"=>0,"type"=>"gun","at"=>25,"to"=>-1,"doing"=>"idle",
+        "target"=>-1,"ramUnit"=>obj!{},"rts"=>obj!{"deployed"=>false}}];
+    let world=obj!{"seconds"=>1,"factions"=>arr![obj!{"id"=>0,"alive"=>true},obj!{"id"=>1,"alive"=>true}],
+        "provinces"=>arr![obj!{"id"=>25,"owner"=>0,"adj"=>arr![11]},obj!{"id"=>11,"owner"=>1,"adj"=>arr![25]}]};
+    let args=views(&[units,world,me]);
+    super::gun(args[0],args[1],args[2]);
+    let orders=emitted();
+    assert_eq!(orders.len(),1);
+    assert_eq!(orders[0].get("do").str(),"fight");
+    assert_eq!(orders[0].get("target").num(),11.0);
+}
+
+#[test]
 fn short_budget_phase_keeps_combat_calls_and_standing_economic_choices() {
     let args = views(&[obj! {}, obj! { "rts"=>obj! { "cpu"=>obj! { "income"=>33583 } } }]);
     let types = obj! { "screen"=>obj! { "share"=>6000, "every"=>1 }, "skirm"=>obj! { "share"=>6000, "every"=>1 } };

@@ -1517,12 +1517,20 @@ fn lancer(units: View, world: View, me: View) {
 }
 
 fn gun(units: View, world: View, me: View) {
+    if cycles_left()<800.0 {return;}
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
         // Keep this before the plan read: the admission covers its cold decoding cost too. A gun can still cheaply
         // deploy, pack, or retain a standing target after the read when there is not enough fuel to find a new route.
         let can_route = !rts || gun_has_route_runway(cycles_left());
         let u = turn(units, i, world);
+        if rts {
+            let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
+            let read=if bytes.is_bytes() && bytes.len()>=2 {
+                let b=bytes.bytes();2.0*f64::from(u16::from_le_bytes([b[0],b[1]]))
+            }else{0.0};
+            if cycles_left()<1800.0+read {break;}
+        }
         let p = plan::of(me, u);
         let defend = Value::Num(common::defends(&p, u));
         let target = if vn(&defend) >= 0.0 { &defend } else { p.get("attack") };
