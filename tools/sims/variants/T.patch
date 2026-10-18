@@ -3,7 +3,7 @@ index 104e382..a5d652e 100644
 --- a/shared/common.rs
 +++ b/shared/common.rs
 @@ -2113,7 +2113,8 @@ use super::{air, theme};
- 
+
      /// The default rule for deal `m` in your inbox: yes when what you'd get is worth at least what you'd give
      /// ([`value`], with your land at [`price`]), and only when your bank holds every ◆ you'd give (all of a stream) and
 -    /// the units you'd get fit under your unit limit. A tech you hold, or that isn't in `techs` (what you research), is
@@ -35,11 +35,11 @@ index d4170ef..8ce4b73 100644
 +    if now % 60.0 == 3.0 && cycles_left() > 10000.0 { sell(orders, world, me, &d); }
 +    if now % 60.0 == 33.0 && cycles_left() > 10000.0 { buy(orders, world, me); }
  }
- 
+
  /// A plant going up is charged a twelfth of its build cost a second through the fabrication lane, which recruits share,
 @@ -313,13 +314,16 @@ fn price(me: View) -> f64 { me.path("rts.costs.priceLevel").num_or(1.0).max(0.01
  fn seat_style(me: View) -> usize { me.get("seat").num_or(9.0).max(0.0) as usize }
- 
+
  /// Offers spare power to the neighbour that's shortest of it, for ◆ a second.
 -fn sell(orders: &mut Value, world: View, me: View) {
 +/// What the grid makes beyond its draw (and a tenth more) and the power it has sold already, in MW.
@@ -82,7 +82,7 @@ index d4170ef..8ce4b73 100644
 @@ -338,6 +352,30 @@ fn sell(orders: &mut Value, world: View, me: View) {
      diplomacy::send(orders, buyer.get("id").num(), "power for sale", obj! { "give" => give, "ask" => ask });
  }
- 
+
 +/// Asks for power when the grid runs short and no plant is going up to cover it: up to 4 MW for three minutes, at 0.15 ◆
 +/// a MW a second, from the neighbour whose plants make the most. A seller weighs it like any deal (`common::fair`), and
 +/// gives only power it has spare.
@@ -109,4 +109,4 @@ index d4170ef..8ce4b73 100644
 +
  // ---------------------------------------------------------------------------------------------------------------------
  // How plants look. Pieces are in cells from the site's centre (x east, y north, z up), as in `structures`.
- 
+

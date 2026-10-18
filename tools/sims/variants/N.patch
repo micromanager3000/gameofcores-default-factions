@@ -10,5 +10,5 @@ index d4170ef..08f804b 100644
 +    let _ = plants;
 +    weak + (room * 0.12).min(1.0)
  }
- 
+
  /// One plant the planner could order next.

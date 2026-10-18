@@ -34,4 +34,3 @@ fn flight_views(values: &[Value]) -> Vec<View> {
     v[2].entry("rts").set("air",obj!{"contacts"=>contacts,"decks"=>decks});
     views(&v)
 }
-

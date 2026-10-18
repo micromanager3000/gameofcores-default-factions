@@ -5,7 +5,7 @@ index 104e382..e7273ea 100644
 @@ -858,6 +858,15 @@ use super::{air, theme};
          plan
      }
- 
+
 +    /// Rated MW of your plants standing in province `p` (batteries left out).
 +    pub fn grid_mw(me: View, p: f64) -> f64 {
 +        let id = me.get("id").num_or(-1.0);
@@ -17,7 +17,7 @@ index 104e382..e7273ea 100644
 +
      /// The most units a plan names to guard a province ([`defense`]): a bigger threat calls everyone.
      pub const GUARD_MAX: f64 = 24.0;
- 
+
 @@ -875,9 +884,11 @@ use super::{air, theme};
          if inv.at < 0.0 {
              return;
