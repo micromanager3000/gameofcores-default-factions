@@ -1,0 +1,31 @@
+{
+  "source": "/Users/reddybot/code/gameofcores-work/gameofcores-gameplay/artifacts/balance-oct16/gameplay-depth-endgames-r1-bacd4e0/endgame-307.state.json",
+  "sourceSha256": "4739ac31c8a856474974bd61c699b9dee917fe5bdcbd958a8cfce9856e4534fe",
+  "seed": 307,
+  "seconds": 86400,
+  "faction": 3,
+  "sourceRevision": "bacd4e0",
+  "transformation": "Selected own haulers 152 and 327; removed world.units as in real unit callbacks. All retained public observation values unchanged. Private snapshot confirms both carriers paid at capture.",
+  "before": {
+    "budget": 10000,
+    "rate": 64,
+    "used": 280.09375,
+    "orders": 0,
+    "moduleSha256": "4054adbc214a2e52d121048835ea45f5b253b437c9e01962579151728a9b0bc4"
+  },
+  "replaySourceRevision": "2078d11f88e62018936c1ee58b390832b7a52391",
+  "after": {
+    "rate": 64,
+    "budgets": "2000 through 12000 in 500-cycle steps, plus 5346; captured and job-cleared followup inputs",
+    "calls": 44,
+    "errors": 0,
+    "captured10000": {
+      "used": 564.921875,
+      "orders": "cancel the two cargo jobs only"
+    },
+    "afterCancel10000": {
+      "used": 2069.640625,
+      "orders": "both original unload endpoints, via empty, real local walking points to town"
+    }
+  }
+}

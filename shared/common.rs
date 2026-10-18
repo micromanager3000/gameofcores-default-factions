@@ -282,14 +282,15 @@ use super::{air, theme};
         }
     }
 
-    /// A finite load can become empty after another carrier arrives first. Depart with the partial load,
-    /// or release that job so an empty carrier can choose another source.
+    // Release empty sources and land approaches stranded outside transfer range by town crowding.
     fn cargo_working(u: View) -> bool {
         let job=u.path("rts.cargo.job");
         if !job.truthy(){return false;}
-        if job.get("status").str()=="depot empty" {
+        if job.get("status").str()=="depot empty" || (job.get("status").str()=="approaching"
+            && !u.path("rts.sea.ship").truthy() && u.get("doing").str()=="idle"
+            && u.get("to").num_or(-1.0)<0.0 && u.get("way").is_empty()) {
             order(logistics::cancel(u));
-            return false;
+            return job.get("status").str()!="depot empty";
         }
         true
     }
