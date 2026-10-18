@@ -239,3 +239,30 @@ fn a_short_naval_search_keeps_land_targets_without_claiming_an_unchecked_crossin
     assert!(!naval_rank_case(84,20000.0,false));
     assert!(naval_rank_case(84,20000.0,true));
 }
+
+#[test]
+fn lancer_low_control_keeps_a_standing_fight_order() {
+    let plan=pages(&obj! {"attack"=>1,"stage"=>0,"defend"=>-1,"home"=>0});
+    let world=Value::parse(r#"{"seconds":1,"factions":[null,{"id":1,"alive":true},{"id":2,"alive":true}],"provinces":[{"id":0,"owner":1,"adj":[1]},{"id":1,"owner":2,"adj":[0]}]}"#);
+    let me=obj! {"id"=>1,"capital"=>0,"allies"=>arr![],"ramProvince"=>obj! {"0"=>plan},
+        "rts"=>obj! {"cpu"=>obj! {"available"=>obj! {"control"=>1199}}}};
+    let units=Value::parse(r#"[{"id":10,"owner":1,"type":"lancer","at":0,"doing":"fight","target":1,"to":-1,"build":{}}]"#);
+    let args=views(&[units,world,me]);
+    lancer(args[0],args[1],args[2]);
+    assert!(emitted().is_empty(),"an underfunded lancer must preserve its existing fight order");
+}
+
+#[test]
+fn funded_lancer_routes_a_fresh_capture() {
+    let plan=pages(&obj! {"attack"=>1,"stage"=>0,"defend"=>-1,"home"=>0});
+    let world=Value::parse(r#"{"seconds":1,"factions":[null,{"id":1,"alive":true},{"id":2,"alive":true}],"provinces":[{"id":0,"owner":1,"adj":[1]},{"id":1,"owner":2,"adj":[0]}]}"#);
+    let me=obj! {"id"=>1,"capital"=>0,"allies"=>arr![],"ramProvince"=>obj! {"0"=>plan},
+        "rts"=>obj! {"cpu"=>obj! {"available"=>obj! {"control"=>1200}}}};
+    let units=Value::parse(r#"[{"id":10,"owner":1,"type":"lancer","at":0,"doing":"idle","target":-1,"to":-1,"build":{}}]"#);
+    let args=views(&[units,world,me]);
+    lancer(args[0],args[1],args[2]);
+    let orders=emitted();
+    assert_eq!(orders.len(),1,"the funded lancer still gets a fresh order: {orders:?}");
+    assert_eq!(orders[0].get("do").str(),"capture");
+    assert_eq!(orders[0].get("target").num(),1.0);
+}

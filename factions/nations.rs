@@ -1688,9 +1688,9 @@ fn carry_order(o: Option<Value>, u: View, pl: &std::rc::Rc<Value>, me: View) -> 
     Some(o)
 }
 
-// Under 2,500 cycles a call can't pay for the plan lookup and an order: its units keep their orders a second longer.
+// Under 3,000 cycles a call cannot both decode a cold plan and preserve an order: units keep standing orders until their next funded turn.
 fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
-    if short(me, 2500.0, 1200.0) {
+    if short(me, 3000.0, 1200.0) {
         return Value::arr();
     }
     let pl = plan::for_units(me, units, View::undefined());
