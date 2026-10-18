@@ -153,4 +153,6 @@ fn logistics_miner_keeps_a_bounded_cargo_retry_below_the_c4_full_assignment_runw
         "the captured loaded-miner callback must not enter full local assignment");
     assert!(super::common::LOGISTICS_MINER_FULL_RUNWAY <= 5000.0,
         "the measured funded full assignment remains available at five thousand cycles");
+    assert!(super::common::LOGISTICS_MINER_FALLBACK_RUNWAY < 4500.0,
+        "the recovery miner allocation can still reach its one local gather fallback");
 }
