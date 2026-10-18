@@ -352,57 +352,33 @@ fn shell_piece(pieces: &mut Vec<Value>, kind: &str, x: f64, y: f64, z: f64, w: f
 /// owned by the founder.  These pieces deliberately sit over the generic plant
 /// core rather than as unrelated corner ornaments: batteries become containers,
 /// reactors containment works, and wind and water plants get their own frames.
-fn plant_shell(pieces: &mut Vec<Value>, kind: &str, style: usize) {
-    let style = style.min(9);
-    let (body, crown, mat, trim) = match style {
-        0 => ("drum", "dome", "marble", "faction"),     // ger and standard
-        1 => ("tiers", "dome", "marble", "faction"),    // temple and lotus
-        2 => ("arch", "spire", "stone", "faction"),     // vaulted Gothic works
-        3 => ("dome", "torus", "glass", "gold"),        // laboratory glassware
-        4 => ("tiers", "spire", "wood", "faction"),     // timber pavilion and mast
-        5 => ("drum", "dome", "brick", "faction"),      // ribbed civic drum
-        6 => ("torus", "spire", "glass", "faction"),    // open portal and antenna
-        7 => ("hall", "roof", "brick", "gold"),         // slate pump-house, copper
-        8 => ("drum", "dome", "metal", "sand"),         // corrugated field tank
-        _ => ("garden", "dome", "jade", "glass"),       // planted, translucent pods
+fn faction_shell(p: &mut Vec<Value>, kind: &str, style: usize) {
+    let (x, y, z, w, d) = match kind {
+        "solar" | "wind" => (0., 0.82, 0.12, 1.28, 0.92), "hydro" | "tidal" => (0., 0.66, 0.72, 1.34, 0.72),
+        "boiler" | "geo" => (-0.20, 0.18, 0.12, 1.70, 1.16), "reactor" => (0.18, -0.56, 0.12, 1.48, 1.20),
+        "fusion" => (0., 0.76, 0.12, 1.58, 1.24), _ => (0., 0.38, 0.12, 1.80, 1.28),
     };
-    match kind {
-        "solar" => { // Arrays remain visible; a house-specific collecting frame stands behind them.
-            shell_piece(pieces, body, 0.0, 0.78, 0.12, 1.34, 0.52, 1.02, mat);
-            shell_piece(pieces, crown, 0.0, 0.78, 0.64, 1.12, 0.38, 0.82, trim);
-            if style == 2 || style == 6 { shell_piece(pieces, "spire", 1.02, 0.78, 0.12, 0.14, 1.28, 0., trim); }
-        }
-        "wind" => { // The rotor remains a turbine, but its base reads as camp, temple, tower, mast, or pod.
-            shell_piece(pieces, body, 0.0, 0.72, 0.12, 1.04, 0.62, 0.88, mat);
-            shell_piece(pieces, crown, 0.0, 0.72, 0.74, 0.76, 0.34, 0.64, trim);
-            if style == 4 || style == 7 { shell_piece(pieces, "spire", 1.0, 0.72, 0.12, 0.16, 1.45, 0., trim); }
-        }
-        "hydro" | "tidal" => { // A dam/barrage stays the hero, capped by its founder's gate or control house.
-            shell_piece(pieces, body, 0.0, 0.68, 0.72, 1.26, 0.64, 0.74, mat);
-            shell_piece(pieces, crown, 0.0, 0.68, 1.36, 0.94, 0.40, 0.62, trim);
-            if style == 2 || style == 4 || style == 7 { shell_piece(pieces, "spire", 0.94, 0.68, 0.72, 0.14, 1.32, 0., trim); }
-        }
-        "boiler" | "geo" => { // Heat works are enclosed as a proper house, with stacks/wells retained behind it.
-            shell_piece(pieces, body, -0.18, 0.18, 0.12, 1.72, 1.02, 1.20, mat);
-            shell_piece(pieces, crown, -0.18, 0.18, 1.14, 1.26, 0.56, 0.90, trim);
-            if style == 0 || style == 2 || style == 4 { shell_piece(pieces, "spire", 0.84, 0.34, 0.12, 0.16, 1.72, 0., trim); }
-        }
-        "reactor" => { // Containment reads differently in every house but never hides the cooling towers.
-            shell_piece(pieces, body, 0.18, -0.56, 0.12, 1.52, 1.16, 1.26, mat);
-            shell_piece(pieces, crown, 0.18, -0.56, 1.28, 1.26, 0.66, 1.02, trim);
-            if style == 6 { shell_piece(pieces, "spire", -0.72, -0.56, 0.12, 0.14, 1.72, 0., trim); shell_piece(pieces, "spire", 1.08, -0.56, 0.12, 0.14, 1.42, 0., trim); }
-        }
-        "fusion" => { // Each house wraps the common fusion ring in a distinct support or dome vocabulary.
-            shell_piece(pieces, body, 0.0, 0.76, 0.12, 1.62, 0.72, 1.30, mat);
-            shell_piece(pieces, crown, 0.0, 0.76, 0.84, 1.30, 0.54, 1.06, trim);
-            if style == 3 || style == 6 { shell_piece(pieces, "light", 0.0, 0.76, 1.38, 0.22, 0.34, 0., trim); }
-        }
-        _ => { // Battery banks become the house's actual storage vessel, not an unrelated decoration.
-            shell_piece(pieces, body, 0.0, 0.38, 0.12, 1.82, 1.02, 1.32, mat);
-            shell_piece(pieces, crown, 0.0, 0.38, 1.14, 1.42, 0.52, 1.04, trim);
-            if style == 5 || style == 7 || style == 8 { shell_piece(pieces, "stack", 0.94, 0.38, 0.12, 0.18, 1.48, 0., trim); }
-        }
+    match style.min(9) {
+        // felt court / temple / Gothic chapter works
+        0 => { shell_piece(p,"pyramid",x,y,z,w*1.06,0.54,d*0.94,"marble"); shell_piece(p,"pyramid",x-w*0.42,y,z,w*0.36,0.34,d*0.36,"faction"); shell_piece(p,"spire",x+w*0.48,y,z,0.14,1.62,0.,"gold"); },
+        1 => { shell_piece(p,"pyramid",x,y,z,w*1.12,0.66,d,"sand"); shell_piece(p,"pyramid",x,y,z+0.50,w*0.72,0.60,d*0.68,"sand"); shell_piece(p,"pyramid",x,y,z+1.00,w*0.42,0.56,d*0.38,"faction"); },
+        2 => { shell_piece(p,"arch",x,y,z,w,1.06,d*0.44,"stone"); shell_piece(p,"spire",x,y,z+1.02,w*0.24,0.88,0.,"faction"); shell_piece(p,"arch",x-w*0.52,y,z,0.34,0.78,0.22,"stone"); },
+        // glass pressure laboratory / timber harbour pavilion / brick factory
+        3 => { shell_piece(p,"drum",x-w*0.34,y,z,w*0.25,0.70,0.,"metal"); shell_piece(p,"drum",x+w*0.34,y,z,w*0.25,0.70,0.,"metal"); shell_piece(p,"hall",x,y+d*0.16,z+0.76,w*1.18,0.66,d*0.54,"glass"); },
+        4 => { shell_piece(p,"platform",x,y,z,w*1.16,0.16,d,"wood"); shell_piece(p,"hall",x,y,z+0.16,w*0.64,0.82,d*0.58,"wood"); shell_piece(p,"roof",x,y,z+0.94,w*1.22,0.28,d*1.14,"faction"); },
+        5 => { shell_piece(p,"hall",x,y,z,w*1.16,0.72,d,"brick"); shell_piece(p,"roof",x-w*0.24,y,z+0.70,w*0.36,0.40,d*1.08,"faction"); shell_piece(p,"stack",x+w*0.42,y,z,0.20,1.62,0.,"metal"); },
+        // floating signal geometry / slate exchange pump house / field tank
+        6 => { shell_piece(p,"platform",x-w*0.26,y,z+0.20,w*0.54,0.12,d*0.82,"dark"); shell_piece(p,"torus",x+w*0.24,y,z+0.48,w*0.68,0.30,0.,"glass"); shell_piece(p,"spire",x-w*0.52,y,z,0.12,1.74,0.,"faction"); },
+        7 => { shell_piece(p,"hall",x,y,z,w,0.74,d,"brick"); shell_piece(p,"roof",x,y,z+0.74,w*1.06,0.48,d*1.06,"dark"); shell_piece(p,"drum",x+w*0.30,y,z+0.76,w*0.24,0.74,0.,"gold"); },
+        8 => { shell_piece(p,"hall",x-w*0.10,y,z,w*1.08,0.52,d,"metal"); shell_piece(p,"drum",x+w*0.34,y,z,w*0.30,1.30,0.,"sand"); shell_piece(p,"spire",x-w*0.48,y,z,0.12,1.48,0.,"faction"); },
+        // living oval / flowering arch / translucent seed pod
+        _ => { shell_piece(p,"garden",x,y,z,w*1.16,0.14,d,"jade"); shell_piece(p,"arch",x-w*0.28,y,z+0.14,w*0.50,1.02,d*0.30,"marble"); shell_piece(p,"arch",x+w*0.28,y,z+0.14,w*0.50,0.84,d*0.30,"marble"); },
     }
+}
+/// The core machinery identifies the resource; this is the largest supporting
+/// structure and deliberately changes its silhouette with the founder.
+fn plant_shell(pieces: &mut Vec<Value>, kind: &str, style: usize) {
+    faction_shell(pieces, kind, style);
 }
 
 /// A plant's appearance: its kind's machinery, more of it the bigger the plant, on the house's ground.

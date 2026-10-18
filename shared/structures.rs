@@ -507,7 +507,9 @@ fn piece(a: &mut Art, k: &Kit, s: &str, sx: f64) {
 /// box in ten paint schemes. These are the principal founder masses: each sits
 /// over the role's working plan and changes the roofline a viewer sees first.
 fn house_massing(a: &mut Art, style: usize, role: Role) {
-    if matches!(role, Role::Landmark | Role::Bastion) { return; }
+    // Landmarks have complete authored plans in buildings.txt.  Bastions get a
+    // house command core inside their readable shared defensive curtain.
+    if role == Role::Landmark { return; }
     let (w, d, h) = match role {
         Role::Landmark => (2.7, 2.3, 1.8), Role::Hall => (2.35, 1.75, 1.5),
         Role::Yard => (1.75, 1.25, 1.05), Role::Works => (1.7, 1.2, 1.12),
@@ -515,26 +517,26 @@ fn house_massing(a: &mut Art, style: usize, role: Role) {
     };
     let (x, y) = (0.0, 0.35);
     match style {
-        // A Khan's portable court: the big felt roof, not a civic rectangle.
-        0 => { a.add(b'd', x, y, 0.16, w, 0.42, 0., b'm'); a.add(b'D', x, y, 0.58, w * 0.94, h * 0.72, 0., b'F'); }
-        // Processional temple massing: stepped sanctum and a lotus cap.
-        1 => { a.add(b'T', x, y, 0.16, w, h * 0.78, d, b'n'); a.add(b'D', x, y, 0.16 + h * 0.78, w * 0.58, h * 0.34, 0., b'F'); }
-        // Sanctum: a pointed nave rises above the service rooms.
-        2 => { a.add(b'a', x, y, 0.16, w, h * 0.9, d * 0.42, b's'); a.add(b's', x, y, 0.16 + h * 0.9, w * 0.26, h * 0.72, 0., b'F'); }
-        // Salomon's House: a glass observatory on a measured drum.
-        3 => { a.add(b'd', x, y, 0.16, w, h * 0.48, 0., b'M'); a.add(b'D', x, y, 0.16 + h * 0.48, w * 0.94, h * 0.66, 0., b'G'); }
-        // Longjiang: deep stacked eaves make each role a timber pavilion.
-        4 => { a.add(b'T', x, y, 0.16, w, h * 1.12, d, b'F'); a.add(b's', x, y, 0.16 + h * 1.12, w * 0.16, h * 0.52, 0., b'F'); }
-        // Reading Room: an industrial brick rotunda with a red civic dome.
-        5 => { a.add(b'd', x, y, 0.16, w, h * 0.62, 0., b'b'); a.add(b'D', x, y, 0.16 + h * 0.62, w * 0.96, h * 0.58, 0., b'F'); }
-        // Address Zero: an open signal portal, with paired data needles.
-        6 => { a.add(b'd', x, y, 0.16, w, h * 0.25, 0., b'k'); a.add(b'D', x, y, 0.16 + h * 0.25, w, h * 0.28, 0., b'G'); a.add(b's', x - w * 0.34, y, 0.16, w * 0.10, h * 1.45, 0., b'F'); a.add(b's', x + w * 0.34, y, 0.16, w * 0.10, h * 1.18, 0., b'F'); }
-        // Kirkcaldy: a brick exchange shed under a slate gable and clock cupola.
-        7 => { a.add(b'h', x, y, 0.16, w, h * 0.72, d, b'b'); a.add(b'r', x, y, 0.16 + h * 0.72, w * 1.06, h * 0.46, d * 1.06, b'k'); a.add(b'd', x + w * 0.3, y, 0.16 + h * 0.72, w * 0.22, h * 0.72, 0., b'g'); }
-        // Campion: a corrugated command tank and its shallow metal cap.
-        8 => { a.add(b'd', x, y, 0.16, w * 0.82, h * 0.88, 0., b'M'); a.add(b'D', x, y, 0.16 + h * 0.88, w * 0.9, h * 0.22, 0., b'M'); }
-        // Flux: the service plan opens into a planted court under a glass bowl.
-        _ => { a.add(b'g', x, y, 0.16, w * 1.08, 0.12, d, b'g'); a.add(b'a', x, y + d * 0.18, 0.16, w, h * 0.9, d * 0.34, b'm'); a.add(b'D', x, y, 0.24, w * 0.64, h * 0.34, 0., b'G'); }
+        // A low radial tent court: several canopies, none large enough to read as a civic dome.
+        0 => { a.add(b'P', x, y, 0.16, w*0.92, h*0.52, d*0.86, b'm'); a.add(b'P', x-w*0.38, y-0.18, 0.16, w*0.38, h*0.35, d*0.42, b'F'); a.add(b'P', x+w*0.38, y-0.18, 0.16, w*0.38, h*0.35, d*0.42, b'F'); a.add(b's', x, y+d*0.34, 0.16, 0.14, h*1.45, 0., b'g'); }
+        // A tall stepped stone temple.  The receding levels are its silhouette, never a lotus dome.
+        1 => { a.add(b'P', x, y, 0.16, w*1.08, h*0.54, d*1.04, b'n'); a.add(b'P', x, y, 0.16+h*0.42, w*0.72, h*0.54, d*0.68, b'n'); a.add(b'P', x, y, 0.16+h*0.84, w*0.42, h*0.62, d*0.38, b'F'); a.add(b's', x, y, 0.16+h*1.42, 0.12, h*0.62, 0., b'g'); }
+        // A cathedral is a long roofed nave, two west spires and buttresses rather than one flat arch.
+        2 => { a.add(b'h', x, y, 0.16, w*0.62, h*1.05, d*1.22, b's'); a.add(b'r', x, y, 0.16+h*1.05, w*0.72, h*0.58, d*1.32, b'F'); a.add(b's', x-w*0.42, y-d*0.36, 0.16, w*0.16, h*1.82, 0., b'F'); a.add(b's', x+w*0.42, y-d*0.36, 0.16, w*0.16, h*1.82, 0., b'F'); }
+        // A raised glass laboratory bridges brass pressure tubes below it.
+        3 => { a.add(b'd', x-w*0.34, y, 0.16, w*0.28, h*0.72, 0., b'M'); a.add(b'd', x, y, 0.16, w*0.28, h*0.72, 0., b'M'); a.add(b'd', x+w*0.34, y, 0.16, w*0.28, h*0.72, 0., b'M'); a.add(b'h', x, y+d*0.18, 0.16+h*0.78, w*1.12, h*0.64, d*0.56, b'G'); a.add(b'x', x, y+d*0.18, 0.16+h*0.72, w*1.28, 0.12, d*0.68, b'g'); }
+        // Timber pagoda: broad separate eaves and a stilted undercroft, not a stepped pyramid.
+        4 => { a.add(b'c', x-w*0.34, y, 0.16, 0.14, h*1.42, 0., b'w'); a.add(b'c', x+w*0.34, y, 0.16, 0.14, h*1.42, 0., b'w'); a.add(b'h', x, y, 0.16, w*0.62, h*0.72, d*0.58, b'w'); a.add(b'r', x, y, 0.16+h*0.68, w*1.20, 0.24, d*1.12, b'F'); a.add(b'r', x, y, 0.16+h*1.10, w*0.88, 0.24, d*0.82, b'F'); }
+        // An exposed rectangular works hall with a serrated roofline and chimney bank.
+        5 => { a.add(b'h', x, y, 0.16, w*1.16, h*0.72, d*1.04, b'b'); a.add(b'r', x-w*0.30, y, 0.16+h*0.70, w*0.34, h*0.38, d*1.10, b'F'); a.add(b'r', x+w*0.10, y, 0.16+h*0.70, w*0.34, h*0.38, d*1.10, b'F'); a.add(b'r', x+w*0.50, y, 0.16+h*0.70, w*0.28, h*0.38, d*1.10, b'F'); a.add(b'k', x-w*0.48, y+d*0.26, 0.16, 0.18, h*1.62, 0., b'M'); }
+        // Address Zero is a discontinuous suspended frame with a void through its centre.
+        6 => { a.add(b'x', x-w*0.34, y, 0.42, w*0.32, 0.16, d*0.92, b'G'); a.add(b'x', x+w*0.34, y, 0.72, w*0.32, 0.16, d*0.92, b'G'); a.add(b'a', x, y, 0.96, w*1.12, h*0.72, d*0.22, b'F'); a.add(b's', x-w*0.48, y-d*0.24, 0.16, 0.12, h*1.84, 0., b'F'); a.add(b's', x+w*0.48, y+d*0.24, 0.16, 0.12, h*1.38, 0., b'G'); }
+        // A broad columned exchange carries a long slate roof and clocklike tower.
+        7 => { a.add(b'h', x, y, 0.16, w*1.28, h*0.66, d*1.10, b'b'); a.add(b'r', x, y, 0.16+h*0.64, w*1.38, h*0.46, d*1.20, b'k'); a.add(b'c', x-w*0.42, y-d*0.44, 0.16, 0.16, h*1.20, 0., b'g'); a.add(b'c', x, y-d*0.44, 0.16, 0.16, h*1.20, 0., b'g'); a.add(b'c', x+w*0.42, y-d*0.44, 0.16, 0.16, h*1.20, 0., b'g'); }
+        // A field compound of shallow corrugated sheds, a tank, and a radio mast.
+        8 => { a.add(b'h', x-w*0.23, y, 0.16, w*0.64, h*0.48, d*0.78, b'M'); a.add(b'r', x-w*0.23, y, 0.16+h*0.46, w*0.72, 0.26, d*0.88, b'M'); a.add(b'h', x+w*0.34, y+d*0.20, 0.16, w*0.42, h*0.40, d*0.54, b'M'); a.add(b'd', x+w*0.48, y-d*0.30, 0.16, w*0.24, h*1.20, 0., b'M'); a.add(b's', x-w*0.48, y-d*0.30, 0.16, 0.12, h*1.48, 0., b'F'); }
+        // Living branches make an irregular canopy over clustered flowers and trunks.
+        _ => { a.add(b'g', x, y, 0.16, w*1.18, 0.14, d, b'g'); a.add(b'a', x-w*0.30, y, 0.16, w*0.48, h*1.14, d*0.28, b'm'); a.add(b'a', x+w*0.30, y+d*0.12, 0.16, w*0.48, h*0.88, d*0.28, b'm'); a.add(b'D', x, y-d*0.22, 0.20, w*0.32, h*0.56, 0., b'G'); a.add(b'D', x+w*0.42, y+d*0.22, 0.20, w*0.26, h*0.46, 0., b'F'); }
     }
     if role != Role::Hall { return; }
     // Halls get their actual side volumes here. The old shared classical wings
@@ -584,6 +586,24 @@ fn house_mark(a: &mut Art, style: usize, role: Role) {
     }
 }
 
+/// A faction owns the site plan as well as its skyline.  Two broad pieces keep
+/// landmark appearances inside the renderer's forty-piece budget.
+fn house_footing(a: &mut Art, style: usize, role: Role, k: &Kit) {
+    let (w, d) = match role { Role::Landmark | Role::Hall => (4.9, 4.5), Role::Yard | Role::Works => (3.5, 3.1), Role::Bastion => (3.7, 3.7), Role::Bay => (3.4, 3.0) };
+    match style.min(9) {
+        0 => { a.add(b'd', 0., 0., 0.02, w*0.82, 0.13, 0., b'm'); a.add(b'x', 0., -d*0.38, 0.15, w*0.34, 0.12, 0.24, b'g'); },
+        1 => { a.add(b'p', 0., 0., 0.02, w, 0.16, d, b'n'); a.add(b'P', 0., 0.12, 0.18, w*0.68, 0.18, d*0.66, k.accent); },
+        2 => { a.add(b'p', 0., 0.15, 0.02, w*0.70, 0.12, d, b's'); a.add(b'a', 0., -d*0.34, 0.14, w*0.46, 0.46, 0.22, b'F'); },
+        3 => { a.add(b'd', 0., 0., 0.02, w*0.84, 0.14, 0., b'M'); a.add(b'x', 0., -d*0.36, 0.16, w*0.42, 0.10, 0.28, b'g'); },
+        4 => { a.add(b'p', 0., 0.10, 0.02, w, 0.12, d*0.58, b'w'); a.add(b'w', 0., -d*0.34, 0.04, w*0.34, 0.18, 0.22, b'b'); },
+        5 => { a.add(b'p', 0., 0., 0.02, w, 0.12, d, b'M'); a.add(b'x', 0., -d*0.42, 0.14, w*0.62, 0.12, 0.20, b'F'); },
+        6 => { a.add(b'p', -w*0.20, 0., 0.10, w*0.54, 0.10, d*0.82, b'k'); a.add(b'x', w*0.23, 0., 0.28, w*0.42, 0.10, d*0.68, b'G'); },
+        7 => { a.add(b'p', 0., 0., 0.02, w, 0.12, d, b'b'); a.add(b'x', 0., -d*0.40, 0.14, w*0.38, 0.12, 0.24, b'g'); },
+        8 => { a.add(b'p', 0., 0., 0.02, w, 0.10, d, b'n'); a.add(b'x', 0., -d*0.36, 0.12, w*0.70, 0.10, 0.32, b'M'); },
+        _ => { a.add(b'g', 0., 0., 0.02, w*0.94, 0.12, d*0.82, b'g'); a.add(b'a', 0., -d*0.28, 0.14, w*0.44, 0.52, 0.24, b'm'); },
+    }
+}
+
 /// Site `style`'s building for `role`, with its design name. A house program holds only its own house's art (`art`,
 /// from shared/buildings.txt), so it builds in its own style in any seat; the default program holds every house's.
 pub fn architecture(style: usize, role: Role) -> Value {
@@ -603,22 +623,11 @@ pub fn architecture(style: usize, role: Role) -> Value {
     }
     let mut a = Art(Vec::new());
     let i = ROLES.iter().position(|r| *r == role).unwrap_or(1);
-    // Every site now begins with a stepped, house-coloured civic footing and a
-    // small front marker.  This breaks up the old isolated boxes without changing
-    // footprint, ports, budgets, or any planner decision.  The sixth kit glyph
-    // chooses the marker material per house, so the same role still reads as its
-    // owner at map scale.
-    let (w, d) = match role {
-        Role::Landmark | Role::Hall => (4.9, 4.5),
-        Role::Yard | Role::Works => (3.5, 3.1),
-        Role::Bastion => (3.7, 3.7),
-        Role::Bay => (3.4, 3.0),
-    };
-    a.add(b'p', 0.0, 0.0, 0.02, w, 0.12, d, k.base);
-    a.add(b'x', 0.0, -d * 0.52, 0.14, w * 0.3, 0.12, 0.22, k.accent);
+    // A faction's footprint is an architectural choice, with no game effect.
+    house_footing(&mut a, style, role, &k);
     house_massing(&mut a, style, role);
-    // The four service roles use a founder mass in place of the generic central
-    // shed. Landmark and bastion plans are already bespoke and retain theirs.
+    // Service roles use the founder mass in place of the generic central shed.
+    // Landmarks keep their authored plan; bastions keep their defensive curtain.
     let src = if i == 0 { f[7].to_string() } else {
         let s = DESIGNS[i - 1];
         match role {
