@@ -51,11 +51,18 @@ function sail(s,x,{height=1.65,width=.62,c=S,lateen=false,batten=false,cross=fal
  s.poly([x,height-.78,0],points,.035,c,'sway',[x,height,0]);
  s.rod([x-width*.50,height-.08,0],[x+width*.48,height-.14,0],.03,WOOD);
  if(batten)for(const d of [.21,.40,.59])s.box([x,height-d,.027],[width*.87,.025,.025],WOOD,'sway',[x,height,0]);
+ // Standing rigging and a boom give the sail an actual load-bearing structure at
+ // inspection zoom, while the cloth remains the primary top-down silhouette.
+ const rigging=s.parts.length;
+ s.rod([x,.58,-.03],[x-width*.50,height-.12,-.03],.014,WOOD,'sway',[x,height,0]);
+ s.rod([x,.58,.03],[x+width*.46,height-.12,.03],.014,WOOD,'sway',[x,height,0]);
+ s.rod([x-width*.45,height-.77,.02],[x+width*.44,height-.77,.02],.024,WOOD,'sway',[x,height,0]);
  if(cross){s.box([x,height-.43,.028],[.06,.37,.025],RED,'sway',[x,height,0]);s.box([x,height-.35,.029],[.28,.06,.026],RED,'sway',[x,height,0]);}
+ s.tag(rigging,{material:'wood',detail:1});
 }
 function oars(s,beam=.36,n=3){for(const z of [-1,1])for(let i=0;i<n;i++){const x=-.55+i*.43;s.rod([x,.44,z*beam],[x-.22,.22,z*(beam+.40)],.035,WOOD);s.box([x-.24,.21,z*(beam+.40)],[.12,.035,.19],DECK);}}
 function gun(s,x,y,z=0,{brass=false,twins=false}={}){
- s.box([x,y-.07,z],[.28,.17,.29],P);for(const side of twins?[-.07,.07]:[0])s.box([x+.27,y+.03,z+side],[.58,.07,.07],brass?GOLD:IRON,'recoil');
+ const start=s.parts.length,pivot=[x,y,z];s.box([x,y-.07,z],[.28,.17,.29],P);for(const side of twins?[-.07,.07]:[0])s.box([x+.27,y+.03,z+side],[.58,.07,.07],brass?GOLD:IRON,'recoil',pivot);s.tag(start,{material:brass?'brass':'iron',aim:'turret',pivot});
 }
 function tower(s,x,y,c=P){s.capsule([x,.55+y/2,0],[.34,y,.38],c);s.box([x,.57+y,0],[.43,.06,.47],S);s.orb([x+.03,.57+y,0],[.22,.11,.22],c);}
 function lantern(s,x,y,z=0){s.rod([x,.55,z],[x,y,z],.035,WOOD);s.box([x,y-.12,z],[.19,.25,.19],GOLD);s.box([x,y-.12,z+.10],[.13,.15,.025],'#fff0ad');}
@@ -200,5 +207,5 @@ export function navalSculpt(style,role='hull',riders=0,variant=''){
  houseRig(s,style);
  // Only carriers display parked aircraft. Passenger count stays out of all other cache variants.
  if(role==='carrier')for(let i=0;i<Math.min(4,Math.max(0,riders));i++)wing(s,-.65+i*.40,.88,P,i%2?.25:-.25);
- return {parts:s.parts};
+ return {parts:s.parts,rig:'ship'};
 }

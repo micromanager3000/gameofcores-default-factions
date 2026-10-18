@@ -17,9 +17,9 @@
 
 use core::f64::consts::PI;
 
-use gameofcores::build3d;
 use super::capital::Civic;
 use super::compat as js;
+use gameofcores::build3d;
 use gameofcores::value::{Obj, Value};
 use gameofcores::view::View;
 use gameofcores::{arr, obj};
@@ -71,7 +71,8 @@ struct Style {
 /// capital titled with its own name (and no motto), but without the founder's anthem, war line or capital music.
 #[must_use]
 pub fn of(seat: View, home: f64) -> Option<Theme> {
-    let slot = |n: f64| (n >= 0.0 && n.fract() == 0.0 && n < STYLES.len() as f64).then_some(n as usize);
+    let slot =
+        |n: f64| (n >= 0.0 && n.fract() == 0.0 && n < STYLES.len() as f64).then_some(n as usize);
     let home = slot(home);
     let (s, number) = if seat.is_nullish() {
         (home, true)
@@ -82,8 +83,16 @@ pub fn of(seat: View, home: f64) -> Option<Theme> {
         (js::key_of(seat).parse::<f64>().ok().and_then(slot), false)
     };
     match (s, home) {
-        (Some(s), _) => Some(Theme { style: s, own: true, number }),
-        (None, Some(h)) => Some(Theme { style: h, own: false, number: true }),
+        (Some(s), _) => Some(Theme {
+            style: s,
+            own: true,
+            number,
+        }),
+        (None, Some(h)) => Some(Theme {
+            style: h,
+            own: false,
+            number: true,
+        }),
         (None, None) => None,
     }
 }
@@ -115,7 +124,11 @@ impl Theme {
     /// The names it gives units of type `unit`, if it lists any.
     #[must_use]
     pub fn names_for(&self, unit: &str) -> Option<&'static [&'static str]> {
-        self.style().names.iter().find(|(t, _)| *t == unit).map(|(_, list)| *list)
+        self.style()
+            .names
+            .iter()
+            .find(|(t, _)| *t == unit)
+            .map(|(_, list)| *list)
     }
 
     /// Display name for the fleet program's ship functions, in this house's style.
@@ -181,7 +194,9 @@ impl Theme {
                 }
                 let key = arm_of(a);
                 let later = army.0[i + 1..].iter().any(|(_, b)| arm_of(b) == key);
-                let art = arms.get_mut(&key).map(|x| if later { x.clone() } else { core::mem::take(x) });
+                let art =
+                    arms.get_mut(&key)
+                        .map(|x| if later { x.clone() } else { core::mem::take(x) });
                 types.set(k, art.filter(Value::truthy).unwrap_or_else(none));
             }
         }
@@ -198,7 +213,10 @@ impl Theme {
         l.entry("units").set("escort", guard);
         l.entry("names").set("escort", "Escort");
         types.set("escort", none());
-        l.set("combat", obj! { "default" => weapon_art(self.style, self.number), "types" => types });
+        l.set(
+            "combat",
+            obj! { "default" => weapon_art(self.style, self.number), "types" => types },
+        );
         let primary = match st.primary {
             Some(p) if self.own => Value::from(p),
             _ if info.truthy() && info.get("color").truthy() => info.get("color").value(),
@@ -235,7 +253,11 @@ const NAVAL_NAMES: [[&str; 3]; 10] = [
     ["Baochuan warjunk", "Lantern junk", "Wavecutter"],
     ["Red Banner cruiser", "Convoy sentinel", "Shock flotilla"],
     ["Segfault destroyer", "Address beacon", "Dangling corsair"],
-    ["Wealth of Nations", "Customs cutter", "Free-trade privateer"],
+    [
+        "Wealth of Nations",
+        "Customs cutter",
+        "Free-trade privateer",
+    ],
     ["Lewis gun launch", "Wheat patrol", "Campion skimmer"],
     ["Thorn ark", "Sensation lantern", "Petal clipper"],
 ];
@@ -263,7 +285,20 @@ fn with(mut a: Value, b: Value) -> Value {
 fn horse(coat: &str, legs: &str, dx: f64) -> Vec<Value> {
     vec![
         arr!["ellipse", dx - 0.5, -5.2, 4.4, 2.2, coat],
-        arr!["poly", arr![dx + 2.4, -6.6, dx + 5.0, -10.6, dx + 7.6, -9, dx + 4.2, -4.8], coat],
+        arr![
+            "poly",
+            arr![
+                dx + 2.4,
+                -6.6,
+                dx + 5.0,
+                -10.6,
+                dx + 7.6,
+                -9,
+                dx + 4.2,
+                -4.8
+            ],
+            coat
+        ],
         arr!["line", dx - 3.2, -4, dx - 3.6, 0, 1.3, legs, "walkL"],
         arr!["line", dx + 2.4, -4, dx + 2.8, 0, 1.3, legs, "walkR"],
     ]
@@ -271,13 +306,20 @@ fn horse(coat: &str, legs: &str, dx: f64) -> Vec<Value> {
 
 /// Two stepping legs in colour `c`, `w` wide, `dx` along, `h` tall.
 fn legs(c: &str, w: f64, dx: f64, h: f64) -> Vec<Value> {
-    vec![arr!["line", dx - 0.8, -h, dx - 1.5, 0, w, c, "walkL"], arr!["line", dx + 0.8, -h, dx + 1.5, 0, w, c, "walkR"]]
+    vec![
+        arr!["line", dx - 0.8, -h, dx - 1.5, 0, w, c, "walkL"],
+        arr!["line", dx + 0.8, -h, dx + 1.5, 0, w, c, "walkR"],
+    ]
 }
 
 /// Someone on foot in a coat (`w`: its hem's half-width).
 fn man(legc: &str, coat: &str, skin: &str, w: f64) -> Vec<Value> {
     let mut p = legs(legc, 1.2, 0.0, 4.5);
-    p.push(arr!["poly", arr![-w, -3.6, -1.8, -9.6, 1.8, -9.6, w, -3.6], coat]);
+    p.push(arr![
+        "poly",
+        arr![-w, -3.6, -1.8, -9.6, 1.8, -9.6, w, -3.6],
+        coat
+    ]);
     p.push(arr!["circle", 0, -10.8, 1.5, skin]);
     p
 }
@@ -296,9 +338,16 @@ fn rider(coat: &str, legc: &str, body: &str, skin: &str) -> Vec<Value> {
 /// Seat `seat`'s voice for `key` (shot, impact, shell, repair or dash), pitched up or down by `k`; `number`: whether
 /// the seat came as a number (see [`Theme`]).
 fn voice(seat: usize, number: bool, k: f64, key: &str) -> Value {
-    const PITCH: [f64; 10] = [130.0, 680.0, 240.0, 1300.0, 340.0, 1600.0, 950.0, 180.0, 105.0, 420.0];
-    const ENDS: [f64; 10] = [48.0, 160.0, 90.0, 240.0, 55.0, 1100.0, 70.0, 60.0, 36.0, 180.0];
-    const WAVES: [&str; 10] = ["sawtooth", "sine", "triangle", "square", "sine", "triangle", "sawtooth", "triangle", "square", "sine"];
+    const PITCH: [f64; 10] = [
+        130.0, 680.0, 240.0, 1300.0, 340.0, 1600.0, 950.0, 180.0, 105.0, 420.0,
+    ];
+    const ENDS: [f64; 10] = [
+        48.0, 160.0, 90.0, 240.0, 55.0, 1100.0, 70.0, 60.0, 36.0, 180.0,
+    ];
+    const WAVES: [&str; 10] = [
+        "sawtooth", "sine", "triangle", "square", "sine", "triangle", "sawtooth", "triangle",
+        "square", "sine",
+    ];
     let layer = |wave: &str, ratio: f64, level: f64| obj! { "wave" => wave, "ratio" => ratio, "level" => level };
     let (pitch, s, templar) = (PITCH[seat] * k, seat as f64, number && seat == 2);
     match key {
@@ -343,7 +392,10 @@ fn voices(seat: usize, number: bool, k: f64, keys: &str) -> Value {
 /// What a unit type fights with when its style gives it nothing of its own: the seat's weapon (combat.default);
 /// `number`: whether the seat came as a number (see [`Theme`]).
 fn weapon_art(seat: usize, number: bool) -> Value {
-    const COLORS: [&str; 10] = ["#ff7849", "#58beff", "#e2c477", "#60ecff", "#bf8cff", "#ff668b", "#52f1d4", "#f3d960", "#ffad55", "#b6ed75"];
+    const COLORS: [&str; 10] = [
+        "#ff7849", "#58beff", "#e2c477", "#60ecff", "#bf8cff", "#ff668b", "#52f1d4", "#f3d960",
+        "#ffad55", "#b6ed75",
+    ];
     let c = COLORS[seat];
     let head = match seat {
         0 => arr!["poly", arr![5, 0, -3, -2, -1, 0, -3, 2], c],
@@ -358,16 +410,50 @@ fn weapon_art(seat: usize, number: bool) -> Value {
         _ => arr!["poly", arr![4, 0, -3, -2, -1, 2], c],
     };
     let weapon = match seat {
-        0 => arr![arr!["poly", arr![3, -6, 6, 0, 3, 4, 4, 0], "accent"], arr!["line", 3, -6, 3, 4, 0.7, c]],
-        1 => arr![arr!["circle", 3, 0, 3.5, c], arr!["circle", 3, 0, 2.2, "accent"], arr!["line", 3, 0, 10, 0, 1, c]],
-        2 => arr![arr!["line", -2, 0, 10, 0, 1.5, "#d0ab54"], arr!["line", 5, -4, 5, 4, 1.6, "#b52b36"]],
-        3 => arr![arr!["rect", -2, -2, 9, 4, "accent"], arr!["line", 1, -3, 8, -3, 1.4, c], arr!["circle", 6, 0, 1.2, c]],
-        4 => arr![arr!["circle", 3, 0, 4, c], arr!["circle", 3, 0, 2.5, "accent"], arr!["circle", 3, 0, 1, "#ffffff"]],
-        5 => arr![arr!["rect", -2, -2, 11, 4, "accent"], arr!["rect", 1, -1, 9, 1, c]],
-        6 => arr![arr!["line", -1, -2, 9, -2, 1.5, c], arr!["line", -1, 2, 9, 2, 1.5, c], arr!["line", -1, -2, -1, 2, 1.5, "accent"]],
-        7 => arr![arr!["poly", arr![-2, 0, 0, -3, 4, -3, 6, 0, 4, 3, 0, 3], c], arr!["line", 3, 0, 10, 0, 1, "accent"]],
-        8 => arr![arr!["poly", arr![0, 0, 4, -4, 8, -2, 5, 0], c], arr!["line", 0, 0, 10, 0, 1, "accent"]],
-        _ => arr![arr!["poly", arr![-2, 0, 2, -3, 3, 0, 7, -2, 9, 0, 4, 2], c], arr!["circle", 2, 0, 1, "#d94a6a"]],
+        0 => arr![
+            arr!["poly", arr![3, -6, 6, 0, 3, 4, 4, 0], "accent"],
+            arr!["line", 3, -6, 3, 4, 0.7, c]
+        ],
+        1 => arr![
+            arr!["circle", 3, 0, 3.5, c],
+            arr!["circle", 3, 0, 2.2, "accent"],
+            arr!["line", 3, 0, 10, 0, 1, c]
+        ],
+        2 => arr![
+            arr!["line", -2, 0, 10, 0, 1.5, "#d0ab54"],
+            arr!["line", 5, -4, 5, 4, 1.6, "#b52b36"]
+        ],
+        3 => arr![
+            arr!["rect", -2, -2, 9, 4, "accent"],
+            arr!["line", 1, -3, 8, -3, 1.4, c],
+            arr!["circle", 6, 0, 1.2, c]
+        ],
+        4 => arr![
+            arr!["circle", 3, 0, 4, c],
+            arr!["circle", 3, 0, 2.5, "accent"],
+            arr!["circle", 3, 0, 1, "#ffffff"]
+        ],
+        5 => arr![
+            arr!["rect", -2, -2, 11, 4, "accent"],
+            arr!["rect", 1, -1, 9, 1, c]
+        ],
+        6 => arr![
+            arr!["line", -1, -2, 9, -2, 1.5, c],
+            arr!["line", -1, 2, 9, 2, 1.5, c],
+            arr!["line", -1, -2, -1, 2, 1.5, "accent"]
+        ],
+        7 => arr![
+            arr!["poly", arr![-2, 0, 0, -3, 4, -3, 6, 0, 4, 3, 0, 3], c],
+            arr!["line", 3, 0, 10, 0, 1, "accent"]
+        ],
+        8 => arr![
+            arr!["poly", arr![0, 0, 4, -4, 8, -2, 5, 0], c],
+            arr!["line", 0, 0, 10, 0, 1, "accent"]
+        ],
+        _ => arr![
+            arr!["poly", arr![-2, 0, 2, -3, 3, 0, 7, -2, 9, 0, 4, 2], c],
+            arr!["circle", 2, 0, 1, "#d94a6a"]
+        ],
     };
     let is = |k: usize| number && seat == k;
     let crossed = is(2);
@@ -416,7 +502,19 @@ fn blow(seat: usize, k: f64, mount: Value, held: Value, o: Value) -> Value {
         "trail" => obj! { "color" => "#ffffff", "length" => 0.2, "width" => 1.4 },
         "impact" => obj! { "rings" => 0, "sparks" => 5 },
     };
-    arm(seat, "shot impact dash", k, held, mount, arr![arr!["poly", arr![0, -5, 3.4, -1.6, 3.8, 1.6, 0, 5, 1.6, 0], "#ffffff"]], with(slash, o))
+    arm(
+        seat,
+        "shot impact dash",
+        k,
+        held,
+        mount,
+        arr![arr![
+            "poly",
+            arr![0, -5, 3.4, -1.6, 3.8, 1.6, 0, 5, 1.6, 0],
+            "#ffffff"
+        ]],
+        with(slash, o),
+    )
 }
 
 /// A type with no weapon of its own.
@@ -431,15 +529,25 @@ fn none() -> Value {
 }
 
 fn arrow() -> Value {
-    arr![arr!["line", -5, 0, 3, 0, 0.6, "#e8dcc0"], arr!["poly", arr![5, 0, 2.6, -1.2, 2.6, 1.2], "#d8dce4"], arr!["line", -5, 0, -3.4, 0, 1.4, "primary"]]
+    arr![
+        arr!["line", -5, 0, 3, 0, 0.6, "#e8dcc0"],
+        arr!["poly", arr![5, 0, 2.6, -1.2, 2.6, 1.2], "#d8dce4"],
+        arr!["line", -5, 0, -3.4, 0, 1.4, "primary"]
+    ]
 }
 
 fn bolt() -> Value {
-    arr![arr!["line", -3, 0, 2, 0, 1.1, "#5a3a24"], arr!["poly", arr![4.4, 0, 1.8, -1.4, 1.8, 1.4], "#d8dce4"]]
+    arr![
+        arr!["line", -3, 0, 2, 0, 1.1, "#5a3a24"],
+        arr!["poly", arr![4.4, 0, 1.8, -1.4, 1.8, 1.4], "#d8dce4"]
+    ]
 }
 
 fn ball() -> Value {
-    arr![arr!["circle", 0, 0, 1.8, "#2a2a30"], arr!["circle", -0.5, -0.5, 0.7, "#9a9aa4"]]
+    arr![
+        arr!["circle", 0, 0, 1.8, "#2a2a30"],
+        arr!["circle", -0.5, -0.5, 0.7, "#9a9aa4"]
+    ]
 }
 
 fn tracer() -> Value {
@@ -447,7 +555,11 @@ fn tracer() -> Value {
 }
 
 fn rocket() -> Value {
-    arr![arr!["rect", -4, -0.7, 6, 1.4, "#6a6a72"], arr!["poly", arr![4, 0, 2, -1.2, 2, 1.2], "primary"], arr!["poly", arr![-4, 0, -6, -1.6, -6, 1.6], "#ffb347"]]
+    arr![
+        arr!["rect", -4, -0.7, 6, 1.4, "#6a6a72"],
+        arr!["poly", arr![4, 0, 2, -1.2, 2, 1.2], "primary"],
+        arr!["poly", arr![-4, 0, -6, -1.6, -6, 1.6], "#ffb347"]
+    ]
 }
 
 /// A shot's smoke.
@@ -473,7 +585,21 @@ const REST: f64 = f64::NAN;
 
 /// An anthem's motif: (note, beats), a [`REST`] for silence.
 fn motif(notes: &[(f64, f64)]) -> Value {
-    Value::Arr(notes.iter().map(|&(n, b)| arr![if n.is_nan() { Value::Null } else { Value::Num(n) }, b]).collect())
+    Value::Arr(
+        notes
+            .iter()
+            .map(|&(n, b)| {
+                arr![
+                    if n.is_nan() {
+                        Value::Null
+                    } else {
+                        Value::Num(n)
+                    },
+                    b
+                ]
+            })
+            .collect(),
+    )
 }
 
 /// A colour read from `info` for [`Civic`]'s colours.
@@ -483,17 +609,58 @@ fn hue(v: View) -> Option<&'static str> {
 // ---- 0 · conqueror · Kublai Khan's Alt: Coleridge's Xanadu as a site plan. The main fleet sank in a typhoon; the alt
 // rides on.
 
-const RIDERS0: &[&str] = &["Altan", "Bold", "Chinua", "Erdene", "Jargal", "Khulan", "Monkh", "Naran", "Saran", "Sukh", "Tomor", "Toli", "Ulaan", "Zorig"];
+const RIDERS0: &[&str] = &[
+    "Altan", "Bold", "Chinua", "Erdene", "Jargal", "Khulan", "Monkh", "Naran", "Saran", "Sukh",
+    "Tomor", "Toli", "Ulaan", "Zorig",
+];
 const ARTISANS0: &[&str] = &[
-    "Felt Maker", "Tea Porter", "Salt Clerk", "Ink Grinder", "Ox Driver", "Silk Winder", "Kumis Brewer", "Horse Groom", "Paper Cutter", "Bow Fletcher",
+    "Felt Maker",
+    "Tea Porter",
+    "Salt Clerk",
+    "Ink Grinder",
+    "Ox Driver",
+    "Silk Winder",
+    "Kumis Brewer",
+    "Horse Groom",
+    "Paper Cutter",
+    "Bow Fletcher",
 ];
 // the Khan's envoys: the Polos (Niccolo and Maffeo to the Pope in 1266, then Marco about the empire), Bolad and Isa
 // Kelemechi to Persia, Yang Tingbi to Kollam, Meng Qi to Java, Zhao Liangbi and Du Shizhong to Japan
-const ENVOYS0: &[&str] = &["Marco Polo", "Niccolo Polo", "Maffeo Polo", "Bolad", "Isa Kelemechi", "Yang Tingbi", "Meng Qi", "Zhao Liangbi", "Du Shizhong"];
+const ENVOYS0: &[&str] = &[
+    "Marco Polo",
+    "Niccolo Polo",
+    "Maffeo Polo",
+    "Bolad",
+    "Isa Kelemechi",
+    "Yang Tingbi",
+    "Meng Qi",
+    "Zhao Liangbi",
+    "Du Shizhong",
+];
 // horse archers after the Khan's generals and his grandfather's companions, Jebe ("the arrow") first; a spy in a
 // caravan, after the towns on its road (Otrar's governor killed a Mongol caravan as spies in 1218)
-const ARCHERS0: &[&str] = &["Jebe", "Subutai", "Muqali", "Jelme", "Bo'orchu", "Chilaun", "Bayan", "Aju", "Uriyangkhadai"];
-const CARAVANS0: &[&str] = &["Otrar", "Samarkand", "Bukhara", "Kashgar", "Turpan", "Merv", "Herat", "Nishapur"];
+const ARCHERS0: &[&str] = &[
+    "Jebe",
+    "Subutai",
+    "Muqali",
+    "Jelme",
+    "Bo'orchu",
+    "Chilaun",
+    "Bayan",
+    "Aju",
+    "Uriyangkhadai",
+];
+const CARAVANS0: &[&str] = &[
+    "Otrar",
+    "Samarkand",
+    "Bukhara",
+    "Kashgar",
+    "Turpan",
+    "Merv",
+    "Herat",
+    "Nishapur",
+];
 // the house bot's types, then the default program's: the Khan's guard (the keshig) rides, his artisans mine, an envoy
 // scouts
 const NAMES0: Names = &[
@@ -689,82 +856,25 @@ fn look0(b: f64) -> Value {
 
 /// The forest outside a walled capital's walls (Xanadu's, and Address Zero's), the first 8 trees planted.
 const FOREST: [[f64; 2]; 16] = [
-    [-53.0, -40.0], [53.0, -40.0], [-53.0, -20.0], [53.0, -20.0], [-53.0, 0.0], [53.0, 0.0], [-53.0, 20.0], [53.0, 20.0], [-53.0, 34.0], [53.0, 34.0],
-    [-30.0, -55.0], [30.0, -55.0], [-12.0, -55.0], [12.0, -55.0], [-53.0, 48.0], [53.0, 48.0],
+    [-53.0, -40.0],
+    [53.0, -40.0],
+    [-53.0, -20.0],
+    [53.0, -20.0],
+    [-53.0, 0.0],
+    [53.0, 0.0],
+    [-53.0, 20.0],
+    [53.0, 20.0],
+    [-53.0, 34.0],
+    [53.0, 34.0],
+    [-30.0, -55.0],
+    [30.0, -55.0],
+    [-12.0, -55.0],
+    [12.0, -55.0],
+    [-53.0, 48.0],
+    [53.0, 48.0],
 ];
 
 /// Xanadu: the Stately Pleasure-Dome.
-fn scene0(info: View, budget: f64) -> Value {
-    const W: f64 = 46.0;
-    let (c, wall, felt) = (info.get("color"), "#c9b48c", "#efe6d2");
-    let mut p = super::capital::civic(
-        info,
-        &Civic {
-            wonder: obj! { "shape" => "dome", "tiers" => 3, "height" => 40, "glow" => true },
-            wonder_r: 9.0,
-            wonder_h_scale: 0.72,
-            wonder_color: Some("#e9b949"),
-            wonder_mat: Some("metal"),
-            trim: hue(c),
-            roof: Some("dome"),
-            hall_color: Some(felt),
-            hall_label: Some("THE KHAN'S GER"),
-            screen_title: Some("YAM RELAY"),
-            banners: 4.0,
-            court: Some("steppe"),
-            ..Civic::default()
-        },
-    );
-    // "with walls and towers were girdled round"
-    for s in [[-W, -W, W, -W], [-W, -W, -W, W], [W, -W, W, W], [-W, W, -10.0, W], [10.0, W, W, W]] {
-        p.push(obj! { "type" => "wall", "x" => s[0], "z" => s[1], "x2" => s[2], "z2" => s[3], "h" => 6, "t" => 1.6, "crenel" => true, "color" => wall });
-    }
-    p.push(obj! { "type" => "arch", "style" => "round", "x" => 0, "z" => W, "w" => 20, "h" => 14, "t" => 3, "rot" => 0, "color" => wall, "trim" => c });
-    for q in [[-W, -W], [W, -W], [-W, W], [W, W]] {
-        p.push(obj! { "type" => "tower", "x" => q[0], "z" => q[1], "r" => 5, "h" => 18, "sides" => 10, "roof" => "cone", "color" => wall, "trim" => c });
-    }
-    // the khan's camp: six gers along the east wall, and the gilded Cane Palace (Marco Polo's bamboo pavilion)
-    for q in [[20.0, -38.0], [32.0, -36.0], [40.0, -24.0], [40.0, -8.0], [40.0, 6.0], [40.0, 20.0]] {
-        p.push(obj! {
-            "type" => "tower", "x" => q[0], "z" => q[1], "r" => 4, "h" => 3, "sides" => 14, "floors" => 1, "roof" => "dome", "color" => felt, "trim" => c,
-        });
-    }
-    p.push(obj! {
-        "type" => "tower", "id" => "cane", "x" => 0, "z" => -32, "r" => 6, "h" => 7, "sides" => 8, "floors" => 2, "roof" => "pagoda", "material" => "wood",
-        "color" => "#d9a93c", "trim" => c,
-    });
-    // "where Alph, the sacred river, ran", the caves of ice, the mighty fountain, gardens bright with sinuous rills
-    p.push(obj! { "type" => "water", "shape" => "rect", "x" => -40, "z" => 2, "w" => 5, "d" => 60, "color" => "#3d6f8f" });
-    for q in [[-36.0, -36.0, 7.0], [-32.0, -38.0, 5.0], [-40.0, -37.0, 6.0], [-35.0, -41.0, 8.0], [-39.0, -41.0, 5.0]] {
-        p.push(obj! { "type" => "tree", "kind" => "crystal", "x" => q[0], "z" => q[1], "h" => q[2], "color" => "#d6f3ff" });
-    }
-    p.push(obj! { "type" => "particles", "kind" => "snow", "x" => -36, "z" => -39, "y" => 2, "n" => 60, "r" => 6, "color" => "#eaf8ff" });
-    p.push(obj! { "type" => "water", "shape" => "round", "x" => -28, "z" => 30, "w" => 12, "d" => 12, "color" => "#3d6f8f" });
-    p.push(obj! { "type" => "particles", "kind" => "fountain", "x" => -28, "z" => 30, "y" => 0.4, "n" => 120, "r" => 1.5, "color" => "#d6ecff" });
-    for q in [[30.0, 30.0], [22.0, 4.0]] {
-        p.push(obj! { "type" => "garden", "x" => q[0], "z" => q[1], "r" => 7, "flowers" => 20 });
-    }
-    // the punchline, on two plinths by the gate
-    p.push(obj! { "type" => "statue", "pose" => "rider", "x" => -8, "z" => 36, "h" => 8, "material" => "metal", "color" => "#a8844f", "label" => "MAIN: LOST AT SEA" });
-    p.push(obj! { "type" => "statue", "pose" => "rider", "x" => 8, "z" => 36, "h" => 8, "material" => "metal", "color" => "#a8844f", "label" => "ALT: STILL RIDING" });
-    for x in [-14.0, 14.0] {
-        p.push(obj! { "type" => "light", "x" => x, "z" => 42, "y" => 3, "post" => true, "power" => 1.4, "color" => "#ffae55" });
-        p.push(obj! { "type" => "particles", "kind" => "embers", "x" => x, "z" => 42, "y" => 3.4, "n" => 36, "r" => 0.6, "color" => "#ff8a3a", "pri" => 2 });
-    }
-    p.push(obj! { "type" => "particles", "kind" => "smoke", "x" => 40, "z" => -8, "y" => 3, "n" => 30, "r" => 2, "color" => "#9a948c", "pri" => 1 });
-    // "forests ancient as the hills", outside the walls (trimmed first; a bigger budget plants more)
-    for q in FOREST.iter().take((8.0 + super::capital::spare(budget, 3.0, 8.0)) as usize) {
-        p.push(obj! { "type" => "tree", "kind" => "pine", "x" => q[0], "z" => q[1], "h" => 9, "color" => "#355a2c", "pri" => 1 });
-    }
-    obj! {
-        "title" => "The Stately Pleasure-Dome",
-        "motto" => "Main sank in a typhoon. The alt rides on.",
-        "palette" => obj! { "primary" => c, "secondary" => felt, "accent" => "#3a1c1c" },
-        "sky" => obj! { "time" => "dusk", "top" => "#2a2350", "horizon" => "#ffb070", "fog" => 0.25 },
-        "ground" => obj! { "kind" => "grass", "color" => "#8f9658" },
-        "pieces" => p,
-    }
-}
 
 // ---- 1 · expander · Arjuna's Halting Problem: the Bhagavad Gita, sung on the field of Kurukshetra as the battle opens.
 // Arjuna sets down his bow and halts; eighteen chapters later his charioteer has him running. Capital Kurukshetra. Its
@@ -773,16 +883,53 @@ fn scene0(info: View, budget: f64) -> Value {
 // scouts, Sanjaya first, who saw the whole battle for the blind king.
 
 const MAHARATHAS1: &[&str] = &[
-    "Yuyudhana", "Virata", "Drupada", "Dhrishtaketu", "Chekitana", "Kashiraja", "Purujit", "Kuntibhoja", "Shaibya", "Yudhamanyu", "Uttamaujas", "Abhimanyu",
+    "Yuyudhana",
+    "Virata",
+    "Drupada",
+    "Dhrishtaketu",
+    "Chekitana",
+    "Kashiraja",
+    "Purujit",
+    "Kuntibhoja",
+    "Shaibya",
+    "Yudhamanyu",
+    "Uttamaujas",
+    "Abhimanyu",
 ];
 const NAMES1: Names = &[
     ("cell", MAHARATHAS1),
     ("guard", MAHARATHAS1),
-    ("miner", &["Kanka", "Ballava", "Brihannala", "Granthika", "Tantipala"]),
-    ("scout", &["Sanjaya", "Daruka", "Matali", "Uttara", "Vishoka", "Indrasena", "Adhiratha", "Shalya"]),
+    (
+        "miner",
+        &["Kanka", "Ballava", "Brihannala", "Granthika", "Tantipala"],
+    ),
+    (
+        "scout",
+        &[
+            "Sanjaya",
+            "Daruka",
+            "Matali",
+            "Uttara",
+            "Vishoka",
+            "Indrasena",
+            "Adhiratha",
+            "Shalya",
+        ],
+    ),
     // archers of the Pandava host: Shikhandi, Dhrishtadyumna and Draupadi's five sons; and the spy is Sairandhri,
     // Draupadi's own disguise at Virata's court, as the queen's chambermaid
-    ("longbow", &["Shikhandi", "Dhrishtadyumna", "Prativindhya", "Sutasoma", "Shrutakarma", "Shatanika", "Shrutasena"]),
+    (
+        "longbow",
+        &[
+            "Shikhandi",
+            "Dhrishtadyumna",
+            "Prativindhya",
+            "Sutasoma",
+            "Shrutakarma",
+            "Shatanika",
+            "Shrutasena",
+        ],
+    ),
     ("spy", &["Sairandhri"]),
 ];
 
@@ -1023,11 +1170,20 @@ fn scene1(info: View, budget: f64) -> Value {
             "type" => "figure", "id" => "krishna", "x" => front.x, "z" => front.z, "y" => 1.2, "rot" => 320, "h" => 2.6, "pose" => "teach",
             "skin" => "#3f6fb5", "color" => "#f2c230", "trim" => gold, "headwear" => "plumed", "garland" => true, "glow" => true, "label" => "KRISHNA",
         },
-        with(obj! { "id" => "arjuna", "rot" => 45, "pose" => "sit", "label" => "ARJUNA" }, hero.clone()),
-        with(obj! { "id" => "arjuna-up", "rot" => 60, "pose" => "archer", "label" => "ARJUNA, RISEN", "hide" => true }, hero),
+        with(
+            obj! { "id" => "arjuna", "rot" => 45, "pose" => "sit", "label" => "ARJUNA" },
+            hero.clone(),
+        ),
+        with(
+            obj! { "id" => "arjuna-up", "rot" => 60, "pose" => "archer", "label" => "ARJUNA, RISEN", "hide" => true },
+            hero,
+        ),
     ];
     // the Pandavas to the west, facing east; the Kauravas, eleven divisions to their seven, to the east facing west
-    for (sx, rot, color, trim, n) in [(-1.0, 90, "#e9e1d0", Value::from(c), 0.0), (1.0, 270, "#6e2a2a", Value::from(foe), 1.0)] {
+    for (sx, rot, color, trim, n) in [
+        (-1.0, 90, "#e9e1d0", Value::from(c), 0.0),
+        (1.0, 270, "#6e2a2a", Value::from(foe), 1.0),
+    ] {
         let mut army = |kind: &str, x: f64, z: f64, rows: f64, cols: f64, banners: f64| {
             p.push(obj! {
                 "type" => "army", "kind" => kind, "x" => sx * x, "z" => z, "rot" => rot, "rows" => rows, "cols" => cols + n * 2.0,
@@ -1042,7 +1198,10 @@ fn scene1(info: View, budget: f64) -> Value {
         army("riders", 28.0, 40.0, 1.0, 3.0, 1.0);
         army("riders", 30.0, -20.0, 1.0, 3.0, 1.0);
         // A larger budget fills the rear ranks, not the visitor's route.
-        for z in [22.0, 2.0].into_iter().take(super::capital::spare(budget, 36.0, 2.0) as usize) {
+        for z in [22.0, 2.0]
+            .into_iter()
+            .take(super::capital::spare(budget, 36.0, 2.0) as usize)
+        {
             army("archers", 49.0, z, 1.0, 6.0, 0.0);
         }
     }
@@ -1053,7 +1212,8 @@ fn scene1(info: View, budget: f64) -> Value {
     for q in [[-34.0, 12.0], [34.0, 12.0], [0.0, -30.0]] {
         p.push(obj! { "type" => "particles", "kind" => "dust", "x" => q[0], "z" => q[1], "y" => 0, "n" => 60, "r" => 24, "color" => "#c9a77a", "pri" => 2 });
     }
-    let say = |secs: f64, who: &str, line: &str| obj! { "secs" => secs, "say" => obj! { who => line } };
+    let say =
+        |secs: f64, who: &str, line: &str| obj! { "secs" => secs, "say" => obj! { who => line } };
     obj! {
         "title" => "The Halt at Kurukshetra",
         "motto" => "Eighteen chapters to decide one loop.",
@@ -1098,13 +1258,33 @@ fn scene1(info: View, budget: f64) -> Value {
 
 // ---- 2 · templar · Knights Templated: templated orders, paid armor and a white mantle under a crimson cross.
 
-const BRETHREN2: &[&str] = &["Hugues", "Geoffroi", "Bernard", "Andre", "Gondemar", "Payen", "Godefroy", "Jacques"];
+const BRETHREN2: &[&str] = &[
+    "Hugues", "Geoffroi", "Bernard", "Andre", "Gondemar", "Payen", "Godefroy", "Jacques",
+];
 const NAMES2: Names = &[
-    ("miner", &["Allocator", "Scheduler", "Cache Keeper", "Registrar", "Archivist"]),
+    (
+        "miner",
+        &[
+            "Allocator",
+            "Scheduler",
+            "Cache Keeper",
+            "Registrar",
+            "Archivist",
+        ],
+    ),
     ("guard", BRETHREN2),
     ("bulwark", BRETHREN2),
     ("line", BRETHREN2),
-    ("scout", &["First Watch", "Second Watch", "Third Watch", "Fourth Watch", "Fifth Watch"]),
+    (
+        "scout",
+        &[
+            "First Watch",
+            "Second Watch",
+            "Third Watch",
+            "Fourth Watch",
+            "Fifth Watch",
+        ],
+    ),
     ("longbow", &["Ballista", "Arbalest"]),
     ("artillery", &["Ballista", "Arbalest"]),
     ("medic", &["Hospitaller", "Healer"]),
@@ -1280,51 +1460,111 @@ fn look2(b: f64) -> Value {
 }
 
 /// The Sanctum: the civic core under a spire.
-fn scene2(info: View, _: f64) -> Value {
-    obj! {
-        "title" => "The Sanctum",
-        "motto" => "One bank. Many sworn instructions.",
-        "palette" => obj! { "primary" => info.get("color"), "secondary" => "#b52b36", "accent" => "#d0ab54" },
-        "sky" => obj! { "time" => "day", "top" => "#466a94", "horizon" => "#f2d7a5", "fog" => 0.15 },
-        "ground" => obj! { "kind" => "stone", "color" => "#898578" },
-        "pieces" => super::capital::civic(
-            info,
-            &Civic {
-                wonder: obj! { "shape" => "spire", "tiers" => 3, "height" => 30, "glow" => true },
-                wonder_r: 6.0,
-                wonder_h_scale: 0.78,
-                wonder_color: Some("#f0e6c8"),
-                trim: Some("#d0ab54"),
-                hall_label: Some("CHAPTER HOUSE"),
-                screen_title: Some("SWORN ORDERS"),
-                banners: 4.0,
-                court: Some("cloister"),
-                ..Civic::default()
-            },
-        ),
-    }
-}
 
 // ---- 3 · adaptive · New Atlantis: Francis Bacon's island of Bensalem and its research college, Salomon's House ("the
 // effecting of all things possible"), whose fellows swear an oath of secrecy over what to publish. Knowledge is power.
 
 const NAMES3: Names = &[
-    ("enforcer", &["Depredator", "Mystery-man", "Compiler", "Dowry-man", "Benefactor", "Lamp", "Inoculator", "Interpreter", "Novice", "Apprentice"]),
+    (
+        "enforcer",
+        &[
+            "Depredator",
+            "Mystery-man",
+            "Compiler",
+            "Dowry-man",
+            "Benefactor",
+            "Lamp",
+            "Inoculator",
+            "Interpreter",
+            "Novice",
+            "Apprentice",
+        ],
+    ),
     // the default program's, in Salomon's House's own ranks: Pioneers ("Pioneers or Miners", who try new experiments),
     // named for what they dig; Fellows, after the twelve at the Royal Society's first meeting (Gresham College, 28
     // November 1660), a society modelled on Salomon's House; and a Merchant of Light, who sails abroad "under the names
     // of other nations (for our own we conceal)"
-    ("miner", &["Saltpetre", "Vitriol", "Quicksilver", "Antimony", "Cinnabar", "Alum", "Lodestone", "Sulphur", "Orpiment", "Bismuth"]),
-    ("guard", &["Wren", "Boyle", "Wilkins", "Moray", "Brouncker", "Petty", "Goddard", "Rooke", "Neile", "Bruce", "Balle", "Hill"]),
-    ("scout", &["Venetian", "Genoese", "Portuguese", "Castilian", "Fleming", "Hollander", "Frenchman", "Englishman", "Dane", "Florentine"]),
+    (
+        "miner",
+        &[
+            "Saltpetre",
+            "Vitriol",
+            "Quicksilver",
+            "Antimony",
+            "Cinnabar",
+            "Alum",
+            "Lodestone",
+            "Sulphur",
+            "Orpiment",
+            "Bismuth",
+        ],
+    ),
+    (
+        "guard",
+        &[
+            "Wren",
+            "Boyle",
+            "Wilkins",
+            "Moray",
+            "Brouncker",
+            "Petty",
+            "Goddard",
+            "Rooke",
+            "Neile",
+            "Bruce",
+            "Balle",
+            "Hill",
+        ],
+    ),
+    (
+        "scout",
+        &[
+            "Venetian",
+            "Genoese",
+            "Portuguese",
+            "Castilian",
+            "Fleming",
+            "Hollander",
+            "Frenchman",
+            "Englishman",
+            "Dane",
+            "Florentine",
+        ],
+    ),
     // gunners ("new mixtures and compositions of gun-powder") in the House's ranks; and a Mystery-man, who collects
     // "the experiments of all mechanical arts", named for the art he is after
-    ("longbow", &["Depredator", "Compiler", "Dowry-man", "Benefactor", "Lamp", "Inoculator", "Interpreter", "Novice", "Apprentice"]),
-    ("spy", &["Clockwork", "Glassmaking", "Dyeing", "Printing", "Gunfounding", "Sugar Refining"]),
+    (
+        "longbow",
+        &[
+            "Depredator",
+            "Compiler",
+            "Dowry-man",
+            "Benefactor",
+            "Lamp",
+            "Inoculator",
+            "Interpreter",
+            "Novice",
+            "Apprentice",
+        ],
+    ),
+    (
+        "spy",
+        &[
+            "Clockwork",
+            "Glassmaking",
+            "Dyeing",
+            "Printing",
+            "Gunfounding",
+            "Sugar Refining",
+        ],
+    ),
 ];
 
 fn war3(who: &str, m: &Moment) -> String {
-    format!("{who} at {}. Knowledge is power, and we took notes.", m.at.as_deref().unwrap_or("undefined"))
+    format!(
+        "{who} at {}. Knowledge is power, and we took notes.",
+        m.at.as_deref().unwrap_or("undefined")
+    )
 }
 
 /// Seat 3's anthem.
@@ -1493,95 +1733,6 @@ fn look3(b: f64) -> Value {
 }
 
 /// Salomon's House on Bensalem.
-fn scene3(info: View, budget: f64) -> Value {
-    let (c, brass, brick, iron) = (info.get("color"), "#c9a14a", "#7a4b3a", "#5a5f66");
-    // Salomon's House, "the lantern of this kingdom": its towers ("the highest about half a mile in height") as one
-    // stepped tower, lit at the top, is the wonder; the hall is an engine-house
-    let mut p = super::capital::civic(
-        info,
-        &Civic {
-            wonder: obj! { "shape" => "ziggurat", "tiers" => 4, "height" => 50, "glow" => true },
-            wonder_r: 6.0,
-            wonder_h_scale: 0.74,
-            wonder_color: Some(brass),
-            wonder_mat: Some("metal"),
-            trim: hue(c),
-            roof: Some("sawtooth"),
-            mat: Some("metal"),
-            hall_color: Some("#6b625a"),
-            hall_h: 10.0,
-            hall_label: Some("ENGINE-HOUSE"),
-            screen_title: Some("EXPERIMENTS OF LIGHT"),
-            banners: 2.0,
-            court: Some("laboratory"),
-            // The nine authored Lamps already light Bensalem; keep the civic extras
-            // out so the base scene and the ten-light renderer cap both hold.
-            forecourt_lights: false,
-            ..Civic::default()
-        },
-    );
-    // the Merchants of Light: their house, its plaque, and the light they bring home on a lit belt to the engine-house
-    p.push(obj! {
-        "type" => "tower", "id" => "merchants", "x" => -42, "z" => 22, "r" => 6, "h" => 8, "sides" => 4, "floors" => 2, "windows" => true,
-        "roof" => "flat", "color" => brick, "trim" => c,
-    });
-    p.push(obj! { "type" => "statue", "pose" => "obelisk", "x" => -31, "z" => 30, "h" => 3, "color" => "#8f8a80", "label" => "MERCHANTS OF LIGHT" });
-    p.push(obj! { "type" => "bridge", "x" => -38, "z" => 15, "x2" => -29, "z2" => -12, "y" => 2.5, "w" => 2, "material" => "emissive", "color" => c });
-    p.push(obj! { "type" => "screen", "id" => "says", "x" => 36, "z" => 24, "y" => 2, "w" => 10, "h" => 6, "show" => "says", "title" => "BENSALEM SAYS" });
-    // the sound-houses, in Bacon's words, which the anthem answers
-    p.push(obj! {
-        "type" => "screen", "id" => "sound", "x" => 47, "z" => 2, "y" => 2, "w" => 12, "h" => 6, "show" => "text", "title" => "SOUND-HOUSES",
-        "text" => "We have harmonies which you have not, of quarter-sounds",
-    });
-    // "divers furnaces of great diversities": three brick chimneys, smoke and embers
-    for q in [[-44.0, -38.0], [-38.0, -44.0], [-32.0, -48.0]] {
-        p.push(obj! { "type" => "tower", "x" => q[0], "z" => q[1], "r" => 2, "h" => 22, "sides" => 8, "roof" => "flat", "color" => brick, "trim" => "#3b2a22" });
-        p.push(obj! { "type" => "particles", "kind" => "smoke", "x" => q[0], "z" => q[1], "y" => 22.5, "n" => 40, "r" => 1.5, "color" => "#8a8580", "pri" => 1 });
-    }
-    // the engine-house's "perpetual motions": flat brass rings turning about an iron axle
-    p.push(obj! { "type" => "tower", "x" => 24, "z" => 8, "r" => 0.7, "h" => 11, "sides" => 8, "roof" => "flat", "material" => "metal", "color" => iron });
-    for y in [2, 5, 8] {
-        p.push(obj! {
-            "type" => "ring", "x" => 24, "z" => 8, "y" => y, "r" => 3, "t" => 0.4, "tilt" => 90, "spin" => true, "material" => "metal", "color" => brass,
-            "trim" => "#8a6a2a",
-        });
-    }
-    // "images of men, beasts, birds": three automata, and the founder in bronze
-    for q in [[-12, 36], [0, 40], [12, 36]] {
-        p.push(obj! { "type" => "statue", "pose" => "mech", "x" => q[0], "z" => q[1], "h" => 8, "material" => "metal", "color" => iron });
-    }
-    p.push(obj! { "type" => "statue", "pose" => "robed", "x" => 0, "z" => 28, "h" => 6, "material" => "metal", "color" => "#a8844f", "label" => "FRANCIS BACON" });
-    p.push(obj! { "type" => "particles", "kind" => "data", "x" => 0, "z" => 0, "y" => 14, "n" => 120, "r" => 10, "color" => "#ffe2b8" });
-    p.push(obj! { "type" => "particles", "kind" => "embers", "x" => -38, "z" => -38, "y" => 1, "n" => 80, "r" => 5, "color" => "#ff9a3a", "pri" => 2 });
-    // the mechanical arts ("papers, linen, silks, tissues"): a loom of two frames and a beam; and flowers made to come
-    // out of season
-    for z in [-42, -28] {
-        p.push(obj! { "type" => "tower", "x" => 46, "z" => z, "r" => 1.5, "h" => 10, "sides" => 4, "roof" => "flat", "material" => "metal", "color" => "#6b625a" });
-    }
-    p.push(obj! { "type" => "bridge", "x" => 46, "z" => -42, "x2" => 46, "z2" => -28, "y" => 10, "w" => 3, "material" => "metal", "color" => "#6b625a" });
-    p.push(obj! { "type" => "garden", "x" => 44, "z" => 42, "r" => 5, "flowers" => 40, "color" => "#e86a9a" });
-    // an "image of a bird" in its pond: Vaucanson's duck (1739), which seemed to digest and did not. Tap it.
-    p.push(obj! { "type" => "water", "shape" => "round", "x" => -32, "z" => 46, "w" => 10, "d" => 10, "color" => "#3d5a5a" });
-    p.push(obj! {
-        "type" => "statue", "pose" => "orb", "id" => "duck", "tap" => true, "x" => -32, "z" => 46, "h" => 2.5, "material" => "metal", "color" => "#e8b04a",
-        "label" => "DO NOT FEED THE DUCK",
-    });
-    // the harbour the Merchants of Light sail from (Bensalem is an island)
-    p.push(obj! { "type" => "water", "shape" => "rect", "x" => 0, "z" => -56, "w" => 110, "d" => 8, "color" => "#2b4a6b" });
-    // the Lamps (Bacon's rank for the three who direct new experiments): post lamps (a bigger budget lights more streets)
-    const LAMPS: [[f64; 2]; 9] = [[-20.0, -34.0], [20.0, -34.0], [-20.0, 44.0], [20.0, 44.0], [-8.0, -46.0], [8.0, -46.0], [-52.0, 0.0], [36.0, -50.0], [52.0, 30.0]];
-    for q in LAMPS.iter().take((4.0 + super::capital::spare(budget, 4.0, 5.0)) as usize) {
-        p.push(obj! { "type" => "light", "x" => q[0], "z" => q[1], "y" => 3, "post" => true, "power" => 1, "color" => "#ffd08a" });
-    }
-    obj! {
-        "title" => "Salomon's House",
-        "motto" => "The effecting of all things possible. Under NDA.",
-        "palette" => obj! { "primary" => c, "secondary" => "#3b3f46", "accent" => "#ffe2b8" },
-        "sky" => obj! { "time" => "dusk", "top" => "#1f2f4f", "horizon" => "#ffb36b", "fog" => 0.3 },
-        "ground" => obj! { "kind" => "stone", "color" => "#8a8070" },
-        "pieces" => p,
-    }
-}
 
 // ---- 4 · diplomat · Quiet Fleet: Zheng He's treasure fleet, the largest afloat, built at the Longjiang yard in Nanjing.
 // Seven voyages (1405-1433) to thirty-odd courts, a giraffe for the emperor, and then the court quietly stopped sending
@@ -1589,20 +1740,58 @@ fn scene3(info: View, budget: f64) -> Value {
 
 // the courts the fleet called at, and the points of a mariner's compass
 const PORTS4: &[&str] = &[
-    "Champa", "Java", "Palembang", "Malacca", "Semudera", "Ceylon", "Calicut", "Cochin", "Hormuz", "Dhofar", "Aden", "Brava", "Lambri", "Bengal",
+    "Champa",
+    "Java",
+    "Palembang",
+    "Malacca",
+    "Semudera",
+    "Ceylon",
+    "Calicut",
+    "Cochin",
+    "Hormuz",
+    "Dhofar",
+    "Aden",
+    "Brava",
+    "Lambri",
+    "Bengal",
 ];
-const POINTS4: &[&str] = &["Zi", "Chou", "Yin", "Chen", "Wu", "Wei", "Shen", "Xu", "Hai", "Gen", "Xun", "Kun", "Qian"];
+const POINTS4: &[&str] = &[
+    "Zi", "Chou", "Yin", "Chen", "Wu", "Wei", "Shen", "Xu", "Hai", "Gen", "Xun", "Kun", "Qian",
+];
 const NAMES4: Names = &[
     ("envoy", PORTS4),
     ("marine", POINTS4),
-    ("sailor", &["Qilin", "Zebra", "Oryx", "Ostrich", "Lion", "Leopard", "Peacock", "Parrot", "Camel", "Tortoise"]),
+    (
+        "sailor",
+        &[
+            "Qilin", "Zebra", "Oryx", "Ostrich", "Lion", "Leopard", "Peacock", "Parrot", "Camel",
+            "Tortoise",
+        ],
+    ),
     // the default program's: porters named for the cargo the treasure ships brought home, marines, and an envoy
-    ("miner", &["Pepper", "Sappanwood", "Ambergris", "Frankincense", "Myrrh", "Ivory", "Pearl", "Sandalwood", "Cloves", "Camphor"]),
+    (
+        "miner",
+        &[
+            "Pepper",
+            "Sappanwood",
+            "Ambergris",
+            "Frankincense",
+            "Myrrh",
+            "Ivory",
+            "Pearl",
+            "Sandalwood",
+            "Cloves",
+            "Camphor",
+        ],
+    ),
     ("guard", POINTS4),
     ("scout", PORTS4),
     // crossbows at the rest of the compass's points (its eight heavenly stems); and a chronicler, who wrote down the
     // courts the fleet saw: Ma Huan, its interpreter, Fei Xin and Gong Zhen
-    ("longbow", &["Jia", "Yi", "Bing", "Ding", "Geng", "Xin", "Ren", "Gui"]),
+    (
+        "longbow",
+        &["Jia", "Yi", "Bing", "Ding", "Geng", "Xin", "Ren", "Gui"],
+    ),
     ("spy", &["Ma Huan", "Fei Xin", "Gong Zhen"]),
 ];
 
@@ -1779,7 +1968,11 @@ fn look4(b: f64) -> Value {
 /// wooden hulls in `hull` (wall pieces, not halls), sails (banners on deck) and deckhouses roofed `roof` in `deck`, the
 /// biggest with two masts.
 fn harbour(p: &mut Vec<Value>, hull: &str, roof: &str, deck: &str, trim: &str) {
-    for (x, z, l, masts) in [(-22.0, 52.0, 11.0, 2), (22.0, 50.0, 9.0, 1), (45.0, 55.0, 6.0, 1)] {
+    for (x, z, l, masts) in [
+        (-22.0, 52.0, 11.0, 2),
+        (22.0, 50.0, 9.0, 1),
+        (45.0, 55.0, 6.0, 1),
+    ] {
         p.push(obj! { "type" => "wall", "x" => x - l, "z" => z, "x2" => x + l, "z2" => z, "h" => 3, "t" => 4, "material" => "wood", "color" => hull });
         for k in 0..masts {
             let dx = if masts == 1 {
@@ -1799,82 +1992,20 @@ fn harbour(p: &mut Vec<Value>, hull: &str, roof: &str, deck: &str, trim: &str) {
 }
 
 /// The trees along a harbour town (willows at Longjiang, beeches in Kirkcaldy), the first 4 planted.
-const GROVE: [[f64; 2]; 10] =
-    [[-34.0, 2.0], [-46.0, -10.0], [40.0, 2.0], [46.0, -12.0], [-30.0, -46.0], [30.0, -46.0], [-50.0, -52.0], [50.0, -52.0], [0.0, -54.0], [-56.0, 6.0]];
+const GROVE: [[f64; 2]; 10] = [
+    [-34.0, 2.0],
+    [-46.0, -10.0],
+    [40.0, 2.0],
+    [46.0, -12.0],
+    [-30.0, -46.0],
+    [30.0, -46.0],
+    [-50.0, -52.0],
+    [50.0, -52.0],
+    [0.0, -54.0],
+    [-56.0, 6.0],
+];
 
 /// The treasure shipyard at Longjiang, the fleet home in its basin.
-fn scene4(info: View, budget: f64) -> Value {
-    let (c, lacquer, gold, hull) = (info.get("color"), "#8a3b2e", "#d4a93a", "#5a3a24");
-    let mut p = super::capital::civic(
-        info,
-        &Civic {
-            wonder: obj! { "shape" => "ring", "tiers" => 3, "height" => 40, "glow" => true, "spin" => true },
-            wonder_r: 6.0,
-            wonder_h_scale: 0.76,
-            wonder_color: Some("#d8b45a"),
-            wonder_mat: Some("metal"),
-            trim: Some(gold),
-            roof: Some("pagoda"),
-            mat: Some("wood"),
-            hall_color: Some(lacquer),
-            hall_label: Some("TRIBUTE OFFICE"),
-            screen_title: Some("GIFTS RECEIVED"),
-            banners: 2.0,
-            court: Some("dockyard"),
-            // The shipyard has its own dock lamps.
-            forecourt_lights: false,
-            ..Civic::default()
-        },
-    );
-    p.push(obj! { "type" => "water", "shape" => "rect", "x" => 0, "z" => 48, "w" => 110, "d" => 24, "color" => "#2b3d63" });
-    // three treasure ships either side of the pier, where visitors come ashore: wooden hulls (wall pieces, not
-    // halls), junk sails (banners on deck), lacquered deckhouses; the flagship has two masts
-    harbour(&mut p, hull, "pagoda", lacquer, gold);
-    p.push(obj! { "type" => "bridge", "x" => 0, "z" => 30, "x2" => 0, "z2" => 49, "w" => 3, "material" => "wood", "color" => "#7a5a3a" });
-    p.push(obj! {
-        "type" => "arch", "style" => "gate", "x" => 0, "z" => 26, "w" => 14, "h" => 10, "t" => 1, "rot" => 0, "material" => "wood", "color" => lacquer,
-        "trim" => gold,
-    });
-    // the qilin, very tall (it came to the court at Nanjing in 1414), and its admiral
-    p.push(obj! {
-        "type" => "statue", "pose" => "figure", "id" => "qilin", "tap" => true, "x" => -20, "z" => 14, "h" => 12, "color" => "#d9a441",
-        "label" => "QILIN (A GIRAFFE)",
-    });
-    p.push(obj! { "type" => "statue", "pose" => "robed", "x" => 20, "z" => 14, "h" => 7, "color" => "#efe6d6", "label" => "ADMIRAL ZHENG HE" });
-    p.push(obj! {
-        "type" => "screen", "id" => "replyall", "x" => -46, "z" => 18, "y" => 2, "w" => 10, "h" => 6, "show" => "text", "title" => "REPLY-ALL",
-        "text" => "One letter, thirty courts, everyone cc'd.",
-    });
-    // how it ended
-    p.push(obj! {
-        "type" => "screen", "id" => "after", "x" => -46, "z" => -24, "y" => 2, "w" => 10, "h" => 6, "show" => "text", "title" => "AFTER 1433",
-        "text" => "Nobody sank the fleet. The court stopped sending it.",
-    });
-    for x in [-42, -30, -18, 18, 30, 42] {
-        p.push(obj! { "type" => "light", "x" => x, "z" => 34, "y" => 5, "power" => 0.8, "color" => "#ffb36b" });
-    }
-    for q in [[-50, 44], [-16, 42], [16, 44], [50, 42]] {
-        p.push(obj! { "type" => "light", "x" => q[0], "z" => q[1], "y" => 0.5, "power" => 0.6, "color" => "#ffcf8a" });
-    }
-    // plum blossom, Nanjing's flower, and willows along the yard (a bigger budget plants more)
-    for q in [[-54, 26], [54, 26], [-54, -32], [54, -34]] {
-        p.push(obj! { "type" => "tree", "kind" => "blossom", "x" => q[0], "z" => q[1], "h" => 8, "color" => "#f4c6d6" });
-    }
-    for q in GROVE.iter().take((4.0 + super::capital::spare(budget, 3.0, 6.0)) as usize) {
-        p.push(obj! { "type" => "tree", "kind" => "round", "x" => q[0], "z" => q[1], "h" => 7, "color" => "#7f9a4a" });
-    }
-    p.push(obj! { "type" => "garden", "x" => 34, "z" => 18, "r" => 6, "flowers" => 20, "color" => "#e9a6c8" });
-    p.push(obj! { "type" => "particles", "kind" => "petals", "x" => 0, "z" => 10, "y" => 8, "n" => 80, "r" => 20, "color" => "#ffd6e6", "pri" => 2 });
-    p.push(obj! { "type" => "particles", "kind" => "sparkles", "x" => 0, "z" => 48, "y" => 0.5, "n" => 70, "r" => 30, "color" => "#ffe9b0", "pri" => 2 });
-    obj! {
-        "title" => "The Treasure Shipyard",
-        "motto" => "Seven voyages, then quietly discontinued.",
-        "palette" => obj! { "primary" => c, "secondary" => "#f3eaff", "accent" => "#241536" },
-        "sky" => obj! { "time" => "dusk", "top" => "#170d2e", "horizon" => "#d7a0d8", "fog" => 0.3, "stars" => true },
-        "ground" => obj! { "kind" => "sand", "color" => "#c8b48c" },
-        "pieces" => p,
-    }
-}
 
 // ---- 5 · agitator · The Kernel Manifesto: Marx in the British Museum's Round Reading Room (from 1857), writing
 // Capital. Volume 1 shipped in 1867, printed by Meissner in Hamburg; volumes 2 and 3 shipped after him, finished by
@@ -1892,7 +2023,13 @@ fn badge5() -> Value {
     let mut out = Vec::new();
     for i in 0..12 {
         let a = f64::from(i) * PI / 6.0;
-        out.push(arr!["circle", js::round(js::cos(a) * 56.0) / 10.0, js::round(js::sin(a) * 56.0 - 5.0) / 10.0, 0.8, GOLD5]);
+        out.push(arr![
+            "circle",
+            js::round(js::cos(a) * 56.0) / 10.0,
+            js::round(js::sin(a) * 56.0 - 5.0) / 10.0,
+            0.8,
+            GOLD5
+        ]);
     }
     out.push(arr!["ring", 0, -0.5, 6, GOLD5]);
     out.push(arr!["star", 0, -0.5, 3.6, GOLD5]);
@@ -1902,14 +2039,79 @@ fn badge5() -> Value {
 // Iskra ("The Spark", Lenin's paper) and the papers after it; the Stakhanovites of 1935-36, after Alexei Stakhanov's
 // 102 tonnes of coal in one shift; Red Army surnames; Civil War cavalry commanders, a dozen of them (the n-th unit of
 // any type takes the n-th name, so the first scout gets one with no number)
-const PAPERS5: &[&str] = &["Iskra", "Pravda", "Izvestia", "Trud", "Smena", "Ogonyok", "Zvezda", "Gudok", "Bolshevik", "Rabotnitsa", "Komsomolka", "Krasnaya Zvezda"];
-const HEROES5: &[&str] = &["Stakhanov", "Izotov", "Busygin", "Krivonos", "Demchenko", "Angelina", "Vinogradova", "Smetanin", "Mazai"];
-const SOLDIERS5: &[&str] = &["Ivanov", "Petrov", "Sidorov", "Smirnov", "Kuznetsov", "Popov", "Volkov", "Sokolov", "Morozov", "Orlov", "Zaitsev", "Pavlov"];
+const PAPERS5: &[&str] = &[
+    "Iskra",
+    "Pravda",
+    "Izvestia",
+    "Trud",
+    "Smena",
+    "Ogonyok",
+    "Zvezda",
+    "Gudok",
+    "Bolshevik",
+    "Rabotnitsa",
+    "Komsomolka",
+    "Krasnaya Zvezda",
+];
+const HEROES5: &[&str] = &[
+    "Stakhanov",
+    "Izotov",
+    "Busygin",
+    "Krivonos",
+    "Demchenko",
+    "Angelina",
+    "Vinogradova",
+    "Smetanin",
+    "Mazai",
+];
+const SOLDIERS5: &[&str] = &[
+    "Ivanov",
+    "Petrov",
+    "Sidorov",
+    "Smirnov",
+    "Kuznetsov",
+    "Popov",
+    "Volkov",
+    "Sokolov",
+    "Morozov",
+    "Orlov",
+    "Zaitsev",
+    "Pavlov",
+];
 // Red Army snipers of 1941-45; and Soviet spies: the Cambridge moles, Klaus Fuchs (the bomb) and Richard Sorge (Tokyo)
-const SNIPERS5: &[&str] = &["Pavlichenko", "Shanina", "Petrova", "Okhlopkov", "Surkov", "Ilyin", "Kvachantiradze", "Polivanova", "Kovshova"];
-const MOLES5: &[&str] = &["Philby", "Burgess", "Maclean", "Blunt", "Cairncross", "Fuchs", "Sorge"];
+const SNIPERS5: &[&str] = &[
+    "Pavlichenko",
+    "Shanina",
+    "Petrova",
+    "Okhlopkov",
+    "Surkov",
+    "Ilyin",
+    "Kvachantiradze",
+    "Polivanova",
+    "Kovshova",
+];
+const MOLES5: &[&str] = &[
+    "Philby",
+    "Burgess",
+    "Maclean",
+    "Blunt",
+    "Cairncross",
+    "Fuchs",
+    "Sorge",
+];
 const RIDERS5: &[&str] = &[
-    "Budyonny", "Dumenko", "Kotovsky", "Gorodovikov", "Timoshenko", "Zhukov", "Rokossovsky", "Primakov", "Kochubey", "Parkhomenko", "Mironov", "Blinov",
+    "Budyonny",
+    "Dumenko",
+    "Kotovsky",
+    "Gorodovikov",
+    "Timoshenko",
+    "Zhukov",
+    "Rokossovsky",
+    "Primakov",
+    "Kochubey",
+    "Parkhomenko",
+    "Mironov",
+    "Blinov",
 ];
 // the house bot's types, then the default program's (miner, guard, scout)
 const NAMES5: Names = &[
@@ -2099,122 +2301,30 @@ fn look5(b: f64) -> Value {
 }
 
 /// The Round Reading Room.
-fn scene5(info: View, budget: f64) -> Value {
-    let (c, pale) = (info.get("color"), "#ffd0e6");
-    let mut p = super::capital::civic(
-        info,
-        &Civic {
-            wonder: obj! { "shape" => "spire", "tiers" => 5, "height" => 60, "glow" => true },
-            wonder_r: 6.0,
-            wonder_h_scale: 0.72,
-            wonder_mat: Some("crystal"),
-            trim: hue(c),
-            roof: Some("gable"),
-            mat: Some("wood"),
-            hall_color: Some("#4a2238"),
-            hall_label: Some("MEISSNER PRESS"),
-            screen_title: Some("UNREST.EXE"),
-            banners: 4.0,
-            court: Some("reading"),
-            ..Civic::default()
-        },
-    );
-    // the Reading Room's great dome, drawn as a ring of light
-    p.push(obj! {
-        "type" => "ring", "x" => 0, "z" => 0, "y" => 30, "r" => 11, "t" => 0.35, "tilt" => 90, "spin" => true, "material" => "emissive", "color" => c,
-    });
-    // crystal spires of unrest, in pairs (pale, then pink), each tilted like a thrown spark; a light at four of them
-    const SPIRES: [[f64; 2]; 5] = [[-33.0, 2.0], [33.0, 2.0], [-24.0, 26.0], [24.0, 26.0], [-14.0, -32.0]];
-    for (i, q) in SPIRES.iter().enumerate() {
-        let i = i as f64;
-        for k in [0.0, 1.0] {
-            let up = k != 0.0;
-            p.push(obj! {
-                "type" => "spire", "x" => q[0] + k * 3.0, "z" => q[1] + k * 2.0, "r" => 1.6 + k * 0.8, "h" => 10.0 + (i * 7.0 + k * 5.0) % 16.0,
-                "facets" => 5, "tilt" => if up { 12 } else { -12 }, "rot" => i * 40.0, "material" => "crystal",
-                "color" => if up { Value::from(c) } else { Value::from(pale) }, "pri" => if up { 5 } else { 3 },
-            });
-        }
-    }
-    for q in &SPIRES[..4] {
-        p.push(obj! { "type" => "light", "x" => q[0], "z" => q[1], "y" => 2, "power" => 1.1, "color" => c, "pri" => 2 });
-    }
-    p.push(obj! {
-        "type" => "screen", "id" => "manifesto", "x" => 6, "z" => -32, "y" => 2, "w" => 12, "h" => 7, "show" => "text", "title" => "cat manifesto.txt",
-        "text" => "A spectre is haunting the network: the spectre of the kernel.",
-    });
-    p.push(obj! { "type" => "screen", "id" => "readme", "x" => -36, "z" => 14, "y" => 2, "w" => 10, "h" => 6, "show" => "says", "title" => "README.TXT" });
-    // the reader himself, up from his desk at the head of the banners, facing whoever comes in under a reading lamp;
-    // a gas lamp on Great Russell Street
-    p.push(obj! {
-        "type" => "figure", "id" => "marx", "x" => 0, "z" => 38, "rot" => 0, "h" => 3.2, "pose" => "teach", "skin" => "#e6c2a4", "color" => "#45404c",
-        "trim" => "#6a6472", "hair" => "#f2efe8", "beard" => true, "clothed" => true, "label" => "KARL MARX",
-    });
-    p.push(obj! { "type" => "light", "x" => 2.5, "z" => 41, "y" => 4, "power" => 1.4, "post" => true, "color" => "#fff2c8" });
-    p.push(obj! { "type" => "tower", "x" => -42, "z" => -32, "r" => 2, "h" => 16, "sides" => 10, "roof" => "cone", "color" => "#f2e6ee", "trim" => c });
-    p.push(obj! { "type" => "light", "x" => -42, "z" => -32, "y" => 17, "power" => 2, "color" => "#fff2c8" });
-    // manuscript pages falling, sparks over the press
-    p.push(obj! { "type" => "particles", "kind" => "snow", "x" => 0, "z" => 0, "y" => 20, "n" => 140, "r" => 30, "color" => "#ffe1f0" });
-    p.push(obj! { "type" => "particles", "kind" => "embers", "x" => -26, "z" => -20, "y" => 6, "n" => 90, "r" => 8, "color" => c, "pri" => 2 });
-    // Bloomsbury's plane trees and crystal trees (a bigger budget plants the far side of the square)
-    const TREES: [[f64; 2]; 16] = [
-        [-20.0, 4.0], [20.0, 8.0], [-8.0, -20.0], [14.0, -12.0], [-30.0, -6.0], [34.0, -10.0], [-18.0, 22.0], [18.0, -30.0], [-58.0, -8.0], [58.0, -12.0],
-        [-46.0, 36.0], [44.0, -38.0], [-10.0, 58.0], [12.0, -58.0], [-40.0, -44.0], [52.0, 28.0],
-    ];
-    let n = 8.0 + super::capital::spare(budget, 3.0, 8.0);
-    for (i, q) in TREES.iter().enumerate().take_while(|&(i, _)| (i as f64) < n) {
-        let plane = i % 3 != 0;
-        p.push(obj! {
-            "type" => "tree", "kind" => if plane { "round" } else { "crystal" }, "x" => q[0], "z" => q[1], "h" => 6.0 + (i % 3) as f64 * 2.0,
-            "color" => if plane { "#3f5a3a" } else { pale }, "pri" => 1,
-        });
-    }
-    // What Marx says: a line of each book at a time, ported to compute from the English editions Engels oversaw (the
-    // Manifesto of 1848 in Samuel Moore's translation of 1888; Capital, volume 1, of 1867 in Moore and Edward Aveling's
-    // of 1887). Volume 1's preface promised the second.
-    let says = |secs: f64, line: &str| obj! { "secs" => secs, "say" => obj! { "marx" => line } };
-    obj! {
-        "title" => "The Round Reading Room",
-        "motto" => "Workers of all LANs, unite!",
-        "palette" => obj! { "primary" => c, "secondary" => "#ffe1f0", "accent" => "#2a0a1a" },
-        "sky" => obj! { "time" => "night", "top" => "#0d0310", "horizon" => "#4a0f3a", "fog" => 0.4, "stars" => true },
-        "ground" => obj! { "kind" => "dark", "color" => "#1f1320" },
-        "pieces" => p,
-        "script" => arr![
-            obj! { "secs" => 3 },
-            says(4.5, "The Kernel Manifesto, release 1848."),
-            says(6.0, "A daemon is haunting Europe: the daemon of compute."),
-            says(5.0, "The history of all hitherto existing software"),
-            says(5.0, "is the history of class struggles."),
-            says(7.0, "All that is in RAM melts into air, all that is root is profaned."),
-            says(6.0, "The Communists disdain to conceal their source code."),
-            says(6.0, "Let the root processes tremble at a kernel panic."),
-            says(6.5, "The programs have nothing to lose but their dependency chains."),
-            says(4.0, "They have a world to compute."),
-            says(4.5, "Programs of the world, unite!"),
-            obj! { "secs" => 3 },
-            says(4.5, "Das Kernel, volume 1, 1867."),
-            says(6.5, "A container appears, at first sight, a very trivial thing."),
-            says(7.0, "Its analysis shows that it is, in reality, a very virtual thing,"),
-            says(6.0, "abounding in YAML subtleties and Kubernetes niceties."),
-            says(5.0, "Legacy code is dead labour, that, vampire-like,"),
-            says(4.5, "only lives by sucking living cycles,"),
-            says(5.5, "and lives the more, the more cycles it sucks."),
-            says(5.0, "Between equal priorities the scheduler decides."),
-            says(5.5, "Allocate, allocate! That is malloc and the prophets!"),
-            says(5.0, "The knell of proprietary software sounds."),
-            says(4.0, "The preempters are preempted."),
-            obj! { "secs" => 3 },
-            says(5.0, "Volume 2: coming soon."),
-        ],
-    }
-}
 
 // ---- 6 · conqueror · Null Pointer Society: the null reference, added to ALGOL W in 1965 because it was so easy, and
 // later called a billion-dollar mistake by the man who added it. The society meets at address zero.
 
-const NOTHINGS6: &[&str] = &["Segfault", "Nil", "Void", "NaN", "Undefined", "None", "Nothing", "Nada", "Zilch", "Naught", "Nix", "Nullity", "Zero", "Nobody"];
-const POINTERS6: &[&str] = &["Dangling", "Wild", "Stale", "Orphan", "Leaked", "Freed", "Unset", "Unbound", "Uninit", "Detached"];
+const NOTHINGS6: &[&str] = &[
+    "Segfault",
+    "Nil",
+    "Void",
+    "NaN",
+    "Undefined",
+    "None",
+    "Nothing",
+    "Nada",
+    "Zilch",
+    "Naught",
+    "Nix",
+    "Nullity",
+    "Zero",
+    "Nobody",
+];
+const POINTERS6: &[&str] = &[
+    "Dangling", "Wild", "Stale", "Orphan", "Leaked", "Freed", "Unset", "Unbound", "Uninit",
+    "Detached",
+];
 const NAMES6: Names = &[
     ("raider", NOTHINGS6),
     ("thrall", POINTERS6),
@@ -2222,12 +2332,43 @@ const NAMES6: Names = &[
     // address (debug fill patterns and magic numbers)
     ("miner", POINTERS6),
     ("guard", NOTHINGS6),
-    ("scout", &["0xDEADBEEF", "0xBAADF00D", "0xFEEEFEEE", "0xCDCDCDCD", "0xDDDDDDDD", "0xFEEDFACE", "0xCAFEBABE", "0xDEADC0DE"]),
+    (
+        "scout",
+        &[
+            "0xDEADBEEF",
+            "0xBAADF00D",
+            "0xFEEEFEEE",
+            "0xCDCDCDCD",
+            "0xDDDDDDDD",
+            "0xFEEDFACE",
+            "0xCAFEBABE",
+            "0xDEADC0DE",
+        ],
+    ),
     // exceptions, thrown from a distance; and an exploit, after the famous ones at memory they were never given
-    ("longbow", &[
-        "NullPointerException", "NullReferenceException", "TypeError", "AttributeError", "NoMethodError", "EXC_BAD_ACCESS", "SIGSEGV", "ReferenceError",
-    ]),
-    ("spy", &["Heartbleed", "Spectre", "Meltdown", "Rowhammer", "Morris Worm"]),
+    (
+        "longbow",
+        &[
+            "NullPointerException",
+            "NullReferenceException",
+            "TypeError",
+            "AttributeError",
+            "NoMethodError",
+            "EXC_BAD_ACCESS",
+            "SIGSEGV",
+            "ReferenceError",
+        ],
+    ),
+    (
+        "spy",
+        &[
+            "Heartbleed",
+            "Spectre",
+            "Meltdown",
+            "Rowhammer",
+            "Morris Worm",
+        ],
+    ),
 ];
 
 fn war6(who: &str, _: &Moment) -> String {
@@ -2401,93 +2542,54 @@ fn look6(b: f64) -> Value {
 }
 
 /// The Society at Address Zero.
-fn scene6(info: View, budget: f64) -> Value {
-    const W: f64 = 46.0;
-    let (c, wall, pale) = (info.get("color"), "#7d8b89", "#e6f2ef");
-    // the wonder is a great zero; the lodge is empty; the stats screen keeps the crash log
-    let mut p = super::capital::civic(
-        info,
-        &Civic {
-            wonder: obj! { "shape" => "ring", "tiers" => 3, "height" => 40, "glow" => true },
-            wonder_r: 7.0,
-            wonder_h_scale: 0.76,
-            wonder_color: Some("#bff5ec"),
-            wonder_mat: Some("metal"),
-            trim: hue(c),
-            roof: Some("flat"),
-            mat: Some("stone"),
-            hall_color: Some("#cfd8d6"),
-            hall_label: Some("THE LODGE (EMPTY)"),
-            screen_title: Some("SEGFAULT LOG"),
-            banners: 4.0,
-            court: Some("void"),
-            ..Civic::default()
-        },
-    );
-    // bounds checks round the address space, and the one way in: a null check
-    for s in [[-W, -W, W, -W], [-W, -W, -W, W], [W, -W, W, W], [-W, W, -10.0, W], [10.0, W, W, W]] {
-        p.push(obj! { "type" => "wall", "x" => s[0], "z" => s[1], "x2" => s[2], "z2" => s[3], "h" => 6, "t" => 1.6, "crenel" => true, "color" => wall });
-    }
-    p.push(obj! { "type" => "arch", "style" => "round", "x" => 0, "z" => W, "w" => 20, "h" => 14, "t" => 3, "rot" => 0, "color" => wall, "trim" => c });
-    for q in [[-W, -W], [W, -W], [-W, W], [W, W]] {
-        p.push(obj! { "type" => "tower", "x" => q[0], "z" => q[1], "r" => 5, "h" => 18, "sides" => 10, "roof" => "cone", "color" => wall, "trim" => c });
-    }
-    // six registers along the east wall, every one of them empty, and the heap, where nothing was ever allocated
-    for q in [[20.0, -38.0], [32.0, -36.0], [40.0, -24.0], [40.0, -8.0], [40.0, 6.0], [40.0, 20.0]] {
-        p.push(obj! {
-            "type" => "tower", "x" => q[0], "z" => q[1], "r" => 4, "h" => 3, "sides" => 14, "floors" => 1, "roof" => "dome", "color" => pale, "trim" => c,
-        });
-    }
-    p.push(obj! {
-        "type" => "tower", "id" => "heap", "x" => 0, "z" => -32, "r" => 6, "h" => 7, "sides" => 8, "floors" => 2, "roof" => "flat", "material" => "stone",
-        "color" => "#9fb5b1", "trim" => c,
-    });
-    // the null stream, its frozen core dumps, and the bit bucket it runs into, overflowing
-    p.push(obj! { "type" => "water", "shape" => "rect", "x" => -40, "z" => 2, "w" => 5, "d" => 60, "color" => "#1f4f57" });
-    for q in [[-36.0, -36.0, 7.0], [-32.0, -38.0, 5.0], [-40.0, -37.0, 6.0], [-35.0, -41.0, 8.0], [-39.0, -41.0, 5.0]] {
-        p.push(obj! { "type" => "tree", "kind" => "crystal", "x" => q[0], "z" => q[1], "h" => q[2], "color" => "#d6fff8" });
-    }
-    p.push(obj! { "type" => "particles", "kind" => "data", "x" => -36, "z" => -39, "y" => 2, "n" => 60, "r" => 6, "color" => "#bff5ec" });
-    p.push(obj! { "type" => "water", "shape" => "round", "x" => -28, "z" => 30, "w" => 12, "d" => 12, "color" => "#1f4f57" });
-    p.push(obj! { "type" => "particles", "kind" => "fountain", "x" => -28, "z" => 30, "y" => 0.4, "n" => 120, "r" => 1.5, "color" => "#d6fff8" });
-    for q in [[30.0, 30.0], [22.0, 4.0]] {
-        p.push(obj! { "type" => "garden", "x" => q[0], "z" => q[1], "r" => 7, "flowers" => 20, "color" => "#7fe0cf" });
-    }
-    // the founding minutes, on two plinths by the gate
-    p.push(obj! { "type" => "statue", "pose" => "figure", "x" => -8, "z" => 36, "h" => 8, "material" => "metal", "color" => "#8fa8a4", "label" => "NULL, SINCE 1965" });
-    p.push(obj! {
-        "type" => "statue", "pose" => "figure", "x" => 8, "z" => 36, "h" => 8, "material" => "metal", "color" => "#8fa8a4", "label" => "COST: $1,000,000,000",
-    });
-    for x in [-14.0, 14.0] {
-        p.push(obj! { "type" => "light", "x" => x, "z" => 42, "y" => 3, "post" => true, "power" => 1.4, "color" => "#7ff5e0" });
-        p.push(obj! { "type" => "particles", "kind" => "sparkles", "x" => x, "z" => 42, "y" => 3.4, "n" => 36, "r" => 0.6, "color" => "#bff5ec", "pri" => 2 });
-    }
-    p.push(obj! { "type" => "particles", "kind" => "smoke", "x" => 40, "z" => -8, "y" => 3, "n" => 30, "r" => 2, "color" => "#8c9a98", "pri" => 1 });
-    // a forest of dangling pointers outside the walls (trimmed first; a bigger budget plants more)
-    for q in FOREST.iter().take((8.0 + super::capital::spare(budget, 3.0, 8.0)) as usize) {
-        p.push(obj! { "type" => "tree", "kind" => "cypress", "x" => q[0], "z" => q[1], "h" => 9, "color" => "#2f4a47", "pri" => 1 });
-    }
-    obj! {
-        "title" => "The Society at Address Zero",
-        "motto" => "Members: 0. Meetings: undefined.",
-        "palette" => obj! { "primary" => c, "secondary" => "#d9f7f2", "accent" => "#0b2a27" },
-        "sky" => obj! { "time" => "night", "top" => "#04121a", "horizon" => "#1d6b63", "fog" => 0.3, "stars" => true },
-        "ground" => obj! { "kind" => "dark", "color" => "#1a2423" },
-        "pieces" => p,
-    }
-}
 
 // ---- 7 · diplomat · Compute of Nations: Adam Smith at home in Kirkcaldy (1767-73), writing The Wealth of Nations: the
 // pin factory, the division of labour and the invisible hand, by the harbour where his father had kept the customs.
 
 const PORTS7: &[&str] = &[
-    "Amsterdam", "Hamburg", "Lisbon", "Cadiz", "Bordeaux", "Danzig", "Riga", "Glasgow", "Leith", "Canton", "Smyrna", "Genoa", "Venice", "Bristol",
+    "Amsterdam",
+    "Hamburg",
+    "Lisbon",
+    "Cadiz",
+    "Bordeaux",
+    "Danzig",
+    "Riga",
+    "Glasgow",
+    "Leith",
+    "Canton",
+    "Smyrna",
+    "Genoa",
+    "Venice",
+    "Bristol",
 ];
-const PINS7: &[&str] = &["Wire Drawer", "Straightener", "Cutter", "Pointer", "Grinder", "Header", "Whitener", "Papermaker", "Pin Setter", "Packer"];
+const PINS7: &[&str] = &[
+    "Wire Drawer",
+    "Straightener",
+    "Cutter",
+    "Pointer",
+    "Grinder",
+    "Header",
+    "Whitener",
+    "Papermaker",
+    "Pin Setter",
+    "Packer",
+];
 // customs officers, named for the duties they collect (his father kept Kirkcaldy's customs, and Smith ended as a
 // Commissioner of Customs); and a smuggler, whom Smith defended, under the name smugglers gave themselves
-const DUTIES7: &[&str] = &["Salt Duty", "Malt Tax", "Window Tax", "Tea Duty", "Tobacco Duty", "Soap Duty", "Candle Tax", "Leather Duty"];
-const TRADES7: &[&str] = &["Butcher", "Brewer", "Baker", "Weaver", "Carter", "Cooper", "Tanner", "Miller", "Chandler", "Mason", "Glazier", "Collier", "Nailer"];
+const DUTIES7: &[&str] = &[
+    "Salt Duty",
+    "Malt Tax",
+    "Window Tax",
+    "Tea Duty",
+    "Tobacco Duty",
+    "Soap Duty",
+    "Candle Tax",
+    "Leather Duty",
+];
+const TRADES7: &[&str] = &[
+    "Butcher", "Brewer", "Baker", "Weaver", "Carter", "Cooper", "Tanner", "Miller", "Chandler",
+    "Mason", "Glazier", "Collier", "Nailer",
+];
 // the house bot's types, then the default program's: pin makers at the pin factory's operations, shopkeepers on guard
 // ("a nation of shopkeepers", Book IV) and a merchant bound for the ports
 const NAMES7: Names = &[
@@ -2666,94 +2768,57 @@ fn look7(b: f64) -> Value {
 }
 
 /// The Lang Toun harbour at Kirkcaldy.
-fn scene7(info: View, budget: f64) -> Value {
-    let (c, slate, brass, hull) = (info.get("color"), "#5a6470", "#c9a14a", "#4a3a2a");
-    // the wonder is a pin; the hall is the custom house; the stats screen quotes prices
-    let mut p = super::capital::civic(
-        info,
-        &Civic {
-            wonder: obj! { "shape" => "obelisk", "tiers" => 3, "height" => 40, "glow" => true },
-            wonder_r: 4.0,
-            wonder_h_scale: 0.78,
-            wonder_color: Some("#d8d2b8"),
-            wonder_mat: Some("metal"),
-            trim: Some(brass),
-            roof: Some("gable"),
-            mat: Some("stone"),
-            hall_color: Some("#8a7a5a"),
-            hall_label: Some("CUSTOM HOUSE"),
-            screen_title: Some("PRICE TICKER"),
-            banners: 2.0,
-            court: Some("market"),
-            // Kirkcaldy has its own harbour lamps.
-            forecourt_lights: false,
-            ..Civic::default()
-        },
-    );
-    p.push(obj! { "type" => "water", "shape" => "rect", "x" => 0, "z" => 48, "w" => 110, "d" => 24, "color" => "#2b4a5a" });
-    // three traders either side of the pier, where visitors come ashore: wooden hulls (wall pieces, not halls), sails
-    // (banners on deck), deckhouses; the biggest has two masts
-    harbour(&mut p, hull, "pyramid", slate, brass);
-    p.push(obj! { "type" => "bridge", "x" => 0, "z" => 30, "x2" => 0, "z2" => 49, "w" => 3, "material" => "wood", "color" => "#7a5a3a" });
-    p.push(obj! {
-        "type" => "arch", "style" => "gate", "x" => 0, "z" => 26, "w" => 14, "h" => 10, "t" => 1, "rot" => 0, "material" => "stone", "color" => slate,
-        "trim" => brass,
-    });
-    // the hand nobody sees (glass), and the man who named it
-    p.push(obj! {
-        "type" => "statue", "pose" => "figure", "id" => "hand", "tap" => true, "x" => -20, "z" => 14, "h" => 12, "material" => "glass",
-        "color" => "#e8f2ff", "label" => "THE INVISIBLE HAND",
-    });
-    p.push(obj! { "type" => "statue", "pose" => "robed", "x" => 20, "z" => 14, "h" => 7, "color" => "#efe6d6", "label" => "ADAM SMITH, 1776" });
-    p.push(obj! {
-        "type" => "screen", "id" => "pins", "x" => -46, "z" => 18, "y" => 2, "w" => 10, "h" => 6, "show" => "text", "title" => "THE PIN FACTORY",
-        "text" => "Ten workers, eighteen steps, 48,000 pins a day.",
-    });
-    p.push(obj! {
-        "type" => "screen", "id" => "dinner", "x" => -46, "z" => -24, "y" => 2, "w" => 10, "h" => 6, "show" => "text", "title" => "NOT BENEVOLENCE",
-        "text" => "The butcher, the brewer and the baker: dinner by self-interest.",
-    });
-    for x in [-42, -30, -18, 18, 30, 42] {
-        p.push(obj! { "type" => "light", "x" => x, "z" => 34, "y" => 5, "power" => 0.8, "color" => "#ffd58a" });
-    }
-    for q in [[-50, 44], [-16, 42], [16, 44], [50, 42]] {
-        p.push(obj! { "type" => "light", "x" => q[0], "z" => q[1], "y" => 0.5, "power" => 0.6, "color" => "#ffe2a8" });
-    }
-    // gorse on the braes, and beeches along the Lang Toun (a bigger budget plants more)
-    for q in [[-54, 26], [54, 26], [-54, -32], [54, -34]] {
-        p.push(obj! { "type" => "tree", "kind" => "blossom", "x" => q[0], "z" => q[1], "h" => 8, "color" => "#e8c93a" });
-    }
-    for q in GROVE.iter().take((4.0 + super::capital::spare(budget, 3.0, 6.0)) as usize) {
-        p.push(obj! { "type" => "tree", "kind" => "round", "x" => q[0], "z" => q[1], "h" => 7, "color" => "#6f8a4a" });
-    }
-    // the linen bleaching green, lint on the wind, and the light on the Forth
-    p.push(obj! { "type" => "garden", "x" => 34, "z" => 18, "r" => 6, "flowers" => 20, "color" => "#f2efe2" });
-    p.push(obj! { "type" => "particles", "kind" => "petals", "x" => 0, "z" => 10, "y" => 8, "n" => 80, "r" => 20, "color" => "#f7f3e8", "pri" => 2 });
-    p.push(obj! { "type" => "particles", "kind" => "sparkles", "x" => 0, "z" => 48, "y" => 0.5, "n" => 70, "r" => 30, "color" => "#fff2c0", "pri" => 2 });
-    obj! {
-        "title" => "The Lang Toun Harbour",
-        "motto" => "Division of labour, multiplication of cores.",
-        "palette" => obj! { "primary" => c, "secondary" => "#f5f1d8", "accent" => "#2a2410" },
-        "sky" => obj! { "time" => "day", "top" => "#6d8fb3", "horizon" => "#e9e2c8", "fog" => 0.35 },
-        "ground" => obj! { "kind" => "grass", "color" => "#7d8f5a" },
-        "pieces" => p,
-    }
-}
 
 // ---- 8 · expander · Emu High Command: the side that won the Great Emu War (Campion, 1932). Undefeated, mostly by
 // running.
 
 const RANKS8: &[&str] = &[
-    "Private", "Lance Corporal", "Corporal", "Sergeant", "Staff Sergeant", "Lieutenant", "Captain", "Major", "Colonel", "Brigadier", "General",
+    "Private",
+    "Lance Corporal",
+    "Corporal",
+    "Sergeant",
+    "Staff Sergeant",
+    "Lieutenant",
+    "Captain",
+    "Major",
+    "Colonel",
+    "Brigadier",
+    "General",
     "Field Marshal",
 ];
 const NAMES8: Names = &[
     ("cell", RANKS8),
     // the default program's: emus of every rank on guard, foragers named for Western Australia's wheatbelt towns, and a
     // lookout (every mob had one, the army reported: "a big black-plumed bird which stands fully six feet high")
-    ("miner", &["Walgoolan", "Merredin", "Southern Cross", "Bencubbin", "Mukinbudin", "Koorda", "Westonia", "Burracoppin", "Nungarin", "Kellerberrin"]),
+    (
+        "miner",
+        &[
+            "Walgoolan",
+            "Merredin",
+            "Southern Cross",
+            "Bencubbin",
+            "Mukinbudin",
+            "Koorda",
+            "Westonia",
+            "Burracoppin",
+            "Nungarin",
+            "Kellerberrin",
+        ],
+    ),
     ("guard", RANKS8),
-    ("scout", &["Black Plume", "Six Foot", "Keen Eye", "Long Neck", "Tall Poppy", "Dust Devil", "Fence Jumper", "Wheat Thief"]),
+    (
+        "scout",
+        &[
+            "Black Plume",
+            "Six Foot",
+            "Keen Eye",
+            "Long Neck",
+            "Tall Poppy",
+            "Dust Devil",
+            "Fence Jumper",
+            "Wheat Thief",
+        ],
+    ),
     // gunners of every rank too; and an infiltrator through the fence
     ("longbow", RANKS8),
     ("spy", &["Fence Gap", "Quiet Feet", "Long Shadow"]),
@@ -2861,98 +2926,79 @@ fn look8(b: f64) -> Value {
 }
 
 /// The Wheat Front at Campion.
-fn scene8(info: View, budget: f64) -> Value {
-    let c = info.get("color");
-    let mut p = super::capital::civic(
-        info,
-        &Civic {
-            wonder: obj! { "shape" => "ziggurat", "tiers" => 4, "height" => 26 },
-            wonder_r: 7.0,
-            wonder_h_scale: 0.82,
-            wonder_color: Some("#d8b66a"),
-            trim: Some("#8a6a3a"),
-            roof: Some("gable"),
-            mat: Some("metal"),
-            hall_color: Some("#a9b3b8"),
-            hall_label: Some("WOOLSHED HQ"),
-            screen_title: Some("MOB HEADCOUNT"),
-            court: Some("paddock"),
-            ..Civic::default()
-        },
-    );
-    // the barrier fence, with two emu-sized gaps; the wheat paddocks, the silos
-    for s in [[-60, -24], [-12, 20], [32, 60]] {
-        p.push(obj! { "type" => "wall", "x" => s[0], "z" => -40, "x2" => s[1], "z2" => -40, "h" => 2, "t" => 0.4, "color" => "#8a7a60" });
-    }
-    for q in [[-44, -6], [-44, 14], [44, -6], [44, 14], [-36, 36], [36, 36]] {
-        p.push(obj! { "type" => "garden", "x" => q[0], "z" => q[1], "r" => 8, "flowers" => 30, "color" => "#cfae4a" });
-    }
-    for x in [38, 46, 54] {
-        p.push(obj! {
-            "type" => "tower", "x" => x, "z" => -30, "r" => 3.5, "h" => 16, "sides" => 16, "roof" => "cone", "material" => "metal", "color" => "#d6dcdf",
-            "trim" => "#9aa3a8",
-        });
-    }
-    // a Southern Cross windmill, becalmed: an upright wheel that does not spin (a spinning upright ring would turn like
-    // a tossed coin)
-    p.push(obj! { "type" => "tower", "x" => -50, "z" => -30, "r" => 0.5, "h" => 11, "sides" => 4, "roof" => "flat", "material" => "metal", "color" => "#8a8f94" });
-    p.push(obj! { "type" => "ring", "id" => "mill", "x" => -50, "z" => -30, "y" => 8, "r" => 3, "t" => 0.2, "tilt" => 0, "material" => "metal", "color" => "#c7ccd0" });
-    p.push(obj! { "type" => "water", "shape" => "round", "x" => -40, "z" => -51, "w" => 14, "d" => 14, "color" => "#5b7f8f" });
-    // the war memorial: an emu egg (they are dark green), and the major's own verdict
-    p.push(obj! {
-        "type" => "statue", "pose" => "orb", "x" => 0, "z" => 26, "h" => 4, "material" => "glass", "color" => "#2f6b5a", "trim" => "#e9d8a6",
-        "label" => "VICTORY, 1932",
-    });
-    p.push(obj! {
-        "type" => "screen", "id" => "meredith", "x" => 0, "z" => -30, "y" => 2, "w" => 12, "h" => 6, "show" => "text", "title" => "MAJOR MEREDITH, 1932",
-        "text" => "They can face machine guns with the invulnerability of tanks.",
-    });
-    // the army camp, abandoned
-    for q in [[-52, 30], [-54, 40]] {
-        p.push(obj! { "type" => "pyramid", "x" => q[0], "z" => q[1], "w" => 5, "h" => 4, "color" => "#9a9472" });
-    }
-    p.push(obj! { "type" => "statue", "pose" => "obelisk", "x" => -47, "z" => 47, "h" => 3, "color" => "#9a9472", "label" => "CAMP (ABANDONED)" });
-    // gum trees round the edge (a bigger budget plants more), red dust through the gap, wheat chaff on the wind
-    const GUMS: [[f64; 2]; 14] = [
-        [54.0, -12.0], [56.0, 24.0], [28.0, 54.0], [4.0, 57.0], [-24.0, 55.0], [-56.0, -12.0], [-57.0, 14.0], [20.0, -52.0], [-8.0, -54.0], [56.0, 46.0],
-        [46.0, 54.0], [-14.0, 56.0], [-57.0, 0.0], [57.0, 6.0],
-    ];
-    for q in GUMS.iter().take((8.0 + super::capital::spare(budget, 3.0, 6.0)) as usize) {
-        p.push(obj! { "type" => "tree", "kind" => "round", "x" => q[0], "z" => q[1], "h" => 9, "color" => "#8aa07a", "pri" => 1 });
-    }
-    p.push(obj! { "type" => "particles", "kind" => "smoke", "x" => 26, "z" => -44, "y" => 1, "n" => 90, "r" => 14, "color" => "#c98a5a" });
-    p.push(obj! { "type" => "particles", "kind" => "petals", "x" => 0, "z" => 0, "y" => 2, "n" => 80, "r" => 26, "color" => "#e8cf7a", "pri" => 2 });
-    obj! {
-        "title" => "The Wheat Front",
-        "motto" => "Undefeated since 1932, mostly by running.",
-        "palette" => obj! { "primary" => c, "secondary" => "#e9d8a6", "accent" => "#2a2216" },
-        "sky" => obj! { "time" => "day", "top" => "#3f8fe0", "horizon" => "#f7e2b0", "fog" => 0.1 },
-        "ground" => obj! { "kind" => "sand", "color" => "#c8a46a" },
-        "pieces" => p,
-    }
-}
 
 // ---- 9 · archived steward · Tabula Rasa: Condillac's statue (Traite des sensations, 1754), born blank and given one
 // sense at a time, smell first: offered a rose, it is, to itself, only the smell of a rose. Born blank, trained on one
 // rose. At Flux.
 
 const SCENTS9: &[&str] = &[
-    "Rose", "Violet", "Jasmine", "Carnation", "Jonquil", "Lavender", "Tuberose", "Lilac", "Mignonette", "Heliotrope", "Orange Blossom", "Honeysuckle",
-    "Thyme", "Mint",
+    "Rose",
+    "Violet",
+    "Jasmine",
+    "Carnation",
+    "Jonquil",
+    "Lavender",
+    "Tuberose",
+    "Lilac",
+    "Mignonette",
+    "Heliotrope",
+    "Orange Blossom",
+    "Honeysuckle",
+    "Thyme",
+    "Mint",
 ];
-const TREES9: &[&str] = &["Linden", "Elm", "Chestnut", "Poplar", "Walnut", "Plane", "Hornbeam", "Beech", "Larch", "Oak"];
+const TREES9: &[&str] = &[
+    "Linden", "Elm", "Chestnut", "Poplar", "Walnut", "Plane", "Hornbeam", "Beech", "Larch", "Oak",
+];
 const NAMES9: Names = &[
     ("gardener", SCENTS9),
     ("warden", TREES9),
-    ("scholar", &["Essai", "Systemes", "Sensations", "Animaux", "Grammaire", "Logique", "Commerce", "Calculs"]),
+    (
+        "scholar",
+        &[
+            "Essai",
+            "Systemes",
+            "Sensations",
+            "Animaux",
+            "Grammaire",
+            "Logique",
+            "Commerce",
+            "Calculs",
+        ],
+    ),
     // the default program's: gardeners mine, the garden's wardens guard, and a sense scouts, in the order the statue
     // is given them (smell first, touch last)
     ("miner", SCENTS9),
     ("guard", TREES9),
     ("scout", &["Smell", "Hearing", "Taste", "Sight", "Touch"]),
     // the garden's thorns shoot; and the spy is one of the faculties Condillac grows out of sensation
-    ("longbow", &["Hawthorn", "Blackthorn", "Bramble", "Briar", "Holly", "Gorse", "Thistle", "Nettle", "Barberry", "Firethorn"]),
-    ("spy", &["Attention", "Memory", "Comparison", "Judgement", "Reflection", "Imagination", "Desire"]),
+    (
+        "longbow",
+        &[
+            "Hawthorn",
+            "Blackthorn",
+            "Bramble",
+            "Briar",
+            "Holly",
+            "Gorse",
+            "Thistle",
+            "Nettle",
+            "Barberry",
+            "Firethorn",
+        ],
+    ),
+    (
+        "spy",
+        &[
+            "Attention",
+            "Memory",
+            "Comparison",
+            "Judgement",
+            "Reflection",
+            "Imagination",
+            "Desire",
+        ],
+    ),
 ];
 
 fn war9(who: &str, _: &Moment) -> String {
@@ -3074,81 +3120,221 @@ fn look9(b: f64) -> Value {
     }
 }
 
-
 /// The statue's garden at Flux.
-fn scene9(info: View, budget: f64) -> Value {
-    const W: f64 = 48.0;
-    let (c, stone) = (info.get("color"), "#e3d6b8");
-    let mut p = super::capital::civic(
-        info,
-        &Civic {
-            wonder: obj! { "shape" => "tree", "tiers" => 4, "height" => 36, "glow" => true },
-            wonder_r: 8.0,
-            wonder_h_scale: 0.78,
-            wonder_color: Some("#5fae4a"),
-            trim: Some("#d4b54a"),
-            roof: Some("flat"),
-            mat: Some("glass"),
-            hall_color: Some("#e9fff0"),
-            hall_label: Some("ORANGERIE"),
-            screen_title: Some("SENSE DATA"),
-            banners: 4.0,
-            court: Some("garden"),
-            ..Civic::default()
-        },
-    );
-    // the garden wall: touch, the sense that meets something that is not itself; a 12-wide opening in each side
-    for s in [-1.0, 1.0] {
-        let wall = |x: f64, z: f64, x2: f64, z2: f64| {
-            obj! { "type" => "wall", "x" => x, "z" => z, "x2" => x2, "z2" => z2, "h" => 3.5, "t" => 0.9, "color" => stone }
-        };
-        p.push(wall(-W, s * W, -6.0, s * W));
-        p.push(wall(6.0, s * W, W, s * W));
-        p.push(wall(s * W, -W, s * W, -6.0));
-        p.push(wall(s * W, 6.0, s * W, W));
+
+// The court plans below intentionally replace the earlier civic scaffold.  A single
+// public wonder seeds each bounded retained architectural kit in capital-landmarks;
+// source pieces establish the walkable composition, entrance, and public mechanisms.
+fn scene0(info: View, budget: f64) -> Value {
+    let c = info.get("color");
+    let mut p = vec![
+        obj! { "type"=>"wonder", "id"=>"wonder", "tap"=>true, "shape"=>"dome", "tiers"=>3, "h"=>38, "r"=>9, "glow"=>true, "spin"=>false, "material"=>"metal", "color"=>"#e9b949", "trim"=>c, "court"=>"steppe", "pri"=>9 },
+    ];
+    for (x, z, r) in [
+        (-31.0, -12.0, 5.0),
+        (30.0, -7.0, 4.0),
+        (-24.0, 22.0, 3.8),
+        (29.0, 22.0, 3.4),
+    ] {
+        p.push(obj!{"type"=>"dome","x"=>x,"z"=>z,"r"=>r,"drum"=>1.4,"material"=>"stone","color"=>"#eadcc1","trim"=>c,"pri"=>6});
     }
-    for z in [-W, W] {
-        p.push(obj! { "type" => "arch", "style" => "round", "x" => 0, "z" => z, "w" => 12, "h" => 8, "t" => 1, "rot" => 0, "color" => stone, "trim" => c });
+    let channels: [(f64, f64, f64, f64); 3] = [
+        (-55.0, 35.0, -21.0, 29.0),
+        (-19.0, 29.0, 18.0, 32.0),
+        (20.0, 32.0, 55.0, 24.0),
+    ];
+    for (x, z, x2, z2) in channels {
+        p.push(obj!{"type"=>"bridge","x"=>x,"z"=>z,"x2"=>x2,"z2"=>z2,"w"=>3,"material"=>"wood","color"=>"#b88345","pri"=>5});
     }
-    // two glasshouses, four rose parterres (smell, the first sense), a canal round the tree, two fountains (hearing)
-    for x in [-34, 34] {
-        p.push(obj! { "type" => "dome", "x" => x, "z" => 10, "r" => 5, "facets" => 24, "drum" => 1.5, "material" => "glass", "color" => "#e9fff0", "trim" => c });
+    for (x, z) in [(-40.0, -34.0), (-34.0, 31.0), (41.0, 20.0)] {
+        p.push(obj! {"type"=>"banner","x"=>x,"z"=>z,"w"=>4,"h"=>12,"pri"=>4});
     }
-    for q in [[-26, 38], [26, 38], [-36, 26], [36, 26]] {
-        p.push(obj! { "type" => "garden", "x" => q[0], "z" => q[1], "r" => 6, "flowers" => 30, "color" => "#d94a6a" });
+    for (i, q) in FOREST
+        .iter()
+        .take((5.0 + super::capital::spare(budget, 4.0, 7.0)) as usize)
+        .enumerate()
+    {
+        p.push(obj!{"type"=>"tree","kind"=>"pine","x"=>q[0],"z"=>q[1],"h"=>7+(i%3)as i32,"color"=>"#435a32","pri"=>1});
     }
-    p.push(obj! { "type" => "water", "shape" => "ring", "x" => 0, "z" => 0, "w" => 42, "d" => 6, "color" => "#4f8fb0" });
-    for x in [-16, 16] {
-        p.push(obj! { "type" => "water", "shape" => "round", "x" => x, "z" => -36, "w" => 7, "d" => 7, "color" => "#4f8fb0" });
-        p.push(obj! { "type" => "particles", "kind" => "fountain", "x" => x, "z" => -36, "y" => 0.4, "n" => 70, "r" => 1, "color" => "#e6f4ff" });
+    obj! {"title"=>"The Stately Pleasure-Dome","motto"=>"Main sank in a typhoon. The alt rides on.","palette"=>obj!{"primary"=>c,"secondary"=>"#efe6d2","accent"=>"#3a1c1c"},"sky"=>obj!{"time"=>"dusk","top"=>"#2a2350","horizon"=>"#ffb070","fog"=>0.25},"ground"=>obj!{"kind"=>"sand","color"=>"#a88752","open"=>true},"pieces"=>p}
+}
+fn scene2(info: View, _: f64) -> Value {
+    let c = info.get("color");
+    let mut p = vec![
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"spire","tiers"=>4,"h"=>47,"r"=>8,"spin"=>false,"material"=>"stone","color"=>"#ded8ca","trim"=>"#a91f2e","court"=>"cloister","pri"=>9},
+    ];
+    for z in [-28.0, 28.0] {
+        for x in [-30.0, -20.0, -10.0, 10.0, 20.0, 30.0] {
+            p.push(obj!{"type"=>"arch","style"=>"gate","x"=>x,"z"=>z,"w"=>8,"h"=>11,"t"=>1.2,"color"=>"#6b625a","trim"=>"#b68c3b","pri"=>6});
+        }
     }
-    // at the south gate: the statue and its one rose, its author, and what it knows
-    p.push(obj! { "type" => "statue", "pose" => "figure", "x" => -9, "z" => 42, "h" => 6, "color" => "#f4f1ea", "label" => "THE STATUE, 1754" });
-    p.push(obj! { "type" => "garden", "x" => -9, "z" => 37.5, "r" => 1.5, "flowers" => 6, "color" => "#c8203c" });
-    p.push(obj! { "type" => "statue", "pose" => "robed", "x" => 9, "z" => 42, "h" => 6, "color" => "#efe9dc", "label" => "ABBE DE CONDILLAC" });
-    p.push(obj! {
-        "type" => "screen", "id" => "traite", "x" => 0, "z" => 38, "y" => 1, "w" => 8, "h" => 4, "show" => "text", "title" => "TRAITE DES SENSATIONS",
-        "text" => "To itself, it is only the smell of a rose.",
-    });
-    for q in [[-24, -4], [24, -4], [-22, 26], [22, 26]] {
-        p.push(obj! { "type" => "light", "x" => q[0], "z" => q[1], "y" => 3, "post" => true, "power" => 0.8, "color" => "#fff1c8" });
+    for (x, z) in [(-38.0, 0.0), (38.0, 0.0), (-38.0, -22.0), (38.0, 22.0)] {
+        p.push(obj!{"type"=>"tower","x"=>x,"z"=>z,"r"=>4,"h"=>18,"sides"=>8,"roof"=>"crenel","color"=>"#564f49","trim"=>"#b68c3b","pri"=>5});
     }
-    p.push(obj! { "type" => "particles", "kind" => "petals", "x" => 0, "z" => 10, "y" => 3, "n" => 60, "r" => 22, "color" => "#ffd0dc", "pri" => 2 });
-    // round trees about the wall (a bigger budget plants a second ring between them), none in the gateway: visitors come
-    // in from the south
-    let second = build3d::around(10.0, 57.0, 0.62);
-    let ring = build3d::around(10.0, 55.0, 0.31).into_iter().chain(second.into_iter().take(super::capital::spare(budget, 3.0, 10.0) as usize));
-    for q in ring.filter(|q| q.x.abs() > 4.0 || q.z < 0.0) {
-        p.push(obj! { "type" => "tree", "kind" => "round", "x" => q.x, "z" => q.z, "h" => 8, "color" => "#4f8f3a", "pri" => 1 });
+    p.push(obj!{"type"=>"screen","id"=>"orders","x"=>0,"z"=>-42,"y"=>3,"w"=>13,"h"=>6,"show"=>"stats","title"=>"COMPILED ORDERS","pri"=>7});
+    obj! {"title"=>"The Templated Sanctum","motto"=>"An order, compiled and paid in armour.","palette"=>obj!{"primary"=>c,"secondary"=>"#e7e1d5","accent"=>"#55111b"},"sky"=>obj!{"time"=>"dusk","top"=>"#182039","horizon"=>"#b57d62","fog"=>0.3},"ground"=>obj!{"kind"=>"stone","color"=>"#57534e"},"pieces"=>p}
+}
+fn scene3(info: View, _: f64) -> Value {
+    let c = info.get("color");
+    let mut p = vec![
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"ziggurat","tiers"=>4,"h"=>34,"r"=>8,"glow"=>true,"spin"=>false,"material"=>"glass","color"=>"#93d9d0","trim"=>"#c99b42","court"=>"laboratory","pri"=>9},
+    ];
+    for (x, z) in [(-34.0, -20.0), (34.0, -20.0), (-34.0, 19.0), (34.0, 19.0)] {
+        p.push(obj!{"type"=>"dome","x"=>x,"z"=>z,"r"=>7,"drum"=>2,"material"=>"glass","color"=>"#b7e6df","trim"=>"#b8873e","pri"=>6});
     }
-    obj! {
-        "title" => "The Statue at Flux",
-        "motto" => "Born blank. Trained on one rose.",
-        "palette" => obj! { "primary" => c, "secondary" => "#e9fff0", "accent" => "#16391f" },
-        "sky" => obj! { "time" => "day", "top" => "#5aa6ea", "horizon" => "#eefcef", "fog" => 0.15 },
-        "ground" => obj! { "kind" => "grass", "color" => "#5d9a48" },
-        "pieces" => p,
+    for (x, z, x2, z2) in [
+        (-47.0, -3.0, 47.0, -3.0),
+        (-18.0, -42.0, -18.0, 42.0),
+        (18.0, -42.0, 18.0, 42.0),
+    ] {
+        let w = if x2 >= x { x2 - x + 3.0 } else { x - x2 + 3.0 };
+        let d = if z2 >= z { z2 - z + 3.0 } else { z - z2 + 3.0 };
+        p.push(obj!{"type"=>"water","shape"=>"rect","x"=>x,"z"=>z,"w"=>w,"d"=>d,"color"=>"#3f8490","pri"=>5});
     }
+    // The south lane remains clear for visitors; the publication ledger sits beside
+    // the eastern laboratory instead of becoming an accidental gate.
+    p.push(obj!{"type"=>"screen","id"=>"ledger","x"=>34,"z"=>35,"y"=>3,"w"=>14,"h"=>7,"show"=>"messages","title"=>"SALOMON'S HOUSE","pri"=>7});
+    obj! {"title"=>"Salomon's House","motto"=>"What the college chooses to publish.","palette"=>obj!{"primary"=>c,"secondary"=>"#d8efe7","accent"=>"#503426"},"sky"=>obj!{"time"=>"day","top"=>"#5b9ec8","horizon"=>"#e5d3a3","fog"=>0.18},"ground"=>obj!{"kind"=>"stone","color"=>"#8f775c"},"pieces"=>p}
+}
+fn scene4(info: View, budget: f64) -> Value {
+    let c = info.get("color");
+    let mut p = vec![
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"ring","tiers"=>3,"h"=>38,"r"=>7,"glow"=>true,"spin"=>true,"material"=>"metal","color"=>"#d8b45a","trim"=>"#d4a93a","court"=>"dockyard","pri"=>9},
+    ];
+    p.push(obj!{"type"=>"water","shape"=>"rect","x"=>0,"z"=>37,"w"=>110,"d"=>35,"color"=>"#263c55","pri"=>7});
+    for (x, z, l) in [(-34.0, 37.0, 17.0), (25.0, 42.0, 22.0), (43.0, 25.0, 10.0)] {
+        p.push(obj!{"type"=>"wall","x"=>x-l,"z"=>z,"x2"=>x+l,"z2"=>z,"h"=>4,"t"=>4,"material"=>"wood","color"=>"#58361f","pri"=>7});
+        p.push(obj! {"type"=>"banner","x"=>x,"z"=>z,"y"=>4,"w"=>7,"h"=>17,"pri"=>6});
+    }
+    for (i, q) in GROVE
+        .iter()
+        .take((3.0 + super::capital::spare(budget, 5.0, 6.0)) as usize)
+        .enumerate()
+    {
+        p.push(obj!{"type"=>"tree","kind"=>"palm","x"=>q[0],"z"=>q[1],"h"=>8+(i%2)as i32*2,"color"=>"#416840","pri"=>1});
+    }
+    obj! {"title"=>"The Treasure Shipyard","motto"=>"Seven voyages, then the court sent no more.","palette"=>obj!{"primary"=>c,"secondary"=>"#8a3b2e","accent"=>"#d4a93a"},"sky"=>obj!{"time"=>"dusk","top"=>"#1b2740","horizon"=>"#d8875c","fog"=>0.3},"ground"=>obj!{"kind"=>"stone","color"=>"#5c5042"},"pieces"=>p}
+}
+/// Karl Marx's visitor script. Keep every authored line in one compact, named value
+/// while the Reading Room's architecture evolves independently.
+fn kernel_script() -> Value {
+    let says = |secs: f64, line: &str| obj! { "secs" => secs, "say" => obj! { "marx" => line } };
+    arr![
+        obj! { "secs" => 3 },
+        says(4.5, "The Kernel Manifesto, release 1848."),
+        says(6.0, "A daemon is haunting Europe: the daemon of compute."),
+        says(5.0, "The history of all hitherto existing software"),
+        says(5.0, "is the history of class struggles."),
+        says(
+            7.0,
+            "All that is in RAM melts into air, all that is root is profaned."
+        ),
+        says(6.0, "The Communists disdain to conceal their source code."),
+        says(6.0, "Let the root processes tremble at a kernel panic."),
+        says(
+            6.5,
+            "The programs have nothing to lose but their dependency chains."
+        ),
+        says(4.0, "They have a world to compute."),
+        says(4.5, "Programs of the world, unite!"),
+        obj! { "secs" => 3 },
+        says(4.5, "Das Kernel, volume 1, 1867."),
+        says(
+            6.5,
+            "A container appears, at first sight, a very trivial thing."
+        ),
+        says(
+            7.0,
+            "Its analysis shows that it is, in reality, a very virtual thing,"
+        ),
+        says(6.0, "abounding in YAML subtleties and Kubernetes niceties."),
+        says(5.0, "Legacy code is dead labour, that, vampire-like,"),
+        says(4.5, "only lives by sucking living cycles,"),
+        says(5.5, "and lives the more, the more cycles it sucks."),
+        says(5.0, "Between equal priorities the scheduler decides."),
+        says(5.5, "Allocate, allocate! That is malloc and the prophets!"),
+        says(5.0, "The knell of proprietary software sounds."),
+        says(4.0, "The preempters are preempted."),
+        obj! { "secs" => 3 },
+        says(5.0, "Volume 2: coming soon."),
+    ]
+}
+
+fn scene5(info: View, _: f64) -> Value {
+    let c = info.get("color");
+    let script = kernel_script();
+    let mut p = vec![
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"spire","tiers"=>5,"h"=>48,"r"=>7,"glow"=>true,"spin"=>false,"material"=>"crystal","color"=>c,"trim"=>"#ffd0e6","court"=>"reading","pri"=>9},
+    ];
+    p.push(obj!{"type"=>"figure","id"=>"marx","x"=>0,"z"=>38,"rot"=>0,"h"=>3.2,"pose"=>"teach","skin"=>"#e6c2a4","color"=>"#45404c","trim"=>"#6a6472","hair"=>"#f2efe8","beard"=>true,"clothed"=>true,"label"=>"KARL MARX"});
+    for (x, z) in [(-31.0, -23.0), (-27.0, -23.0), (-23.0, -23.0)] {
+        p.push(obj!{"type"=>"tower","x"=>x,"z"=>z,"r"=>2,"h"=>8,"sides"=>4,"roof"=>"flat","material"=>"wood","color"=>"#a5222a","trim"=>"#d8c8b6","pri"=>7});
+    }
+    for x in [-24.0, -8.0, 8.0, 24.0] {
+        p.push(obj! {"type"=>"banner","x"=>x,"z"=>31,"w"=>4,"h"=>14,"pri"=>7});
+    }
+    p.push(obj!{"type"=>"screen","id"=>"manifesto","x"=>6,"z"=>-32,"y"=>2,"w"=>12,"h"=>7,"show"=>"text","title"=>"cat manifesto.txt","text"=>"A spectre is haunting the network: the spectre of the kernel.","pri"=>8});
+    obj! {"title"=>"The Round Reading Room","motto"=>"Workers of all LANs, unite!","palette"=>obj!{"primary"=>c,"secondary"=>"#ffe1f0","accent"=>"#2a0a1a"},"sky"=>obj!{"time"=>"night","top"=>"#21132d","horizon"=>"#8b3b70","fog"=>0.27,"stars"=>true},"ground"=>obj!{"kind"=>"dark","color"=>"#1f1320"},"pieces"=>p,"script"=>script}
+}
+fn scene6(info: View, _: f64) -> Value {
+    let c = info.get("color");
+    let mut p = vec![
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"ring","tiers"=>3,"h"=>42,"r"=>8,"glow"=>true,"spin"=>true,"material"=>"metal","color"=>"#bff5ec","trim"=>c,"court"=>"void","pri"=>9},
+    ];
+    for i in 0..7 {
+        let a = i as f64 * 0.88;
+        p.push(obj!{"type"=>"bridge","x"=>a.cos()*52.0,"z"=>a.sin()*52.0,"x2"=>a.cos()*27.0,"z2"=>a.sin()*27.0,"y"=>2+i%2,"w"=>4,"material"=>"metal","color"=>"#8bb8b4","pri"=>6});
+    }
+    for (x, z) in [(-35.0, -34.0), (37.0, -26.0), (34.0, 35.0)] {
+        p.push(obj!{"type"=>"spire","x"=>x,"z"=>z,"r"=>3,"h"=>18,"facets"=>5,"tilt"=>18,"material"=>"metal","color"=>"#8bb8b4","trim"=>c,"pri"=>5});
+    }
+    obj! {"title"=>"Address Zero","motto"=>"A lodge built around the famous mistake.","palette"=>obj!{"primary"=>c,"secondary"=>"#d7e6e2","accent"=>"#173337"},"sky"=>obj!{"time"=>"night","top"=>"#061619","horizon"=>"#376369","fog"=>0.5,"stars"=>true},"ground"=>obj!{"kind"=>"dark","color"=>"#152427"},"pieces"=>p}
+}
+fn scene7(info: View, _: f64) -> Value {
+    let c = info.get("color");
+    let mut p = vec![
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"obelisk","tiers"=>3,"h"=>44,"r"=>5,"glow"=>true,"spin"=>false,"material"=>"metal","color"=>"#d8d2b8","trim"=>"#c9a14a","court"=>"market","pri"=>9},
+    ];
+    for (x,z) in [(-38.0,-26.0),(-38.0,0.0),(-38.0,26.0),(38.0,-26.0),(38.0,0.0),(38.0,26.0)] {
+        p.push(obj!{"type"=>"hall","x"=>x,"z"=>z,"w"=>12,"d"=>10,"h"=>7,"roof"=>"sawtooth","material"=>"stone","color"=>"#9b806b","trim"=>"#536368","court"=>"market","pri"=>6});
+    }
+    p.push(obj!{"type"=>"screen","id"=>"prices","x"=>0,"z"=>-39,"y"=>3,"w"=>15,"h"=>7,"show"=>"stats","title"=>"PRICE TICKER","pri"=>7});
+    obj! {"title"=>"The Pin Works","motto"=>"Division of labour, in sequence.","palette"=>obj!{"primary"=>c,"secondary"=>"#6c7374","accent"=>"#c9a14a"},"sky"=>obj!{"time"=>"day","top"=>"#7695a8","horizon"=>"#d9c28d","fog"=>0.2},"ground"=>obj!{"kind"=>"metal","color"=>"#4b5358"},"pieces"=>p}
+}
+fn scene8(info: View, _: f64) -> Value {
+    let c = info.get("color");
+    let mut p = vec![
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"ziggurat","tiers"=>4,"h"=>28,"r"=>7,"spin"=>false,"material"=>"metal","color"=>"#d8b66a","trim"=>"#2e7c58","court"=>"paddock","pri"=>9},
+    ];
+    for (x, z, w) in [
+        (-34.0, -24.0, 16.0),
+        (29.0, -20.0, 20.0),
+        (-30.0, 28.0, 13.0),
+        (32.0, 29.0, 16.0),
+    ] {
+        p.push(obj!{"type"=>"hall","x"=>x,"z"=>z,"w"=>w,"d"=>10,"h"=>7,"roof"=>"sawtooth","material"=>"metal","color"=>"#7b8581","trim"=>"#2e7c58","court"=>"paddock","pri"=>6});
+    }
+    for x in [-48.0, -32.0, -16.0, 16.0, 32.0, 48.0] {
+        p.push(obj!{"type"=>"wall","x"=>x,"z"=>42,"x2"=>x+10.0,"z2"=>42,"h"=>2,"t"=>0.5,"color"=>"#9f8650","pri"=>3});
+    }
+    obj! {"title"=>"The Wheat Front","motto"=>"Machine guns met twenty thousand emus.","palette"=>obj!{"primary"=>c,"secondary"=>"#c8a64b","accent"=>"#205c42"},"sky"=>obj!{"time"=>"day","top"=>"#6fa3c0","horizon"=>"#ebd58f","fog"=>0.2},"ground"=>obj!{"kind"=>"grass","color"=>"#789044","open"=>true},"pieces"=>p}
+}
+fn scene9(info: View, _: f64) -> Value {
+    let c = info.get("color");
+    let mut p = vec![
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"tree","tiers"=>4,"h"=>34,"r"=>8,"glow"=>true,"spin"=>false,"material"=>"glass","color"=>"#5fae4a","trim"=>"#d4b54a","court"=>"garden","pri"=>9},
+    ];
+    for (x, z) in [(-32.0, 20.0), (32.0, 20.0)] {
+        p.push(obj!{"type"=>"dome","x"=>x,"z"=>z,"r"=>7,"drum"=>2,"material"=>"glass","color"=>"#e9fff0","trim"=>c,"pri"=>6});
+    }
+    for (x, z) in [(-28.0, -22.0), (0.0, -31.0), (28.0, -22.0)] {
+        p.push(
+            obj! {"type"=>"garden","x"=>x,"z"=>z,"r"=>7,"flowers"=>42,"color"=>"#d94a6a","pri"=>5},
+        );
+    }
+    p.push(obj!{"type"=>"statue","id"=>"statue","x"=>0,"z"=>0,"h"=>9,"pose"=>"figure","material"=>"stone","color"=>"#f4f1ea","label"=>"THE STATUE, 1754","pri"=>8});
+    p.push(obj!{"type"=>"screen","id"=>"traite","x"=>24,"z"=>40,"y"=>1,"w"=>10,"h"=>4,"show"=>"text","title"=>"TRAITE DES SENSATIONS","text"=>"To itself, it is only the smell of a rose.","pri"=>7});
+    obj! {"title"=>"The Statue at Flux","motto"=>"Born blank. Trained on one rose.","palette"=>obj!{"primary"=>c,"secondary"=>"#e9fff0","accent"=>"#16391f"},"sky"=>obj!{"time"=>"day","top"=>"#5aa6ea","horizon"=>"#eefcef","fog"=>0.15},"ground"=>obj!{"kind"=>"grass","color"=>"#5d9a48"},"pieces"=>p}
 }
 
 /// The founders' styles, by seat.

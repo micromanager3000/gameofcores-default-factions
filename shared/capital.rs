@@ -1,6 +1,6 @@
 //! Default capital layout and Wonder animation.
-use gameofcores::{Value, View};
 use super::compat as js;
+use gameofcores::{Value, View};
 
 /// What [`civic`] builds: `wonder` (a look's wonder, e.g. `info.get("wonder").value()`: `{ shape, tiers, height, glow,
 /// spin, color }`; undefined for none) and its radius `wonder_r` (6), colour (`wonder_color`, else the wonder's own,
@@ -22,7 +22,12 @@ pub struct Civic<'a> {
     pub mat: Option<&'a str>,
     pub hall_color: Option<&'a str>,
     pub hall_label: Option<&'a str>,
+    /// Whether this court needs the legacy public hall.  House courts normally build
+    /// their own arrival architecture instead of inheriting the civic starter hall.
+    pub public_hall: bool,
     pub screen_title: Option<&'a str>,
+    /// Whether this court needs the legacy public stats screen.
+    pub public_screen: bool,
     pub banners: f64,
     pub pole_h: f64,
     /// The bounded arrival-court language used by the hall renderer.  This is scene
@@ -47,7 +52,9 @@ impl Default for Civic<'_> {
             mat: None,
             hall_color: None,
             hall_label: None,
+            public_hall: true,
             screen_title: None,
+            public_screen: true,
             banners: 6.0,
             pole_h: 15.0,
             court: None,
@@ -89,7 +96,10 @@ pub fn civic(info: View, o: &Civic) -> Vec<Value> {
             ("tap", Value::Bool(true)),
             ("shape", w.get("shape").clone()),
             ("tiers", w.get("tiers").clone()),
-            ("h", Value::Num(w.get("height").num() * or(o.wonder_h_scale, 1.0))),
+            (
+                "h",
+                Value::Num(w.get("height").num() * or(o.wonder_h_scale, 1.0)),
+            ),
             ("r", Value::Num(or(o.wonder_r, 6.0))),
             ("glow", w.get("glow").clone()),
             ("spin", w.get("spin").clone()),
@@ -100,25 +110,27 @@ pub fn civic(info: View, o: &Civic) -> Vec<Value> {
             ("pri", Value::Num(9.0)),
         ]));
     }
-    out.push(js::object(vec![
-        ("type", Value::from("hall")),
-        ("id", Value::from("hall")),
-        ("x", Value::Num(-26.0)),
-        ("z", Value::Num(-20.0)),
-        ("w", Value::Num(18.0)),
-        ("d", Value::Num(11.0)),
-        ("h", Value::Num(or(o.hall_h, 9.0))),
-        ("roof", Value::from(or_str(o.roof, "gable"))),
-        ("material", Value::from(or_str(o.mat, "stone"))),
-        ("color", Value::from(o.hall_color)),
-        ("trim", Value::from(o.trim)),
-        ("label", Value::from(o.hall_label)),
-        ("court", Value::from(o.court)),
-        ("pri", Value::Num(8.0)),
-    ]));
+    if o.public_hall {
+        out.push(js::object(vec![
+            ("type", Value::from("hall")),
+            ("id", Value::from("hall")),
+            ("x", Value::Num(-26.0)),
+            ("z", Value::Num(-20.0)),
+            ("w", Value::Num(18.0)),
+            ("d", Value::Num(11.0)),
+            ("h", Value::Num(or(o.hall_h, 9.0))),
+            ("roof", Value::from(or_str(o.roof, "gable"))),
+            ("material", Value::from(or_str(o.mat, "stone"))),
+            ("color", Value::from(o.hall_color)),
+            ("trim", Value::from(o.trim)),
+            ("label", Value::from(o.hall_label)),
+            ("court", Value::from(o.court)),
+            ("pri", Value::Num(8.0)),
+        ]));
+    }
     // Decorative lamps yield first when a house has spent its base scene budget on
     // authored machinery. That preserves its existing landmark composition at 224.
-    if o.forecourt_lights {
+    if o.public_hall && o.forecourt_lights {
         for x in [-34.0, -18.0] {
             out.push(js::object(vec![
                 ("type", Value::from("light")),
@@ -132,18 +144,20 @@ pub fn civic(info: View, o: &Civic) -> Vec<Value> {
             ]));
         }
     }
-    out.push(js::object(vec![
-        ("type", Value::from("screen")),
-        ("id", Value::from("stats")),
-        ("x", Value::Num(26.0)),
-        ("z", Value::Num(-20.0)),
-        ("y", Value::Num(3.0)),
-        ("w", Value::Num(15.0)),
-        ("h", Value::Num(8.5)),
-        ("show", Value::from("stats")),
-        ("title", Value::from(or_str(o.screen_title, "LIVE STATS"))),
-        ("pri", Value::Num(8.0)),
-    ]));
+    if o.public_screen {
+        out.push(js::object(vec![
+            ("type", Value::from("screen")),
+            ("id", Value::from("stats")),
+            ("x", Value::Num(26.0)),
+            ("z", Value::Num(-20.0)),
+            ("y", Value::Num(3.0)),
+            ("w", Value::Num(15.0)),
+            ("h", Value::Num(8.5)),
+            ("show", Value::from("stats")),
+            ("title", Value::from(or_str(o.screen_title, "LIVE STATS"))),
+            ("pri", Value::Num(8.0)),
+        ]));
+    }
     let n = or(o.banners, 6.0);
     let mut i = 0.0;
     while i < n {
@@ -165,10 +179,20 @@ pub fn civic(info: View, o: &Civic) -> Vec<Value> {
 /// For `live3d(state, now)`: taps on the Wonder spin it up, and it winds down again. `s` is what live3d keeps (made an
 /// object if it isn't one); `s.heat` holds the spin. Returns the change for the 'wonder' piece (`{ spin }`).
 pub fn ring(s: &mut Value, now: View) -> Value {
-    let heat = js::round(js::min(240.0, js::vor(s.get("heat"), 0.0) * 0.75 + js::or(now.get("taps").get("wonder"), 0.0) * 45.0));
+    let heat = js::round(js::min(
+        240.0,
+        js::vor(s.get("heat"), 0.0) * 0.75 + js::or(now.get("taps").get("wonder"), 0.0) * 45.0,
+    ));
     let heat = if heat < 3.0 { 0.0 } else { heat };
     s.set("heat", heat);
-    js::object(vec![("spin", if heat != 0.0 && !heat.is_nan() { Value::Num(heat) } else { Value::Null })])
+    js::object(vec![(
+        "spin",
+        if heat != 0.0 && !heat.is_nan() {
+            Value::Num(heat)
+        } else {
+            Value::Null
+        },
+    )])
 }
 
 /// How many extra pieces a bigger budget affords: one per `per` build points past 224, at most `cap` (cosmetic credits
@@ -177,4 +201,3 @@ pub fn ring(s: &mut Value, now: View) -> Value {
 pub fn spare(budget: f64, per: f64, cap: f64) -> f64 {
     js::max(0.0, js::min(cap, ((budget - 224.0) / per).floor()))
 }
-
