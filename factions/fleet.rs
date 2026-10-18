@@ -1693,8 +1693,11 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
     let adj=sea::index(world).get(home).get("adj");
     let nearby=|water:f64|water>=0.0&&(water==home||adj.has_num(water));
     let contacts=me.path("rts.sea.contacts");
-    let prospects=contacts.iter().filter(|c| nearby(c.get("water").num_or(-1.0))
-        && paying_corsair_prey(*c, contacts, me, corsair_capacity, true, 1.0)).count();
+    // A visible, unarmed loaded merchant justifies preparing a corsair. Its
+    // controller keeps the stricter escort and round-trip profitability gate.
+    let prospects=contacts.iter().filter(|c| c.get("ship").truthy()
+        && nearby(c.get("water").num_or(-1.0)) && c.path("cargo.load").num_or(0.0)>=2.0
+        && c.path("build.range").num_or(0.0)==0.0 && c.path("build.carry").num_or(0.0)>=2.0).count();
     let salvage=me.path("rts.logistics.wrecks").iter().any(|w|w.get("sea").truthy()&&nearby(w.get("water").num_or(-1.0))&&w.get("cycles").num_or(0.0)>160000.0*common::price_level(me));
     // Raid nearby cargo, salvage wrecks, or hunt rival shipping.
     let want_cors = if !guns { 0.0 } else if prospects>0 || salvage { (prospects as f64).clamp(1.0,2.0) } else if naval.raid > 0 { 1.0 } else { 0.0 };

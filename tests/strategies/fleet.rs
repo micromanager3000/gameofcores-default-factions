@@ -256,7 +256,7 @@ fn fleet_uses_lean_plan_when_the_full_estimate_exceeds_the_spend_cap() {
 }
 
 #[test]
-fn fleet_corsair_spawn_rejects_the_same_unprofitable_or_escorted_prey_as_quarry() {
+fn fleet_quarry_rejects_unprofitable_or_escorted_prey() {
     let me = Value::parse(r#"{"rts":{"logistics":{"rules":{"shipHoldPerCarry":160000}},"sea":{"contacts":[]}}}"#);
     let prey = Value::parse(r#"{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":2},"cargo":{"load":2}}"#);
     let empty=Value::arr();
@@ -269,7 +269,7 @@ fn fleet_corsair_spawn_rejects_the_same_unprofitable_or_escorted_prey_as_quarry(
 }
 
 #[test]
-fn fleet_corsair_spawn_keeps_a_profitable_unescorted_prey_eligible() {
+fn fleet_quarry_keeps_a_profitable_unescorted_prey_eligible() {
     let me=Value::parse(r#"{"rts":{"logistics":{"rules":{"shipHoldPerCarry":160000}}}}"#);
     let prey=Value::parse(r#"{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":3},"cargo":{"load":3}}"#);
     let empty=Value::arr();
