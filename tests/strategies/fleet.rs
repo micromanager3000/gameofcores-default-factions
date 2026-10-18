@@ -83,6 +83,8 @@ fn fleet_keeps_its_opening_air_wing_small_until_a_carrier_is_fielded() {
 
 #[test]
 fn fleet_rebuild_uses_the_posted_fabrication_policy_not_the_recovery_lane() {
+    // `fixtures/fleet-think-rebuild.json` is a public house observation used by
+    // native metering; it changes only available.think to 64,554 and fabrication to 0.
     let me = Value::parse(r#"{"id":1,"seat":4,"bank":100000,"costs":{"unit":100},
         "units":{"cap":28,"total":13,"queued":0,"spawned":20,"byType":{}},
         "rts":{"bank":8000000,"costs":{"fabrication":{"base":4728,"module":2364}},
@@ -116,6 +118,8 @@ fn fleet_rebuild_still_rejects_an_unfunded_posted_fabrication_policy() {
 
 #[test]
 fn fleet_kite_callback_routes_a_hot_wing_to_an_adjacent_carrier_deck() {
+    // Native metering uses the authored 939-byte cold plans in
+    // `fixtures/fleet-kite-{deck,land}-cold.json`.
     let units = Value::parse(r#"[{"id":101,"owner":1,"type":"kite","air":true,"at":5,
         "build":{"vision":0,"range":0,"wings":1},"rts":{"air":{"heat":30,"aloft":true},"sea":{}}}]"#);
     let world = Value::parse(r#"{"seconds":1,"provinces":[{"id":5,"owner":1,"adj":[6]},{"id":6,"owner":1,"adj":[5]}],"units":[
