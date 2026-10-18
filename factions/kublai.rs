@@ -1409,9 +1409,16 @@ struct ControlBudget {
 
 const CONTROL_MIN_NEXT: f64 = 2400.0;
 const CONTROL_ADMISSION_MARGIN: f64 = 1800.0;
+// A gun's route can cold-read its carried plan, carry that plan forward, find a path and submit an order. The measured
+// worst normal route finishes below this with enough return room; a half-funded callback leaves its standing fire order.
+const GUN_ROUTE_RUNWAY: f64 = 3900.0;
 
 fn control_has_runway(available: f64, next: f64, read: f64) -> bool {
     available >= next.max(CONTROL_MIN_NEXT) + read + CONTROL_ADMISSION_MARGIN
+}
+
+fn gun_has_route_runway(available: f64) -> bool {
+    available >= GUN_ROUTE_RUNWAY
 }
 
 impl ControlBudget {
@@ -1511,9 +1518,9 @@ fn lancer(units: View, world: View, me: View) {
 fn gun(units: View, world: View, me: View) {
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
-        if rts && cycles_left() < 2200.0 {
-            break;
-        }
+        // Keep this before the plan read: the admission covers its cold decoding cost too. A gun can still cheaply
+        // deploy, pack, or retain a standing target after the read when there is not enough fuel to find a new route.
+        let can_route = !rts || gun_has_route_runway(cycles_left());
         let u = turn(units, i, world);
         let p = plan::of(me, u);
         let defend = Value::Num(common::defends(&p, u));
@@ -1532,6 +1539,7 @@ fn gun(units: View, world: View, me: View) {
         let stage = p.get("stage");
         let under_pressure = is_str(u.get("why"), "attacked") && set_up;
         if under_pressure && vn(stage) >= 0.0 && !same_v(u.get("at"), stage) {
+            if !can_route { break; }
             match orders::to(u, "move", vn(stage), world, me, ()) {
                 Some(mut retreat) => {
                     retreat.set("deploy", false);
@@ -1542,10 +1550,10 @@ fn gun(units: View, world: View, me: View) {
             }
             continue;
         }
-        let o = carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me);
         if set_up {
             if !same_v(u.get("at"), target) || n(u.get("to")) >= 0.0 {
-                match o {
+                if !can_route { break; }
+                match carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me) {
                     Some(mut o) => {
                         o.set("deploy", false);
                         o.set("alert", 8);
@@ -1560,9 +1568,12 @@ fn gun(units: View, world: View, me: View) {
         // first leg has not started.
         if same_v(u.get("at"), target) && n(u.get("to")) < 0.0 {
             order(obj! { "id" => u.get("id"), "deploy" => true, "alert" => 8 });
-        } else if let Some(mut o) = o {
-            o.set("alert", 8);
-            order(o);
+        } else {
+            if !can_route { break; }
+            if let Some(mut o) = carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me) {
+                o.set("alert", 8);
+                order(o);
+            }
         }
     }
 }
