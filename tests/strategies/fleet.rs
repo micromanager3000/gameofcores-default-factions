@@ -167,3 +167,25 @@ fn fleet_uses_lean_plan_when_the_full_estimate_exceeds_the_spend_cap() {
     assert!(!super::plan_fuel_ready(cheap_limit, cheap_limit - super::PLAN_CALLBACK_OVERHEAD, low_cap_need),
         "when even the lean pass does not fit, stay on cheap recovery");
 }
+
+#[test]
+fn fleet_corsair_spawn_rejects_the_same_unprofitable_or_escorted_prey_as_quarry() {
+    let me = Value::parse(r#"{"rts":{"logistics":{"rules":{"shipHoldPerCarry":160000}},"sea":{"contacts":[]}}}"#);
+    let prey = Value::parse(r#"{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":2},"cargo":{"load":2}}"#);
+    let empty=Value::arr();
+    let args=views(&[me.clone(),prey,empty]);
+    assert!(!super::paying_corsair_prey(args[1], args[2], args[0], 160000.0, true), "a half-load cannot repay the existing corsair trip gate");
+    let prey = Value::parse(r#"{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":3},"cargo":{"load":3}}"#);
+    let contacts=Value::parse(r#"[{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":3},"cargo":{"load":3}},{"id":10,"ship":true,"water":1,"build":{"range":1}}]"#);
+    let args=views(&[me,prey,contacts]);
+    assert!(!super::paying_corsair_prey(args[1],args[2],args[0],160000.0,true),"an armed escort rejects the spawn just as it rejects a chase");
+}
+
+#[test]
+fn fleet_corsair_spawn_keeps_a_profitable_unescorted_prey_eligible() {
+    let me=Value::parse(r#"{"rts":{"logistics":{"rules":{"shipHoldPerCarry":160000}}}}"#);
+    let prey=Value::parse(r#"{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":3},"cargo":{"load":3}}"#);
+    let empty=Value::arr();
+    let args=views(&[me,prey,empty]);
+    assert!(super::paying_corsair_prey(args[1],args[2],args[0],160000.0,true));
+}
