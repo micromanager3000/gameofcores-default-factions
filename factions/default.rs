@@ -209,7 +209,7 @@ fn scout(units: View, world: View, me: View) -> Vec<Value> {
 // Units in contact: each strikes the nearest rival it can hit (reflex::can_hit), and holds its ground doing so on an
 // aggressive order. Orders commit as they are made. Both rulesets keep room for the most expensive prior turn.
 fn classic_reflex_runway(previous: f64, visible: usize) -> f64 {
-    previous.max(450.0 + 70.0 * visible as f64)
+    previous.max(120.0 + 70.0 * visible as f64)
 }
 
 fn next_reflex_runway(previous: f64, spent: f64, rts: bool) -> f64 {
