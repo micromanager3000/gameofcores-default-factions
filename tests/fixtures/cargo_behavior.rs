@@ -129,3 +129,24 @@ fn empty_or_remote_carriers_do_not_displace_working_miners(){
         assert_eq!(out.get("compute").get("cpu").get("upkeepOrder").at(0).str(),"miner","{case}");
     }
 }
+
+#[test]
+fn a_delivery_bridge_preserves_fielded_aircraft_landing_control() {
+    let (mut world,mut me,mut units)=approach_case();
+    world.set("seconds",3);
+    units.push(obj!{"id"=>901,"owner"=>me.get("id").clone(),"type"=>"interceptor","build"=>obj!{"wings"=>2}});
+    units.push(obj!{"id"=>902,"owner"=>me.get("id").clone(),"type"=>"aeronaut","build"=>obj!{"wings"=>2}});
+    units.push(obj!{"id"=>903,"owner"=>7,"type"=>"foreign-wing","build"=>obj!{"wings"=>2}});
+    world.set("units",units);
+    me.entry("units").set("stalled",1);me.entry("rts").entry("cpu").set("bank",1000);
+    let args=views(&[world,me]);
+    let out=common::govern(args[0],args[1],0.4,||panic!("the loaded delivery needs recovery"));
+    let types=out.get("compute").get("types");
+    for ty in ["interceptor","aeronaut"] {
+        assert_eq!(types.get(ty),&obj!{"cycles"=>2400,"every"=>3},"{ty}");
+    }
+    assert!(types.get("foreign-wing").is_undef());
+    assert_eq!(types.get("hauler").get("cycles").num(),10000.0);
+    assert_eq!(types.get("freighter").get("cycles").num(),12000.0);
+    assert_eq!(out.get("compute").get("cpu").get("upkeepOrder"),&arr!["hauler","freighter","miner"]);
+}

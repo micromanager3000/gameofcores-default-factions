@@ -112,3 +112,9 @@ fn turbines_take_priority_only_during_a_real_power_shortfall() {
     assert_eq!(arjuna_research_choice(0.8), "turbines");
     assert_eq!(arjuna_research_choice(0.96), "flight");
 }
+
+#[test]
+fn gun_callback_keeps_its_standing_order_below_the_c4_route_runway() {
+    assert!(super::GUN_CALLBACK_RUNWAY > 2317.0, "the captured C4 artillery callback must not enter its route work");
+    assert!(super::GUN_CALLBACK_RUNWAY <= 2500.0, "the measured 3k funded gun callback remains available");
+}

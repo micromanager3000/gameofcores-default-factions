@@ -146,3 +146,11 @@ fn a_short_naval_rank_preserves_land_without_assuming_a_crossing_is_held() {
     assert!(!naval_target_case(84,20000.0,false));
     assert!(naval_target_case(84,20000.0,true));
 }
+
+#[test]
+fn logistics_miner_keeps_a_bounded_cargo_retry_below_the_c4_full_assignment_runway() {
+    assert!(super::common::LOGISTICS_MINER_FULL_RUNWAY > 4324.0,
+        "the captured loaded-miner callback must not enter full local assignment");
+    assert!(super::common::LOGISTICS_MINER_FULL_RUNWAY <= 5000.0,
+        "the measured funded full assignment remains available at five thousand cycles");
+}

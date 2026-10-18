@@ -1,0 +1,9 @@
+{
+  "capture": "C4 day-101, error-25-faction-2-miner.json",
+  "source": "Knights Templated at candidate4 3328f71",
+  "tick": 178378,
+  "function": "miner",
+  "budget": 4324,
+  "rate": 64,
+  "purpose": "A loaded local miner in logistics mode hit the full local assignment path at 4,324 cycles. The 5,000-cycle admission keeps the bounded cargo retry available below that runway."
+}

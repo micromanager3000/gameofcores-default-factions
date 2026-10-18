@@ -309,8 +309,12 @@ use super::{air, theme};
     }
 
     /// Miners unload locally. Haulers connect remote town depots to the capital or a dock.
+    pub const LOGISTICS_MINER_FULL_RUNWAY: f64 = 5000.0;
+
     fn logistics_miners(units: View, world: View, me: View) {
-        if cycles_left()<4300.0 {
+        // Full local assignment reads cargo and route state for each body.  Below this runway the
+        // bounded delivery retry can still free a loaded miner without losing the callback.
+        if cycles_left()<LOGISTICS_MINER_FULL_RUNWAY {
             if cycles_left()<1000.0{return;}
             use logistics::{Endpoint as E,cargo,transfer};
             let cap=me.get("capital").num();
@@ -687,6 +691,11 @@ use super::{air, theme};
         types.set("miner",obj!{"share"=>0,"every"=>2});
         types.set("hauler",obj!{"cycles"=>10000,"every"=>2});
         types.set("freighter",obj!{"cycles"=>12000,"every"=>2});
+        for u in world.get("units").iter().take_while(|_|cycles_left()>3500.0) {
+            if u.get("owner").num_or(-1.0)==me.get("id").num() && u.path("build.wings").num_or(0.0)>0.0 {
+                out.entry("compute").entry("types").set(u.get("type").str(),obj!{"cycles"=>2400,"every"=>3});
+            }
+        }
         Some(out)
     }
     fn logistics_budget(world:View,me:View,share:f64,mut out:Value)->Value{

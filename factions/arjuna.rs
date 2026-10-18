@@ -837,10 +837,15 @@ fn lancer(units: View, world: View, me: View) {
     skirm(units, world, me);
 }
 
+const GUN_CALLBACK_RUNWAY: f64 = 2500.0;
+
 fn gun(units: View, world: View, me: View) {
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
-        if rts && cycles_left() < 2200.0 {
+        // A gun must finish its plan lookup and route order after this guard.  The C4 2,317-cycle
+        // callback reached that work but could not return its retreat order, so keep its standing
+        // fire order until this full turn is affordable.
+        if rts && cycles_left() < GUN_CALLBACK_RUNWAY {
             break;
         }
         let u = turn(units, i, world);
