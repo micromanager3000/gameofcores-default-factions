@@ -181,10 +181,20 @@ fn rival_in(q: View, me: View) -> f64 {
     n
 }
 
+// Sea-station ranking waits until its searches and the remaining planner can fit.
+fn rank_hold(world: View, me: View) -> impl Fn(View, f64) -> bool {
+    let land = common::can_hold(world, me, false);
+    let naval = common::can_hold(world, me, true);
+    let work = 300.0 * world.get("waters").len() as f64;
+    let cpu = rts(me);
+    move |q, left| land(q) || ((!cpu || left > 18000.0 + work
+        * (q.path("routes.sea").len() + q.path("routes.air").len()).max(1) as f64) && naval(q))
+}
+
 // Trade funds a campaign through valuable land. Existing leases keep their protection.
 fn frontline(world: View, me: View) -> Vec<View> {
     let me_id = me.get("id").num();
-    let hold = common::can_hold(world, me, true);
+    let hold = rank_hold(world, me);
     let campaign = mem::get(me.get("ramCapital"), 0).get("campaign").num_or(-1.0);
     let fighters = common::fighters(me);
     let by_id = realm::index(world);
@@ -203,7 +213,7 @@ fn frontline(world: View, me: View) -> Vec<View> {
             + if capital { 12.0 } else if q.get("capital").truthy() { -5.0 } else { 0.0 }
             + if approach { 5.0 } else { 0.0 }
             + if enemy && owner == campaign { 4.0 } else { 0.0 }
-            - if hold(q) { 0.0 } else { common::OVER_WATER }
+            - if hold(q, cycles_left()) { 0.0 } else { common::OVER_WATER }
     });
     common::rally(world, me, ranked)
 }
@@ -479,7 +489,15 @@ fn conserve(world: View, me: View) -> Value {
 }
 
 fn think(world: View, me: View) -> Value {
-    common::govern(world, me, 0.4, || strategy(world, me))
+    common::govern(world, me, 0.4, || {
+        let mut orders = strategy(world, me);
+        // A recruit needs a complete upkeep review before the governor and ABI tail.
+        if rts(me) && !orders.get("spawn").is_empty()
+            && cycles_left() < 4000.0 + 220.0 * world.get("units").len() as f64 {
+            orders.set("spawn", Value::arr());
+        }
+        orders
+    })
 }
 
 enum PlannerAdmission { Full, Raise(Value), Lean }
@@ -590,8 +608,7 @@ fn lean_research(orders: &mut Value, world: View, me: View) {
 }
 
 fn strategy(world: View, me: View) -> Value {
-    // (from 3,000 cycles the short path below still sets the CPU policy: a think that sets none keeps a limit that may
-    // be too small for it every second after)
+    // Short calls still set a CPU policy so the next call can recover.
     if rts(me) && cycles_left() < 3000.0 {
         return common::recovery(world, me);
     }
@@ -697,8 +714,7 @@ fn strategy(world: View, me: View) -> Value {
     let available_control = if available.truthy() { available.get("control").num() * 0.8 } else { f64::INFINITY };
     let types = common::calls(
         world,
-        // Standing orders persist; local reflexes keep the fast combat path.
-        // Absolute budgets leave room for route search as more types wake.
+        // Standing orders persist; each controller keeps route room.
         &[
             ("miner", 6000.0, 6.0),
             ("runner", 5000.0, 4.0),
@@ -714,7 +730,7 @@ fn strategy(world: View, me: View) -> Value {
         available_control,
         me.get("units").get("byType"),
     );
-    // research what nobody sells first; what somebody holds, the market buys (market::research_order)
+    // Research what nobody sells; buy the rest.
     if full_plan {
         let research = market::research_order(&sold);
         common::budget(&mut orders, world, me, &common::Budget { research: 0.12, code: 0.10, techs: &research, types: Some(&types) });
@@ -730,7 +746,7 @@ fn strategy(world: View, me: View) -> Value {
         };
         let tech = if studying.is_empty() { View::undefined() } else { world.get("techs").get(&studying) };
         let offer = if tech.truthy() { tech.get("offer").num() } else { 0.0 };
-        // Any visible contact releases the research reserve for combat actions.
+        // Contacts release research reserves for combat.
         let mut policy = cpu_policy(me, offer, threatened || enemy.total >= 2.0);
         common::fit_cpu(&mut policy, me);
         orders.entry("compute").set("cpu", policy);
@@ -745,7 +761,7 @@ fn strategy(world: View, me: View) -> Value {
     if cycles_left() < 6000.0 || (rts(me) && ran_out) {
         return affordable(orders, me, start);
     }
-    // Court the two largest non-leaders outside pacts; partners' wars subsidise the market.
+    // Court large non-leaders outside pacts.
     let no_pacts = me.get("pacts").is_empty();
     // Avoid duplicates while one awaits an answer or within 10 s of the last proposal.
     if no_pacts && !me.get("inbox").iter().any(|m| m.get("pact").truthy()) && clock.at.get("ct").num_or(-1.0) <= now {
@@ -758,9 +774,9 @@ fn strategy(world: View, me: View) -> Value {
             }
         }
     }
-    // Market hiring scans visible units (about 10 cycles each).
+    // Reserve the governor and ABI tail before optional market searches.
     let seen = 10.0 * world.get("units").len() as f64;
-    if !rts(me) || cycles_left() > 9000.0 + seen {
+    if !rts(me) || cycles_left() > 30000.0 + seen {
         let mood = market::Mood { threatened, fight: threatened || enemy.total >= 4.0, shade_ready, target: target_id, army: name };
         market::run(&mut orders, world, me, &mut clock, now, &mood, &sold);
     }
@@ -807,7 +823,7 @@ mod market {
         out
     }
 
-    /// The wanted techs some other faction standing holds (one pass over each faction's list).
+    /// Wanted techs held by another living faction.
     pub fn sold(world: View, me: View) -> Vec<&'static str> {
         let me_id = me.get("id").num();
         let mut out: Vec<&'static str> = Vec::new();
@@ -988,7 +1004,7 @@ mod market {
         if due(clock, "pa", 12.0, now) {
             doing = passage(orders, world, me, clock, now).or(doing);
         }
-        // a tech is bought as soon as the purse holds its price (the spawns save for it), one every 12 to 20 seconds
+        // Buy an affordable tech every 12–20 seconds.
         if clock.at.get("bt").num_or(-1.0) <= now {
             let mut p = purse(orders, me, true);
             if let Some(d) = buy_tech(orders, world, me, &mut p, clock, now, sold) {
@@ -1016,7 +1032,7 @@ mod market {
             propaganda(orders, world, me);
         }
         if due(clock, "mi", 70.0, now) && !mood.threatened {
-            // (a lease is paid by the second: it needs the first second's ◆, and a few more, not a unit's price)
+            // A lease needs cash for its first payments.
             let mut p = purse(orders, me, true);
             doing = lease_in(orders, world, me, &mut p, mood.target).or(doing);
         }
