@@ -694,11 +694,12 @@ fn rich_rebuild_ready(me: View) -> bool {
 }
 
 // This is about the per-second hard cap, not merely the callback's temporary
-// allowance. The lean planner estimate cannot admit Fleet's full naval scan:
-// its own measured floor is what protects a funded normal retry.
+// allowance. If that cap can buy the selected planner, recovery posts its
+// normal retry rather than replacing it with bounded work.
 fn rich_rebuild_is_capped(world: View, me: View) -> bool {
     if !rich_rebuild_ready(me) { return false; }
-    affordable_plan_limit(me, full_think_need(world, me)).is_none()
+    let cap = me.path("rts.cpu.spendCap").or(me.path("rts.cpu.burst").or(f64::INFINITY));
+    affordable_plan_limit(me, budgeted_think_need(world, me, cap)).is_none()
 }
 
 fn retirement_ready(world: View, me: View, remaining: f64) -> bool {
@@ -1244,7 +1245,7 @@ fn prey(world: View, me: View, n: &[(f64, f64)]) -> f64 {
 fn kite(units: View, world: View, me: View) {
     // A starved callback cannot afford recovery's deck search.  Landing one hot
     // wing is still useful, but leave the rest on their standing orders.
-    if cycles_left() < 1200.0 {
+    if cycles_left() < 3500.0 {
         land_hot(units);
         return;
     }
@@ -1831,7 +1832,9 @@ fn quarry(u: View, me: View, world: View, role: u8) -> Option<View> {
 /// Every junk: keep to its water, or go after a rival ship nearby; the reflex fires the guns. A junk standing off our
 /// own coast hears the plan there, and copies its water into its own RAM (page 1) for when it sails off a rival's.
 fn junks(units: View, world: View, me: View, role: u8) -> Value {
-    if short(me, 2500.0, 1200.0) {
+    // Route, contact, and ship-RAM scans need more than a thin control lane.
+    // Below it, retain the standing course for the next funded callback.
+    if short(me, 3200.0, 1200.0) {
         return Value::arr();
     }
     let pl = plan::for_units(me, units, View::undefined());
