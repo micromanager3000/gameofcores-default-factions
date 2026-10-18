@@ -1,0 +1,323 @@
+{
+  "purpose": "Reproduce a late Arjuna planning recovery loop and atomic CPU policy replacement on resting beats, without changing engine budgets.",
+  "baseFactionRevision": "98d3e0a6edf8e6560685ae1e63029fe3d0a6c224",
+  "canonicalRevisionAtValidation": "ea5f46a7e017c55e90f5ec66fdbce368a36aff0a",
+  "candidateFactionSourceSha256": "ae3c6e559ee2ddd8e403b8c49bba4f6188c3f5d3b0471817835d3f1645b8f093",
+  "fixtures": {
+    "arjuna-think-bounded.json": {
+      "sha256": "cbd5de8cdfa620d93952378141bd2036c41011c67305db3df9a0a600e5f891e1",
+      "origin": "Exact faction1 public THINK args from the C4 seed101 saved24h endpoint. Original source3328f715; no observation fields changed.",
+      "state": "artifacts/balance-oct16/gameplay-depth-day-candidate4-3328f71/day-101.state.json",
+      "seconds": 86400,
+      "actualFuel": 52180,
+      "publicSpendCap": 52269,
+      "before": {
+        "used": 32449.125,
+        "memo": "Recovering production",
+        "fabrication": 0,
+        "thinkRequest": 70030.9
+      },
+      "after": {
+        "used": 48742.625,
+        "memo": "Arjuna normal local plan",
+        "fabrication": 20488,
+        "thinkRequest": 52269
+      }
+    },
+    "arjuna-think-decayed.json": {
+      "sha256": "810c71e18e769efe7d03a7c930281da5f780bc7716fe75f8f983a34ef8067929",
+      "origin": "Exact faction1 public THINK args captured in the first candidate continuation, before the world-size full-planning guard was added. No observation fields changed.",
+      "capture": "/tmp/goc-depth-arjuna-lean-resume/treatment/errors/error-01-faction-1-think.json",
+      "tick": 432574,
+      "actualFuel": 21346,
+      "publicSpendCap": 27136,
+      "thinkPeak": 8949,
+      "before": {
+        "error": "ran out of cycles",
+        "used": 21346
+      },
+      "after": {
+        "used": 16191.015625,
+        "fabrication": 20488,
+        "thinkRequest": 27136
+      }
+    }
+  },
+  "changes": [
+    "Empty resting responses do not invoke flight_progress; this prevents a research-only CPU object from atomically replacing the standing lanes.",
+    "A bounded local plan retains capital defence, nearby legal ground targets, mining, Arjuna recruitment and controller schedules, active research and earned doctrine choices. It skips global census, route fields, markets and diplomacy when the recent peak or public map scan cannot fit.",
+    "The final absolute THINK request is clamped to a present positive public spendCap; other CPU lanes remain intact. Genuine shared insolvency/recovery checks remain."
+  ],
+  "metering": {
+    "toolchain": "1.97.0",
+    "instructionsPerCycle": 64,
+    "sourceSha256": "9846a189d4002687a2176cdba66dec72605ba79962506724a8486e496facf6cc",
+    "wasmSha256": "46aa580dcb2df0866d4118bf27eaa2af61996c3dcc5458ebf33208df0226050a",
+    "scope": "Final Arjuna source with unchanged HEAD98 shared modules. The final canonical faction prefix exactly matches this metered export; concurrent shared changes are excluded.",
+    "command": "cores call MODULE think ARGS FUEL 64",
+    "results": "/tmp/goc-depth-arjuna-v2-meter/results.json",
+    "calls": 83,
+    "failures": 0,
+    "budgets": {
+      "endpoint": [
+        45000,
+        45250,
+        45500,
+        45750,
+        46000,
+        46250,
+        46500,
+        46750,
+        47000,
+        47250,
+        47500,
+        47750,
+        48000,
+        48250,
+        48500,
+        48750,
+        49000,
+        49250,
+        49500,
+        49750,
+        50000,
+        50250,
+        50500,
+        50750,
+        51000,
+        51250,
+        51500,
+        51750,
+        52000,
+        52250,
+        52500,
+        52180,
+        52269
+      ],
+      "decayed": [
+        18000,
+        18250,
+        18500,
+        18750,
+        19000,
+        19250,
+        19500,
+        19750,
+        20000,
+        20250,
+        20500,
+        20750,
+        21000,
+        21250,
+        21500,
+        21750,
+        22000,
+        22250,
+        22500,
+        22750,
+        23000,
+        23250,
+        23500,
+        23750,
+        24000,
+        24250,
+        24500,
+        24750,
+        25000,
+        25250,
+        25500,
+        25750,
+        26000,
+        26250,
+        26500,
+        26750,
+        27000,
+        27250,
+        27500,
+        27750,
+        28000,
+        28250,
+        28500,
+        28750,
+        29000,
+        29250,
+        29500,
+        29750,
+        30000,
+        21346
+      ]
+    },
+    "countercases": "Resting601 returns empty; poor stalled crews recover; absent spendCap retains normal admission behaviour. Tiny2k\u201340k probes are retained in /tmp/goc-depth-arjuna-counters/results.json.",
+    "knownSharedTail": "Initial45\u201375k sweep found a63,500-cycle shared structureJobs serialization boundary, reproduced with spendCap75000. Root owns the separate accumulated-output reserve repair; it is not hidden or capped in Arjuna."
+  },
+  "validation": {
+    "strategyTests": {
+      "passed": 13,
+      "failed": 0,
+      "log": "/tmp/goc-depth-arjuna-lean-final-strategies.log"
+    },
+    "sourceChecks": {
+      "passed": 5,
+      "failed": 0,
+      "log": "/tmp/goc-depth-arjuna-lean-source-checks.log"
+    },
+    "continuation": {
+      "manifest": "/tmp/goc-depth-arjuna-lean-resume/manifest-v2.json",
+      "comparison": "/tmp/goc-depth-arjuna-lean-resume/comparison.json",
+      "simulatorSha256": "2ec98f5754dbb8150b98239deb717238411d9d31457e81bc3777ad29afd02496",
+      "scope": "600seconds from the exact C4 day101 saved world. One job; only faction1 source differs, current98 control versus final isolated Arjuna candidate. Seven other saved sources, world/RNG/CPU/units/RAM are unchanged; both arms use the same current simulator.",
+      "control": {
+        "producedDelta": 8789721.695833683,
+        "deliveredDelta": 5200800.0,
+        "spawnedDelta": 2,
+        "units": {
+          "total": 28,
+          "cap": 34,
+          "queued": 0,
+          "hiredOut": 0,
+          "hiredOutByType": {},
+          "spawned": 351,
+          "stalled": 11,
+          "grumbling": 0,
+          "byType": {
+            "miner": 14,
+            "hauler": 10,
+            "freighter": 2,
+            "escort": 2
+          },
+          "doing": {
+            "gather": 13,
+            "idle": 15
+          },
+          "morale": 52,
+          "max": 240,
+          "upkeepRate": 1
+        },
+        "provinces": 3,
+        "share": 0.091,
+        "rtsBank": 986.3466352705691,
+        "income": 17730.742176107076,
+        "endFabrication": 0,
+        "positiveFabricationSamples": 37,
+        "secondsSampled": 601,
+        "ownErrors": [
+          {
+            "tick": 432544,
+            "function": "think",
+            "fuel": 21802
+          }
+        ],
+        "allCapturedErrors": [
+          {
+            "faction": 1,
+            "function": "think",
+            "fuel": 21802
+          },
+          {
+            "faction": 2,
+            "function": "think",
+            "fuel": 31944
+          }
+        ]
+      },
+      "firstRejectedCandidate": {
+        "producedDelta": 9054639.20677638,
+        "deliveredDelta": 5705120.0,
+        "spawnedDelta": 2,
+        "units": {
+          "total": 28,
+          "cap": 34,
+          "queued": 0,
+          "hiredOut": 0,
+          "hiredOutByType": {},
+          "spawned": 351,
+          "stalled": 12,
+          "grumbling": 0,
+          "byType": {
+            "miner": 14,
+            "hauler": 10,
+            "freighter": 2,
+            "escort": 2
+          },
+          "doing": {
+            "gather": 13,
+            "idle": 15
+          },
+          "morale": 51,
+          "max": 240,
+          "upkeepRate": 1
+        },
+        "provinces": 3,
+        "share": 0.091,
+        "rtsBank": 1542.0835651415596,
+        "income": 16403.484545142317,
+        "endFabrication": 0,
+        "positiveFabricationSamples": 141,
+        "secondsSampled": 601,
+        "ownErrors": [
+          {
+            "tick": 432574,
+            "function": "think",
+            "fuel": 21346
+          }
+        ],
+        "allCapturedErrors": [
+          {
+            "faction": 1,
+            "function": "think",
+            "fuel": 21346
+          },
+          {
+            "faction": 2,
+            "function": "think",
+            "fuel": 15228
+          }
+        ]
+      },
+      "finalCandidate": {
+        "producedDelta": 9180719.206782818,
+        "deliveredDelta": 5579040.0,
+        "spawnedDelta": 2,
+        "units": {
+          "total": 28,
+          "cap": 34,
+          "queued": 0,
+          "hiredOut": 0,
+          "hiredOutByType": {},
+          "spawned": 351,
+          "stalled": 14,
+          "grumbling": 0,
+          "byType": {
+            "miner": 14,
+            "hauler": 10,
+            "freighter": 2,
+            "escort": 2
+          },
+          "doing": {
+            "gather": 13,
+            "idle": 15
+          },
+          "morale": 50,
+          "max": 240,
+          "upkeepRate": 1
+        },
+        "provinces": 3,
+        "share": 0.091,
+        "rtsBank": 1478.5050946746987,
+        "income": 14940.942051515782,
+        "endFabrication": 0,
+        "positiveFabricationSamples": 139,
+        "secondsSampled": 601,
+        "ownErrors": [],
+        "allCapturedErrors": [
+          {
+            "faction": 2,
+            "function": "think",
+            "fuel": 15737
+          }
+        ]
+      },
+      "limits": "The final candidate eliminates the observed Arjuna callback failure and retains a complete productive policy longer, but both arms recruit only logistics and end poor/stalled with no ground army. This is not evidence of sustained military recovery, winning or general balance."
+    }
+  }
+}

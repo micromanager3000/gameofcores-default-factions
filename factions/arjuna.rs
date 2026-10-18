@@ -334,7 +334,13 @@ fn think(world: View, me: View) -> Value {
     } else {
         common::govern(world, me, 0.4, || strategy(world, me))
     };
-    flight_progress(&mut orders, world, me);
+    if !orders.is_empty() { flight_progress(&mut orders, world, me); }
+    let cap=me.path("rts.cpu.spendCap");
+    if cap.is_num() && cap.num()>0.0 {
+        let cap=cap.num();
+        let think=orders.get("compute").get("cpu").get("limits").get("think").num_or(0.0);
+        if think>1.0 && think>cap {orders.entry("compute").entry("cpu").entry("limits").set("think",cap);}
+    }
     orders
 }
 
@@ -416,6 +422,68 @@ fn recovery_policy(me: View) -> Value {
         "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0 }
 }
 
+fn full_planning_ready(world:View,me:View,remaining:f64)->bool {
+    let scan=18000.0+300.0*world.get("provinces").len() as f64+100.0*world.get("units").len() as f64;
+    let need=(me.path("compute.thinkPeak").num_or(0.0)*1.25+6000.0).max(scan);
+    remaining>=need && me.path("rts.cpu.spendCap").num_or(f64::INFINITY)>=need
+}
+
+// Keep local mining, defense and a nearby ground/air objective moving without a global census or route field.
+fn lean_plan(world: View, me: View, last: &Value) -> Value {
+    let by=realm::index(world);let ours=me.get("id").num();let home=me.get("capital").num();
+    let provinces=world.get("provinces");let count=provinces.len();let offset=(world.get("seconds").num_or(0.0)/3.0) as usize;
+    let hosts:Vec<f64>=me.get("contracts").iter().take(32).filter(|c|!c.get("ended").truthy()&&c.path("get.passage").truthy()).map(|c|c.get("with").num()).collect();
+    let (mut attack,mut stage,mut need,mut best)=(-1.0,home,0.0,f64::NEG_INFINITY);
+    let (mut defend,mut threat)=(-1.0,0.0);let mut mines=Vec::new();
+    for i in 0..count.min(48)+1 {
+        if cycles_left()<18000.0 {break;}
+        let p=if i==0 {by.get(home)}else{provinces.at((offset+i-1)%count)};
+        let id=p.get("id").num_or(-1.0);
+        if p.get("owner").num_or(-1.0)!=ours || (i>0&&id==home) {continue;}
+        let foes=p.get("units").entries().filter(|(f,_)|realm::is_rival(world,me,f.parse().unwrap_or(-1.0))).map(|(_,n)|n.num_or(0.0)).sum::<f64>();
+        if (defend!=home&&foes>threat)||(id==home&&foes>0.0){defend=id;threat=foes;}
+        for (k,v) in p.get("mines").iter().enumerate().take(8) {
+            if v.num_or(0.0)<=0.0||realm::worker(p,k as f64)!=ours {continue;}
+            let staff=p.get("staff").at(k).num_or(0.0).max(0.0) as usize;
+            for _ in staff..2 {if mines.len()<12 {mines.push(arr![id,k]);}}
+        }
+        if p.get("hops").num_or(0.0)<0.0 {continue;}
+        for adjacent in p.get("adj").iter().take(12) {
+            if cycles_left()<18000.0 {break;}
+            let q=by.at(adjacent);let owner=q.get("owner").num_or(-1.0);
+            if !q.truthy()||owner==ours||hosts.contains(&owner)||me.get("contracts").len()>32
+                ||(owner>=0.0&&(!q.get("visible").truthy()||!realm::is_rival(world,me,owner)))
+                ||q.get("leased").iter().take(16).any(|l|l.get("to").num_or(-1.0)==ours)||common::hopeless(me,q){continue;}
+            let target=q.get("id").num_or(-1.0);
+            let score=q.get("cores").num_or(0.0)*3.0-common::town_defenders(q)+if owner>=0.0{9.0}else{2.0}
+                +if target==last.get("attack").num_or(-1.0){10000.0}else{0.0};
+            if target>=0.0&&score>best {attack=target;stage=id;need=common::muster_for(q);best=score;}
+        }
+    }
+    let mut plan=obj!{"home"=>home,"stage"=>stage,"attack"=>attack,"need"=>need,"defend"=>defend,"threat"=>threat,
+        "mines"=>mines,"fresh"=>(world.get("seconds").num_or(0.0)/15.0).floor()*15.0};
+    for key in ["sky","skyVerb"] {if !last.get(key).is_undef(){plan.set(key,last.get(key).clone());}}
+    if defend>=0.0 || (last.get("sky").num_or(-1.0)<0.0&&attack>=0.0) {
+        plan.set("sky",if defend>=0.0{defend}else{attack});plan.set("skyVerb","fight");
+    }
+    plan
+}
+fn lean_research(orders:&mut Value,world:View,me:View,techs:&[&str]) {
+    if me.path("research.tech").truthy(){return;}
+    for &want in techs {
+        if cycles_left()<7000.0 {break;}
+        let mut pick=want;
+        for _ in 0..8 {
+            let missing=world.get("techs").get(pick).get("requires").iter().find(|t|!me.get("techs").get(t.str()).truthy());
+            match missing {Some(t)=>pick=t.str(),None=>break}
+        }
+        let tech=world.get("techs").get(pick);
+        if !me.get("techs").get(pick).truthy()&&tech.truthy()&&tech.get("requires").iter().all(|t|me.get("techs").get(t.str()).truthy()) {
+            orders.set("research",pick);break;
+        }
+    }
+}
+
 fn strategy(world: View, me: View) -> Value {
     let emu=me.get("seat").num_or(-1.0)==8.0;
     let doctrine = doctrine(me, emu);
@@ -423,23 +491,19 @@ fn strategy(world: View, me: View) -> Value {
     if rts.truthy() && cycles_left() < 3000.0 {
         return common::recovery(world, me);
     }
-    // Short of a full think (12,000 cycles, or its recent peak), set only the CPU policy: a think that runs out sets
-    // none, and its limit, a share of income, stays too small when income falls, every second after. (Three quarters
-    // of the peak let a poor faction start thinks it couldn't finish, every second for twenty minutes.)
-    if rts.truthy() && cycles_left() < jmax(12000.0, me.get("compute").get("thinkPeak").or(0.0)) {
-        return common::recovery(world, me);
-    }
+    let full = !rts.truthy() || full_planning_ready(world,me,cycles_left());
+    if !full && cycles_left()<18000.0 { return common::recovery(world,me); }
     let t = me.get("techs");
     let has = |k: &str| t.get(k).truthy();
     let bt = me.get("units").get("byType");
-    let rim = common::frontier(world, me);
+    let rim = if full {common::frontier(world, me)} else {Vec::new()};
     // the best land first, marked down where the army couldn't hold on to it (common::can_hold)
     let hold = common::can_hold(world, me, false);
-    let mut ranked = realm::rank(world, me, rim, |w, m, q| common::score(w, m, q) - if hold(q) { 0.0 } else { common::OVER_WATER });
+    let mut ranked = if full {realm::rank(world, me, rim, |w, m, q| common::score(w, m, q) - if hold(q) { 0.0 } else { common::OVER_WATER })} else {Vec::new()};
     // An established archer column can finish a nearby capital instead of circling richer provinces.
     // Count capturers separately: aircraft and freight crews cannot occupy the town ring.
     let ground = (common::fighters(me) - bt.get("wing").or(0.0) - bt.get("ghost").or(0.0)).max(0.0);
-    let campaign = rts_cpu(me).get("income").num_or(0.0) >= 60000.0
+    let campaign = full && rts_cpu(me).get("income").num_or(0.0) >= 60000.0
         && rts_cpu(me).get("bank").num_or(0.0) >= rts_cpu(me).get("income").num_or(0.0) * 2.0 && ground >= 12.0;
     if campaign {
         let lead = common::dominant(world).map(|f| f.get("id").num());
@@ -451,13 +515,13 @@ fn strategy(world: View, me: View) -> Value {
             && (!press_leader || lead == Some(q.get("owner").num())));
         if let Some(q) = capital { ranked = vec![q]; }
     }
-    let mut plan = common::survey(world, me, &ranked, 2.0);
+    let last = mem::get(me.get("ramCapital"), 0);
+    let mut plan = if full {common::survey(world, me, &ranked, 2.0)} else {lean_plan(world,me,&last)};
     // The sky's strike for the vimanas (sky::pick), once Flight allows them and vimanas fly: its census is budgeted at
     // about 40 cycles a unit in sight and 40 a province, only when think can still finish after it; else last second's
     // strike stands.
-    let last = mem::get(me.get("ramCapital"), 0);
     let mut strike: Option<sky::Strike> = None;
-    if has("flight") && bt.get("wing").or(0.0) > 0.0 {
+    if full && has("flight") && bt.get("wing").or(0.0) > 0.0 {
         let seen = world.get("units");
         let census = 40.0 * seen.len() as f64 + 40.0 * world.get("provinces").len() as f64 + 12000.0;
         if cycles_left() > census {
@@ -474,8 +538,8 @@ fn strategy(world: View, me: View) -> Value {
     }
     // the rest of think (spawns, budget, trade and diplomacy) is budgeted at up to 16,000 cycles after the search
     let defend = vn(plan.get("defend"));
-    if let Some(field) = road(world, me, if defend >= 0.0 { defend } else { vn(plan.get("attack")) }, 16000.0) {
-        plan.set("field", field);
+    if full {
+        if let Some(field) = road(world, me, if defend >= 0.0 { defend } else { vn(plan.get("attack")) }, 16000.0) { plan.set("field", field); }
     }
     let cpu = rts_cpu(me);
     // Fabrication has its own lane. Think reduces the shared bank once.
@@ -498,7 +562,7 @@ fn strategy(world: View, me: View) -> Value {
         "slots" => army_room(me),
         "priceLevel" => common::price_level(me),
     };
-    common::share(&mut orders, &plan, world, me);
+    if full {common::share(&mut orders, &plan, world, me);} else {plan::share(&mut orders,&plan,me);}
 
     let count = |k: &str| bt.get(k).or(0.0);
     let (miners, screens, runners, skirms, lancers) = (count("miner"), count("screen"), count("runner"), count("skirm"), count("lancer"));
@@ -558,12 +622,15 @@ fn strategy(world: View, me: View) -> Value {
     // common::budget keeps its useful research choice, rent choice and type schedules. In CPU RTS the old split is
     // ignored; cpu_policy below atomically installs caps and reserves for the one shared balance.
     let budget = common::Budget { research: if has("repair") { 0.06 } else { 0.12 }, code: 0.72, techs: doctrine, types: Some(&type_calls) };
-    common::budget(&mut orders, world, me, &budget);
+    if full {common::budget(&mut orders, world, me, &budget);} else {
+        orders.entry("compute").set("types",type_calls.clone());
+        lean_research(&mut orders,world,me,doctrine);
+    }
     let mut policy = cpu_policy(me, &plan, &type_calls);
     common::fit_cpu(&mut policy, me);
     orders.entry("compute").set("cpu", policy);
     // the sorties so far (sky::tally), and the memo spectators read: where the vimanas fly, or how near Flight is
-    let air = if (wings > 0.0 || !last.get("sky").is_undef()) && cycles_left() > 9000.0 { sky::tally(world, me, &mut orders) } else { sky::Tally::default() };
+    let air = if full && (wings > 0.0 || !last.get("sky").is_undef()) && cycles_left() > 9000.0 { sky::tally(world, me, &mut orders) } else { sky::Tally::default() };
     let memo = if emu {
         format!("Emu High Command: {} runners and {} skirmishers advancing on the frontier",js_num(screens),js_num(skirms))
     } else if has("flight") {
@@ -586,7 +653,7 @@ fn strategy(world: View, me: View) -> Value {
     orders.set("memo", memo);
     // A short second keeps what's decided so far (the plan, spawns and the CPU policy): trade and diplomacy wait a
     // second rather than run think out of cycles and lose it all.
-    if cycles_left() < 5000.0 {
+    if !full || cycles_left() < 5000.0 {
         return orders;
     }
     let pact_leader = realm::leader(world);
