@@ -487,6 +487,7 @@ fn conserve(world: View, me: View) -> Value {
 }
 
 fn think(world: View, me: View) -> Value {
+    if cycles_left()<800.0 {return obj!{};}
     common::govern(world, me, 0.4, || {
         let mut orders = strategy(world, me);
         // A recruit needs a complete upkeep review before the governor and ABI tail.

@@ -1728,9 +1728,17 @@ use super::{air, theme};
         Some(orders)
     }
 
-    /// Runs a house's own strategy, with its own economic safety policy around every return path. Classic worlds
-    /// keep the house's strategy. No engine allocation, exemption or rule is involved.
+    /// Runs the house strategy with economic recovery; classic worlds keep normal planning.
     pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
+        if cycles_left()<800.0 {return obj!{};}
+        if me.path("rts.cpu").truthy() && cycles_left()<6000.0 {
+            return obj!{"compute"=>obj!{"cpu"=>obj!{
+                "limits"=>obj!{"think"=>24000,"control"=>0.5,"upkeep"=>0.65,
+                    "research"=>0,"influence"=>0,"fabrication"=>0,"visuals"=>0,
+                    "reflex"=>0.15,"duel"=>0.08,"challenge"=>0.02,"drive"=>0.08,
+                    "armor"=>0.05,"weapon"=>0.08,"abilities"=>0,"cloak"=>0,"gate"=>0},
+                "reserve"=>obj!{},"upkeepOrder"=>vec!["miner"]}}};
+        }
         if let Some(orders) = classic_bootstrap(world, me) { return orders; }
         if resting(world, me) {
             return Value::obj();
@@ -1757,9 +1765,7 @@ use super::{air, theme};
     /// cycles a full think costs go to the army instead.
     const THINK_EVERY: f64 = 3.0;
 
-    /// Keep the three-second cadence once a recovery policy is standing, too. Repeating recovery every second can
-    /// spend the income its miners and haulers need to restart. A newly short bank still enters recovery immediately.
-    /// An empty answer preserves standing orders and budgets; unit callbacks and reflexes continue between reviews.
+    /// Recovery keeps the three-second cadence. Empty answers preserve standing work and budgets.
     fn resting(world: View, me: View) -> bool {
         let cpu = me.path("rts.cpu");
         if !cpu.truthy() || world.get("seconds").num_or(0.0) % THINK_EVERY == 0.0 {
@@ -1769,10 +1775,7 @@ use super::{air, theme};
             || mem::get(me.get("ramCapital"), RECOVERY_PAGE).get("r").truthy()
     }
 
-    /// Whether a job that runs every `period` seconds, staggered by `offset` (often the faction's id), is due at second
-    /// `now`. A resting house thinks in full only every [`THINK_EVERY`] seconds, and a job keyed to any other second
-    /// would wait for the two to line up. So it runs on full-think seconds: every `period` rounded to a multiple of
-    /// [`THINK_EVERY`], and on every full think for a period that short.
+    /// Tests a staggered job's deadline, rounding `period` to full-think beats of [`THINK_EVERY`].
     pub fn every(now: f64, period: f64, offset: f64) -> bool {
         let beats = (period / THINK_EVERY).round().max(1.0);
         now % THINK_EVERY == 0.0 && ((now / THINK_EVERY).floor() + offset).rem_euclid(beats) == 0.0

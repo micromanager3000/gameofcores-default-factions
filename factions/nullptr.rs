@@ -438,6 +438,7 @@ fn think_room(orders: &Value, work: f64) -> bool {
 }
 
 fn think(world: View, me: View) -> Value {
+    if cycles_left()<800.0 {return obj!{};}
     if !me.path("rts.cpu").truthy() {
         return common::govern(world, me, 0.4, || strategy(world, me));
     }

@@ -560,6 +560,7 @@ fn affordable(mut orders: Value, me: View, start: f64) -> Value {
 }
 
 fn think(world: View, me: View) -> Value {
+    if cycles_left()<800.0 {return obj!{};}
     common::govern(world, me, 0.4, || strategy(world, me))
 }
 

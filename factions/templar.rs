@@ -734,6 +734,7 @@ fn lean_research(orders: &mut Value, world: View, me: View) {
 }
 
 fn think(world: View, me: View) -> Value {
+    if cycles_left()<800.0 {return obj!{};}
     // A nearly empty slice cannot afford govern's scans. Open the next allowance,
     // keep miners first for upkeep, and leave type schedules and standing orders alone.
     if me.get("rts").truthy() && cycles_left() < 3000.0 {

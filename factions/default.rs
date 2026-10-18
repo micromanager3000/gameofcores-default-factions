@@ -20,6 +20,7 @@ program!(think, hauler, freighter, miner, guard, longbow, spy, scout, reflex, re
 const TECHS: [&str; 15] = ["extraction", "ranged", "dash", "repair", "turbines", "transmission", "seaTraversal", "mountainTraversal", "storage", "cloak", "mining", "archery", "boats", "alpine", "espionage"];
 
 fn think(world: View, me: View) -> Value {
+    if cycles_left()<800.0 {return obj!{};}
     common::govern(world, me, 0.4, || strategy(world, me))
 }
 

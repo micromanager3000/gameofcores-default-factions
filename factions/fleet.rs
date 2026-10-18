@@ -664,6 +664,7 @@ fn retirement_ready(world: View, me: View, remaining: f64) -> bool {
 }
 
 fn think(world: View, me: View) -> Value {
+    if cycles_left()<800.0 {return obj!{};}
     let mut out=common::govern(world, me, 0.4, || strategy(world, me));
     // Retire corsairs with no paying target, wreck or hunting water.
     if !retirement_ready(world,me,cycles_left()) {return out;}

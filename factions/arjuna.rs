@@ -325,6 +325,7 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
 }
 
 fn think(world: View, me: View) -> Value {
+    if cycles_left()<800.0 {return obj!{};}
     if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
         return emergency_recovery_policy();
     }
