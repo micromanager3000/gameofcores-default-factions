@@ -24,7 +24,7 @@
       "endsIn": 201,
       "graceIn": 231
     },
-    "scope": "One of30 surviving C6 endpoint observations selected an incoming mine-lease target. Five observations held incoming mine leases. Baseline endpoints lack saved own observations, so contract prevalence cannot be compared."
+    "scope": "One of 30 surviving C6 endpoint observations selected an incoming mine-lease target. Five observations held incoming mine leases. Baseline endpoints lack saved own observations, so contract prevalence cannot be compared."
   },
   "baselineComparison": {
     "factionRevision": "9abe662723ee38ebdaf3038b096b0e58bd269b02",
@@ -33,7 +33,7 @@
       "frontier": 2908,
       "fairSiegeCheck": 4452
     },
-    "finding": "The baseline also omits leased provinces from frontier filtering and checks only an already-started siege before accepting a mine lease. This is a latent shared bug. Its presence in one C6 endpoint does not establish the cause of0C6Crowns versus5baselineCrowns."
+    "finding": "The baseline also omits leased provinces from frontier filtering and checks only an already-started siege before accepting a mine lease. This is a latent shared bug. Its presence in one C6 endpoint does not establish the cause of zero candidate-6 Crowns versus five baseline Crowns."
   },
   "engineContract": {
     "safeConduct": "crates/engine/src/trade.rs:751,798: mine leases protect every lessee unit in that province, including capture units and the leave grace.",
@@ -43,7 +43,7 @@
   "repair": [
     "Exclude incoming leased provinces and incoming passage hosts while their contract grace remains. Outgoing rights do not protect our own force.",
     "Decline incoming mine leases or passage when they would cover the saved attack, a standing capture order or an active siege. Normal productive leases remain eligible.",
-    "Check encoded plan length before reading capitalRAM. Decline the optional protective deal when the read plus5000cycles does not fit; bound the unit-intent scan with a4000cycle reserve."
+    "Check encoded plan length before reading capital RAM. Decline the optional protective deal when the read plus 5,000 cycles does not fit; bound the unit-intent scan with a reserve of 4,000 cycles."
   ],
   "limitations": [
     "If every target is protected and a house later clears both saved and standing capture intent, this repair does not persist a campaign intent across that change. The authored renewal test proves refusal while intent exists, then eligibility after unrenewed grace. It does not prove a complete all-protected campaign recovery.",
