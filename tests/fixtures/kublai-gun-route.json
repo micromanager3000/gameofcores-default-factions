@@ -1,0 +1,196 @@
+[
+  [
+    {
+      "id": 733,
+      "owner": 0,
+      "type": "gun",
+      "at": 25,
+      "to": -1,
+      "goal": -1,
+      "doing": "idle",
+      "target": -1,
+      "alert": 8,
+      "why": "",
+      "ramUnit": {},
+      "rts": {
+        "deployed": false,
+        "deploying": false
+      }
+    }
+  ],
+  {
+    "seconds": 3954,
+    "factions": [
+      {
+        "id": 0,
+        "alive": true
+      }
+    ],
+    "provinces": [
+      {
+        "id": 11,
+        "owner": 1,
+        "adj": [
+          25
+        ],
+        "visible": true,
+        "units": {
+          "0": 1
+        }
+      },
+      {
+        "id": 25,
+        "owner": 0,
+        "adj": [
+          11
+        ],
+        "visible": true,
+        "units": {
+          "0": 1
+        }
+      },
+      {
+        "id": 25,
+        "owner": 0,
+        "capital": true,
+        "adj": [
+          11
+        ],
+        "visible": true,
+        "units": {
+          "0": 1
+        }
+      }
+    ]
+  },
+  {
+    "id": 0,
+    "capital": 25,
+    "allies": [],
+    "ramProvince": {
+      "11": {
+        "0": {
+          "bytes": {
+            "$b": "ugF7Im1pbmVzIjpbWzM3LDBdLFszNSwwXSxbMCwwXSxbMywwXSxbMzIsMV0sWzYsMF0sWzYsMV0sWzM3LDBdLA=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        },
+        "1": {
+          "bytes": {
+            "$b": "WzM1LDBdLFswLDBdLFszLDBdLFs2LDBdLFs2LDFdXSwiYXR0YWNrIjoxMSwic3RhZ2UiOjMsIm5lZWQiOjIsIg=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        },
+        "2": {
+          "bytes": {
+            "$b": "aG9tZSI6MjUsImZyZXNoIjozOTQ1LCJ0aHJlYXQiOjEsImRlZmVuZCI6LTEsInBpY2tldCI6MTAsImd1YXJkIg=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        },
+        "3": {
+          "bytes": {
+            "$b": "Ols2NTEsNjUzLDY3N10sImd1YXJkQXQiOjM5NDUsImZpZWxkIjp7InRvIjoxMSwibmV4dCI6eyIxMSI6MTEsIg=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        },
+        "4": {
+          "bytes": {
+            "$b": "MCI6MywiMyI6MTEsIjQiOjAsIjYiOjExLCIxMCI6NCwiMTIiOjcsIjciOjQsIjE4IjoxMCwiMTYiOjQsIjIwIg=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        },
+        "5": {
+          "bytes": {
+            "$b": "OjQsIjIzIjoxNiwiMjUiOjQsIjMyIjo0LCIzNSI6MTYsIjMwIjoyMywiMzkiOjM1LCIzNyI6MTZ9LCJhdCI6Mw=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        },
+        "6": {
+          "bytes": {
+            "$b": "OTQ1fSwiZnJvbnQiOlsxMSwzLDAsMzQsMywzOTQ1XSwiY29udm95IjpbXSwiY29udm95QXQiOjM5NDV9AAAAAA=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        }
+      },
+      "25": {
+        "0": {
+          "bytes": {
+            "$b": "ugF7Im1pbmVzIjpbWzM3LDBdLFszNSwwXSxbMCwwXSxbMywwXSxbMzIsMV0sWzYsMF0sWzYsMV0sWzM3LDBdLA=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        },
+        "1": {
+          "bytes": {
+            "$b": "WzM1LDBdLFswLDBdLFszLDBdLFs2LDBdLFs2LDFdXSwiYXR0YWNrIjoxMSwic3RhZ2UiOjMsIm5lZWQiOjIsIg=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        },
+        "2": {
+          "bytes": {
+            "$b": "aG9tZSI6MjUsImZyZXNoIjozOTQ1LCJ0aHJlYXQiOjEsImRlZmVuZCI6LTEsInBpY2tldCI6MTAsImd1YXJkIg=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        },
+        "3": {
+          "bytes": {
+            "$b": "Ols2NTEsNjUzLDY3N10sImd1YXJkQXQiOjM5NDUsImZpZWxkIjp7InRvIjoxMSwibmV4dCI6eyIxMSI6MTEsIg=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        },
+        "4": {
+          "bytes": {
+            "$b": "MCI6MywiMyI6MTEsIjQiOjAsIjYiOjExLCIxMCI6NCwiMTIiOjcsIjciOjQsIjE4IjoxMCwiMTYiOjQsIjIwIg=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        },
+        "5": {
+          "bytes": {
+            "$b": "OjQsIjIzIjoxNiwiMjUiOjQsIjMyIjo0LCIzNSI6MTYsIjMwIjoyMywiMzkiOjM1LCIzNyI6MTZ9LCJhdCI6Mw=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        },
+        "6": {
+          "bytes": {
+            "$b": "OTQ1fSwiZnJvbnQiOlsxMSwzLDAsMzQsMywzOTQ1XSwiY29udm95IjpbXSwiY29udm95QXQiOjM5NDV9AAAAAA=="
+          },
+          "t": 3945,
+          "by": -1,
+          "scope": "shared"
+        }
+      }
+    },
+    "rts": {
+      "cpu": {
+        "limits": {
+          "fabrication": 4800
+        }
+      }
+    }
+  }
+]

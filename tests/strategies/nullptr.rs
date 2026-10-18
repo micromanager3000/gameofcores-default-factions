@@ -54,21 +54,25 @@ fn recovery_recruitment_preserves_think_control_and_fabrication_commitments() {
 
 #[test]
 fn rich_cargo_recovery_rearms_a_screen_before_a_full_plan_fits() {
+    let mut recovery_pages = Value::obj();
+    for op in mem::put(244, &obj! { "r"=>true }, "local", None, 1).expect("marker fits") {
+        recovery_pages.set(&op.get("write").num().to_string(), obj! { "bytes"=>op.get("bytes").clone(), "t"=>1 });
+    }
     let me = obj! { "id"=>6, "capital"=>36, "compute"=>obj! { "thinkPeak"=>15449 },
         "units"=>obj! { "total"=>33, "cap"=>52, "queued"=>0, "stalled"=>0,
             "byType"=>obj! { "miner"=>17, "hauler"=>11, "freighter"=>2, "escort"=>2, "sentry"=>1 } },
         "rts"=>obj! { "costs"=>obj! { "fabrication"=>obj! { "base"=>4800, "module"=>2400 } }, "cpu"=>obj! {
             "income"=>36694, "bank"=>379960, "limits"=>obj! { "fabrication"=>0, "control"=>22000 },
             "reserve"=>obj! {}, "spent"=>obj! {} } },
-        "ramCapital"=>obj! { "244"=>obj! { "r"=>true } }, "types"=>obj! { "miner"=>obj! {}, "screen"=>obj! {} } };
+        "ramCapital"=>recovery_pages, "types"=>obj! { "miner"=>obj! {}, "screen"=>obj! {} } };
     let args = views(&[me]);
     assert!(productive_reentry(args[0]));
     let orders = think_reentry(args[0]);
     assert_eq!(orders.get("memo").str(), "Address Zero: rearming a screen for the carried front.");
     assert_eq!(orders.get("spawn").at(0).get("type").str(), "screen");
-    assert_eq!(orders.path("compute.cpu.limits.fabrication").num(), 9800.0);
-    assert_eq!(orders.path("compute.types.screen.cycles").num(), 6000.0);
-    assert_eq!(orders.path("compute.types.hauler.cycles").num(), 10000.0);
+    assert_eq!(orders.get("compute").get("cpu").get("limits").get("fabrication").num(), 5000.0);
+    assert_eq!(orders.get("compute").get("types").get("screen").get("cycles").num(), 6000.0);
+    assert_eq!(orders.get("compute").get("types").get("hauler").get("cycles").num(), 10000.0);
 }
 
 fn naval_rank_case(waters: usize, remaining: f64, land_border: bool) -> bool {
