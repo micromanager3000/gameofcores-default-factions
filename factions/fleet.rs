@@ -1247,14 +1247,14 @@ fn prey(world: View, me: View, n: &[(f64, f64)]) -> f64 {
 
 // Kites defend, raid prey for ◆, or join the target attack.
 fn kite(units: View, world: View, me: View) {
-    // A starved callback cannot afford recovery's deck search.  Landing one hot
-    // wing is still useful, but leave the rest on their standing orders.
+    // Keep urgent landings before a short call's deck and plan admission.
     if cycles_left() < 3500.0 {
-        land_hot(units);
+        land_urgent(units);
         return;
     }
     if common::air_recovery(units,me) { return; }
     if !me.path("rts.air.decks").is_empty() {
+        if cycles_left()<4000.0 {land_urgent(units);return;}
         common::fly(units, world, me);
         return;
     }
@@ -1296,6 +1296,16 @@ fn kite(units: View, world: View, me: View) {
             o.set("alert", 6);
             o.set("power", obj! { "drive" => 600, "armor" => 0, "weapon" => 420 });
             order(o);
+        }
+    }
+}
+
+// Short callbacks retain shared flight's urgent threshold, including moving wings.
+fn land_urgent(units: View) {
+    for u in units.iter().take_while(|_| cycles_left()>400.0) {
+        let air=u.path("rts.air");
+        if air.get("aloft").truthy()&&heat(air)>=45.0 {
+            order(obj!{"id"=>u.get("id"),"land"=>true});
         }
     }
 }

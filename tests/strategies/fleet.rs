@@ -345,3 +345,17 @@ fn fleet_prioritizes_storage_only_for_a_dim_grid_with_chargeable_variable_surplu
     assert_eq!(storage_research_pick(0.96,10.0),"airWeapons","a stable grid keeps the air path ahead of storage");
     assert_eq!(storage_research_pick(0.8,2.0),"airWeapons","a low powered share without generation headroom is not a battery case");
 }
+
+#[test]
+fn urgent_landings_include_moving_wings_before_normal_flight_admission() {
+    let units=Value::parse(r#"[{"id":1,"doing":"move","rts":{"air":{"aloft":true,"heat":53}}},
+        {"id":2,"doing":"move","rts":{"air":{"aloft":true,"heat":47}}},
+        {"id":3,"doing":"move","rts":{"air":{"aloft":true,"heat":46}}},
+        {"id":4,"doing":"move","rts":{"air":{"aloft":true,"heat":43}}},
+        {"id":5,"doing":"idle","rts":{"air":{"aloft":false,"heat":60}}}]"#);
+    let args=views(&[units]);
+    super::land_urgent(args[0]);
+    let out=emitted();
+    assert_eq!(out.iter().map(|order|order.get("id").num()).collect::<Vec<_>>(),vec![1.0,2.0,3.0]);
+    assert!(out.iter().all(|order|order.get("land").truthy()));
+}
