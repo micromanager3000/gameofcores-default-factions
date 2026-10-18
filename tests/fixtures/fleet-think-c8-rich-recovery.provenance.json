@@ -1,0 +1,10 @@
+{
+  "source": "C8 holdout-long-419 final own Fleet think observation",
+  "state": "/Users/reddybot/code/gameofcores-work/gameofcores-gameplay/artifacts/balance-oct16/gameplay-depth-holdout-final-af6732e/holdout-long-419.state.json",
+  "engine": "2d9b8f14 frozen C8 simulator",
+  "callback": "think",
+  "faction": 4,
+  "rate": 64,
+  "capturedAtSeconds": 21600,
+  "purpose": "rich low-income Fleet recovery whose hard think spend cap cannot admit the full planner"
+}

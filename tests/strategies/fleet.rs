@@ -167,6 +167,34 @@ fn fleet_low_think_allowance_recovers_and_funded_retry_can_plan() {
 }
 
 #[test]
+fn fleet_rich_capped_rebuild_funds_an_active_study_without_admitting_the_planner() {
+    let world = Value::parse(r#"{"techs":{}}"#);
+    let me = Value::parse(r#"{"id":4,"research":{"tech":"flight"},"units":{"total":6,"stalled":0},
+        "compute":{"cycles":12130,"thinkPeak":32000},"rts":{"bank":3145458,
+        "cpu":{"income":12130,"bank":3145458,"spendCap":15163,"capacity":3152000,
+        "available":{"think":14890},"limits":{},"reserve":{},"spent":{}}}}"#);
+    let args = views(&[world, me]);
+    let orders = super::lean_rebuild(args[0], args[1]);
+    assert_eq!(orders.get("memo").str(), "Fleet rebuilding crew and research");
+    assert_eq!(orders.get("compute").get("cpu").get("limits").get("research").num(), 0.3,
+        "an active study must retain a funded lane below the full-plan admission floor");
+    assert!(orders.get("compute").get("cpu").get("limits").get("fabrication").num() > 0.0,
+        "the bounded path restores production policy without scanning the map");
+}
+
+#[test]
+fn fleet_lean_rebuild_requires_paid_unstalled_crew() {
+    let low_bank = Value::parse(r#"{"units":{"stalled":0},"rts":{"cpu":{"income":12130,"bank":24259}}}"#);
+    let stalled = Value::parse(r#"{"units":{"stalled":1},"rts":{"cpu":{"income":12130,"bank":1000000}}}"#);
+    let paid = Value::parse(r#"{"units":{"stalled":0},"rts":{"cpu":{"income":12130,"bank":24260}}}"#);
+    assert!(!super::rich_rebuild_ready(views(&[low_bank])[0]),
+        "low savings must stay in recovery rather than fund optional study and fabrication");
+    assert!(!super::rich_rebuild_ready(views(&[stalled])[0]),
+        "unpaid crew must stay in recovery even with a historical CPU balance");
+    assert!(super::rich_rebuild_ready(views(&[paid])[0]));
+}
+
+#[test]
 fn fleet_uses_lean_plan_when_the_full_estimate_exceeds_the_spend_cap() {
     let mut world = Value::parse(r#"{"seconds":6,"provinces":[],"units":[]}"#);
     let mut provinces = Value::arr();

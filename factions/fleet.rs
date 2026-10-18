@@ -654,6 +654,45 @@ fn recovery_for_plan(world: View, me: View, need: f64) -> Value {
     orders
 }
 
+// A house can have enough income to keep its crew and an active study, yet not
+// enough of this second's capped spend to run Fleet's map planner. Keep that
+// productive work alive without attempting routes, census, or naval scans.
+fn lean_rebuild(world: View, me: View) -> Value {
+    let mut orders = common::recovery(world, me);
+    let studying = me.path("research.tech").str();
+    if studying.is_empty() {
+        let all = world.get("techs");
+        let mine = me.get("techs");
+        for &want in research_techs(world, me) {
+            if cycles_left() < 4000.0 { break; }
+            let mut pick = want;
+            for _ in 0..8 {
+                let tech = all.get(pick);
+                let missing = tech.get("requires").iter().find(|t| !mine.get(t.str()).truthy());
+                match missing { Some(t) => pick = t.str(), None => break }
+            }
+            let tech = all.get(pick);
+            if !mine.get(pick).truthy() && tech.truthy()
+                && tech.get("requires").iter().all(|t| mine.get(t.str()).truthy())
+                && tech.get("offer").num_or(0.0) <= me.path("rts.cpu.capacity").num_or(f64::INFINITY) {
+                orders.set("research", pick);
+                break;
+            }
+        }
+    }
+    let mut policy = cpu_policy(me, 0.0, false);
+    common::fit_cpu(&mut policy, me);
+    orders.entry("compute").set("cpu", policy);
+    orders.set("memo", "Fleet rebuilding crew and research");
+    orders
+}
+
+fn rich_rebuild_ready(me: View) -> bool {
+    let cpu = me.path("rts.cpu");
+    cpu.truthy() && me.path("units.stalled").num_or(0.0)==0.0
+        && cpu.get("bank").num_or(0.0)>=cpu.get("income").num_or(0.0)*2.0
+}
+
 fn retirement_ready(world: View, me: View, remaining: f64) -> bool {
     if !world.get("logistics").truthy() || me.path("units.byType.corsair").num_or(0.0) <= 0.0 || remaining < 5000.0 { return false; }
     let bytes = me.get("ramCapital").key(0.0).get("bytes");
@@ -665,6 +704,12 @@ fn retirement_ready(world: View, me: View, remaining: f64) -> bool {
 
 fn think(world: View, me: View) -> Value {
     if cycles_left()<800.0 {return obj!{};}
+    // A rich, paid crew can use a capped second to maintain its active study
+    // and fabrication policy even when that cap is too small for the planner.
+    if rich_rebuild_ready(me)
+        && cycles_left()>=6000.0 && cycles_left()<13000.0 {
+        return lean_rebuild(world, me);
+    }
     let mut hunting=None;
     let mut out=common::govern(world, me, 0.4, || strategy(world, me, &mut hunting));
     // Only a fresh naval decision can retire a hull; recovery and resting preserve it.
@@ -697,7 +742,7 @@ fn strategy(world: View, me: View, hunting: &mut Option<bool>) -> Value {
     if rts(me) {
         let allowance = if available.truthy() { available.get("think").num_or(0.0) } else { cycles_left() };
         if !plan_fuel_ready(allowance, cycles_left(), need) {
-            return recovery_for_plan(world, me, need);
+            return if rich_rebuild_ready(me) { lean_rebuild(world, me) } else { recovery_for_plan(world, me, need) };
         }
     }
     let me_id = me.get("id").num();
