@@ -634,13 +634,13 @@ use super::{air, theme};
                 && w.get("until").num_or(0.0)>(now+travel)*5.0
         }).max_by(|a,b|a.get("cycles").num().min(hold).total_cmp(&b.get("cycles").num().min(hold)))
     }
-    fn logistics_budget(world:View,me:View,mut out:Value)->Value{
+    fn logistics_budget(world:View,me:View,share:f64,mut out:Value)->Value{
         if !world.get("logistics").truthy(){return out;}
-        // Recovery must be able to return its policy even when the planner used nearly all its call.
+        // Keep recovery affordable.
         if cycles_left()<3500.0{return out;}
         let income=me.path("rts.cpu.income").num_or(20000.0);
         for (ty,cycles) in [("miner",4500),("hauler",10000),("freighter",12000)]{out.entry("compute").entry("types").set(ty,obj!{"cycles"=>cycles,"every"=>2});}
-        // Route planning and RAM reads need a fixed minimum even between irregular deliveries.
+        // Fund routing between deliveries.
         let cpu=out.entry("compute").entry("cpu");
         for (lane,floor) in [("think",14000.0),("control",22000.0),("drive",8000.0)]{
             let old=cpu.get("limits").get(lane).num_or(0.0);let old=if old<=1.0{old*income}else{old};
@@ -649,13 +649,12 @@ use super::{air, theme};
         let mut priority=vec![Value::from("miner"),Value::from("hauler"),Value::from("freighter")];
         for ty in cpu.get("upkeepOrder").items(){if !priority.contains(ty){priority.push(ty.clone());}}
         cpu.set("upkeepOrder",priority);
-        // The governor sizes the army to income (govern_base). A lower upkeep limit would only stall units it paid for.
+        // Fund the units the governor admitted.
         let old=cpu.get("limits").get("upkeep").num_or(1.0);let old=if old<=1.0{old}else{old/income.max(1.0)};
         cpu.entry("limits").set("upkeep",old.max(UPKEEP_LIMIT));
-        // Fixed reserves from a rich second must not lock out code when delivery income falls.
+        // Reserves follow cargo income.
         cpu.set("reserve",obj!{"think"=>0.25,"control"=>0.1,"upkeep"=>0.1,"duel"=>0.05});
-        // Between cargo loads the army lives on the bank. Below a minute of its upkeep, research and influence slow
-        // in proportion, so the next delivery finds the army still paid instead of stalled.
+        // Slow optional spending below a minute of upkeep savings.
         let bill=me.path("rts.cpu.last.upkeep").num_or(0.0);
         if bill>0.0 && income>0.0 {
             let health=(me.path("rts.cpu.bank").num_or(0.0)/(bill*UPKEEP_BUFFER)).clamp(0.0,1.0);
@@ -668,15 +667,16 @@ use super::{air, theme};
             }
         }
         let depots=me.path("rts.logistics.depots");let stock=depots.iter().filter(|d|d.get("p").num()!=me.get("capital").num()||d.get("dock").truthy()).map(|d|d.get("cycles").num_or(0.0)).sum::<f64>();
-        let have=me.path("units.byType");
+        let have=me.path("units.byType");let n=me.path("units.total").num_or(0.0);let away=me.path("units.hiredOut").num_or(0.0);
+        let count=n+away;let cap=me.path("units.cap").num_or(0.0);
         if stock>16000.0 && depots.iter().filter(|d|d.get("dock").truthy()).count()>=2 && !me.path("techs.seaTraversal").truthy(){out.set("research","seaTraversal");}
-        if stock>16000.0 && me.path("units.queued").num_or(0.0)==0.0 && me.get("bank").num_or(0.0)>me.path("costs.unit").num_or(1e9)+8.0 && me.path("rts.cpu.bank").num_or(0.0)>fabrication(me,1.0)+income*2.0 {
+        if stock>16000.0 && out.get("spawn").is_empty() && count<cap && me.path("units.queued").num_or(0.0)==0.0 && me.get("bank").num_or(0.0)>me.path("costs.unit").num_or(1e9)+8.0 && me.path("rts.cpu.bank").num_or(0.0)>fabrication(me,1.0)+income*2.0 {
             let mut port = None;
-            let ty = if have.get("hauler").num_or(0.0) < (me.get("provinces").num_or(1.0)/2.0).clamp(2.0,6.0) { "hauler" }
-            else if me.path("techs.seaTraversal").truthy() && have.get("freighter").num_or(0.0) < 2.0
+            let ty = if have.get("hauler").num_or(0.0)+away < (me.get("provinces").num_or(1.0)/2.0).clamp(2.0,6.0) { "hauler" }
+            else if me.path("techs.seaTraversal").truthy() && have.get("freighter").num_or(0.0)+away < 2.0
                 && world.get("seconds").num_or(0.0) >= mem::get(me.get("ramCapital"), FREIGHT_PAGE).get("until").num_or(0.0) {
                 for p in me.path("rts.sea.ports").iter() {
-                    // Leave room for a cold port probe and returning the completed orders.
+                    // Reserve the freight tail.
                     if cycles_left() < 9000.0 { break; }
                     let at = p.num();
                     let Some(d) = world.path("logistics.docks").iter().find(|d| d.get("p").num() == at) else { continue };
@@ -688,6 +688,8 @@ use super::{air, theme};
             } else { return out; };
             let mods=if ty=="freighter"{vec!["hull"]}else{vec![]};
             let body=obj!{"hp"=>2,"speed"=>2,"strength"=>0,"carry"=>5,"vision"=>1};
+            let paid=(n-me.path("units.stalled").num_or(0.0)).max(1.0);let each=(unit_upkeep(me)/paid/(n/cap).max(1.0)).max(me.path("costs.upkeep").num_or(100.0));
+            if (each*count+body_upkeep_value(me,&body,mods.len() as f64))*((count+1.0)/cap).max(1.0)+building_upkeep(me)+me.path("costs.draw").entries().map(|(_,v)|v.num_or(0.0)).fold(0.0,f64::max)>income*share {return out;}
             let mut recruit = obj! {"type"=>ty,"build"=>body,"modules"=>mods};
             if let Some(p) = port { recruit.set("port", p); }
             out.set("spawn",vec![recruit]);
@@ -1759,7 +1761,7 @@ use super::{air, theme};
             // A starved army still needs the full crew-aware recovery policy. Its paid upkeep can be zero. Units
             // stalled between deliveries while the bank still holds cycles keep the strategy running.
             if me.path("units.stalled").num_or(0.0)>0.0 && me.path("rts.cpu.bank").num_or(0.0)<income*2.0 {
-                return logistics_budget(world, me, recovery(world, me));
+                return logistics_budget(world, me, share, recovery(world, me));
             }
             // A working crew with savings may resume strategy between irregular cargo deliveries.
             let starting=income<30000.0 && me.path("units.total").num_or(0.0)<4.0;
@@ -1791,11 +1793,11 @@ use super::{air, theme};
                     let label=names.map_or_else(||format!("miner-{serial:.0}"),|list|name(me,list,serial));
                     out.set("spawn",vec![obj!{"type"=>"miner","name"=>label}]);
                 }
-                return logistics_budget(world,me,out);
+                return logistics_budget(world,me,share,out);
             }
         }
         let orders = govern_base(world, me, share, strategy);
-        logistics_budget(world, me, orders)
+        logistics_budget(world, me, share, orders)
     }
     fn govern_base(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
         if !me.path("rts.cpu").truthy() { return strategy(); }
