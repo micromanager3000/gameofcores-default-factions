@@ -119,6 +119,17 @@ fn healthy_recovery_keeps_flight_research_moving() {
     assert_eq!(orders.get("research").str(),"flight");
     assert_eq!(orders.get("compute").get("cpu").get("limits").get("research").num(),0.12);
 }
+
+#[test]
+fn target_scoring_uses_capture_ring_defenders_and_preserves_old_observations() {
+    let args=views(&[obj!{"factions"=>arr![]},obj!{"id"=>0},
+        obj!{"owner"=>1,"cores"=>4,"garrison"=>20,"townGarrison"=>0},
+        obj!{"owner"=>1,"cores"=>3,"garrison"=>2,"townGarrison"=>2},
+        obj!{"owner"=>1,"cores"=>4,"garrison"=>20}]);
+    assert!(common::score(args[0],args[1],args[2]) > common::score(args[0],args[1],args[3]),
+        "distant workers do not make an open capture ring harder than two local defenders");
+    assert_eq!(common::town_defenders(args[4]),20.0,"older observations fall back to the province garrison");
+}
 #[test]
 fn flight_research_waits_for_recovery_and_preserves_emu_doctrine() {
     for state in ["stalled","poor","costly","emu"] {
