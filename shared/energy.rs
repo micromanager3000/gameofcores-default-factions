@@ -400,6 +400,22 @@ fn plant_shell(pieces: &mut Vec<Value>, kind: &str, style: usize) {
     faction_shell(pieces, kind, style);
 }
 
+/// Mechanisms that explain how a public plant works when a player zooms in.
+/// They use the same normalized appearance vocabulary as the main machinery.
+fn working_details(p: &mut Vec<Value>, kind: &str, style: usize) {
+    let metal = if style == 4 { "wood" } else { "metal" };
+    match kind {
+        "solar" => { shell_piece(p, "column", -1.02, -0.78, 0.12, 0.10, 0.54, 0.0, metal); shell_piece(p, "accent", 1.02, 0.82, 0.20, 0.34, 0.12, 0.22, "gold"); }
+        "wind" => { shell_piece(p, "drum", 0., 0., 0.14, 0.62, 0.22, 0.0, metal); shell_piece(p, "platform", 0., 0., 0.12, 1.84, 0.10, 1.46, "stone"); }
+        "hydro" | "tidal" => { shell_piece(p, "column", -0.82, -0.22, 0.12, 0.14, 0.92, 0.0, metal); shell_piece(p, "column", 0.82, -0.22, 0.12, 0.14, 0.92, 0.0, metal); shell_piece(p, "accent", 0., -0.32, 0.38, 1.44, 0.10, 0.16, "faction"); }
+        "boiler" => { shell_piece(p, "accent", -0.26, -0.44, 0.62, 1.34, 0.10, 0.16, metal); shell_piece(p, "light", 0.64, -0.54, 0.22, 0.14, 0.42, 0.0, "gold"); }
+        "geo" => { shell_piece(p, "column", -0.54, -0.36, 0.12, 0.10, 1.16, 0.0, metal); shell_piece(p, "column", 0.54, -0.36, 0.12, 0.10, 1.16, 0.0, metal); shell_piece(p, "accent", 0., -0.38, 0.66, 1.08, 0.10, 0.16, "jade"); }
+        "reactor" => { shell_piece(p, "arch", 0.18, -0.60, 0.12, 1.44, 1.42, 0.34, metal); shell_piece(p, "light", 0.18, -0.60, 1.42, 0.16, 0.30, 0.0, "faction"); }
+        "fusion" => { shell_piece(p, "torus", 0., 0., 0.82, 1.48, 0.18, 0.0, "gold"); shell_piece(p, "light", 0., 0., 1.24, 0.18, 0.18, 0.0, "faction"); }
+        _ => { shell_piece(p, "accent", 0., -0.74, 0.48, 1.56, 0.10, 0.14, metal); shell_piece(p, "light", -0.72, -0.74, 0.22, 0.12, 0.30, 0.0, "faction"); }
+    }
+}
+
 /// A plant's appearance: its kind's machinery, more of it the bigger the plant, on the house's ground.
 pub fn look(kind: &str, cap: f64, style: usize) -> Value {
     let base = ["stone", "marble", "stone", "metal", "wood", "brick", "dark", "brick", "sand", "marble"][style.min(9)];
@@ -491,5 +507,6 @@ pub fn look(kind: &str, cap: f64, style: usize) -> Value {
         }
     };
     plant_shell(&mut pieces, kind, style);
+    working_details(&mut pieces, kind, style);
     obj! { "name" => name, "pieces" => pieces }
 }

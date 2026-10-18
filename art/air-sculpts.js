@@ -14,6 +14,11 @@ function wing(s,x,y,span,c,{feathers=false,flap=feathers,swept=false,thin=false}
   // A slim rounded leading edge catches the light and keeps every house's aircraft
   // from reading as a flat card. It is cheaper than a second high-detail wing mesh.
   const edge=s.taper([x+.30,y+.025,z],[x-.22,y+.025,z+side*span*.82],.026,c,m,pivot);edge.amplitude=flap?.22:0;
+  // Spar and split trailing flap give close inspection a built aircraft rather
+  // than a single coloured wing card. The small pieces disappear before the body.
+  const spar=s.rod([x+.25,y+.035,z+side*.08],[x-.52,y+.035,z+side*span*.72],.018,WOOD,m,pivot);spar.amplitude=flap?.22:0;
+  const flapPiece=s.box([x-.39,y-.018,z+side*span*.69],[.34,.026,span*.27],c,m,pivot);flapPiece.amplitude=flap?.22:0;
+  spar.material='wood';spar.detail=1;flapPiece.detail=1;
   if(feathers)for(let i=0;i<3;i++){
    const f=s.box([x-.35-i*.10,y-.02,z+side*(span*.58+i*.14)],[.50-i*.08,.06,.11],i%2?S:c,m,pivot);f.amplitude=flap?.22:0;
   }
@@ -128,5 +133,5 @@ function housePlanform(s,seat,role){
 }
 export function airSculpt(seat,role='fighter'){
  if(!BUILDERS[seat]||!AIR_ROLES.includes(role))return null;
- const s=new Sculpt();BUILDERS[seat](s,role);housePlanform(s,seat,role);return {parts:s.parts};
+ const s=new Sculpt();BUILDERS[seat](s,role);housePlanform(s,seat,role);return {parts:s.parts,rig:'air'};
 }

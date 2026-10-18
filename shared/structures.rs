@@ -621,6 +621,39 @@ fn house_footing(a: &mut Art, style: usize, role: Role, k: &Kit) {
     }
 }
 
+/// Close-range construction joints shared by the service plans.  These are
+/// load-bearing edges, entrances and braces, so each survives the strategy
+/// camera while giving an inspected site a built, inhabited scale.
+fn finish_work(a: &mut Art, role: Role, k: &Kit) {
+    match role {
+        Role::Landmark => {}
+        Role::Hall => {
+            a.add(b'a', 0., -1.02, 0.16, 0.72, 0.98, 0.20, k.base);
+            a.add(b'c', -0.42, -1.02, 0.16, 0.12, 1.08, 0., k.accent);
+            a.add(b'c', 0.42, -1.02, 0.16, 0.12, 1.08, 0., k.accent);
+        }
+        Role::Yard => {
+            a.add(b'w', 0.18, -1.12, 0.16, 1.50, 0.44, 0.10, k.base);
+            a.add(b'a', -0.66, -1.12, 0.16, 0.46, 0.72, 0.12, k.wall);
+            a.add(b'c', 1.10, 0.12, 0.16, 0.12, 1.52, 0., k.accent);
+        }
+        Role::Works => {
+            a.add(b'x', -0.34, -0.72, 1.20, 1.28, 0.10, 0.14, k.accent);
+            a.add(b'c', -0.98, 0.18, 0.16, 0.14, 1.36, 0., k.base);
+            a.add(b'c', 0.56, 0.18, 0.16, 0.14, 1.36, 0., k.base);
+        }
+        Role::Bastion => {
+            a.add(b'a', 0., -1.18, 0.30, 0.70, 0.86, 0.28, k.wall);
+            a.add(b'x', 0., -1.18, 1.14, 1.08, 0.10, 0.18, k.accent);
+        }
+        Role::Bay => {
+            a.add(b'a', 0.12, -0.98, 0.16, 1.24, 1.26, 0.20, k.base);
+            a.add(b'c', -0.58, -0.98, 0.16, 0.12, 1.42, 0., k.accent);
+            a.add(b'c', 0.82, -0.98, 0.16, 0.12, 1.42, 0., k.accent);
+        }
+    }
+}
+
 /// Site `style`'s building for `role`, with its design name. A house program holds only its own house's art (`art`,
 /// from shared/buildings.txt), so it builds in its own style in any seat; the default program holds every house's.
 pub fn architecture(style: usize, role: Role) -> Value {
@@ -643,6 +676,7 @@ pub fn architecture(style: usize, role: Role) -> Value {
     // A faction's footprint is an architectural choice, with no game effect.
     house_footing(&mut a, style, role, &k);
     house_massing(&mut a, style, role);
+    finish_work(&mut a, role, &k);
     // Service roles use the founder mass in place of the generic central shed.
     // Landmarks keep their authored plan; bastions keep their defensive curtain.
     let src = if i == 0 { f[7].to_string() } else {

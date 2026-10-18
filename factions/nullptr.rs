@@ -481,6 +481,12 @@ fn rank_hold(world: View, me: View) -> impl Fn(View, f64) -> bool {
         * (q.path("routes.sea").len() + q.path("routes.air").len()).max(1) as f64) && naval(q))
 }
 
+fn prefer_supported(rim: Vec<View>, rts: bool, supported: &[f64]) -> Vec<View> {
+    if rts && !supported.is_empty() {
+        rim.into_iter().filter(|q| supported.contains(&q.get("id").num())).collect()
+    } else { rim }
+}
+
 fn strategy(world: View, me: View) -> Value {
     let rts = me.get("rts");
     if rts.truthy() && cycles_left() < 3000.0 {
@@ -500,8 +506,11 @@ fn strategy(world: View, me: View) -> Value {
     let by_id = realm::index(world);
     let fighters = common::fighters(me);
     let rim = common::frontier(world, me);
-    // the best land first, marked down where the army couldn't hold on to it (common::can_hold)
+    // Keep reachable fronts ahead of unsupported sea crossings even when survey rejects a well-defended town.
+    // Classify each crossing once: rank_hold leaves expensive sea checks out of short callbacks.
     let hold = rank_hold(world, me);
+    let supported: Vec<f64> = rim.iter().filter(|q| hold(**q, cycles_left())).map(|q| q.get("id").num()).collect();
+    let rim = prefer_supported(rim, rts.truthy(), &supported);
     let ranked = realm::rank(world, me, rim, |w, m, q| {
         let owner = q.get("owner").num_or(-1.0);
         let rival = realm::is_rival(w, m, owner);
@@ -517,7 +526,7 @@ fn strategy(world: View, me: View) -> Value {
             + if approach { 5.0 } else { 0.0 }
             + if rival && infiltrated { 7.0 } else { 0.0 }
             + if rival && owner == campaign { 4.0 } else { 0.0 }
-            - if hold(q, cycles_left()) { 0.0 } else { common::OVER_WATER }
+            - if supported.contains(&q.get("id").num()) { 0.0 } else { common::OVER_WATER }
     });
     let ranked = common::rally(world, me, ranked);
     // Survey scans provinces for mines and defense, and may scan visible fighters for a picket.

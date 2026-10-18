@@ -1,8 +1,17 @@
 // Retained rigid-part recipes shared by land and naval miniatures. +x forward, +y up.
 const DARK='#26333a',IRON='#788b95';
+function materialFor(color){
+ if(color==='primary'||color==='secondary'||color==='accent')return 'cloth';
+ if(['#788b95','#26333a','#7f7767','#777c83','#aebba1'].includes(color))return 'iron';
+ if(['#785239','#594332','#493e34','#72523b','#654d37','#533b2f','#62402f','#6c4b35'].includes(color))return 'wood';
+ if(['#dab866','#be9b58','#b89a63','#c19b62'].includes(color))return 'brass';
+ if(['#a3fff0','#9fe8db','#9cccd3','#bdfcf4'].includes(color))return 'glass';
+ if(['#e6dcc2','#d8d5b6','#d5cdbb'].includes(color))return 'cloth';
+ return 'organic';
+}
 export class Sculpt {
  constructor(){this.parts=[];}
- part(shape,at,size,color,motion='',pivot=at,rotation=[0,0,0],amplitude=.5){const p={shape,at,size,color,motion,pivot,rotation,amplitude,on:[]};if(motion==='kneeL'||motion==='kneeR')p.kneeDrop=.32;this.parts.push(p);return p;}
+ part(shape,at,size,color,motion='',pivot=at,rotation=[0,0,0],amplitude=.5){const p={shape,at,size,color,motion,pivot,rotation,amplitude,on:[],material:materialFor(color),detail:0};if(motion==='kneeL'||motion==='kneeR')p.kneeDrop=.32;this.parts.push(p);return p;}
  box(at,size,c,m='',pivot=at,rot=[0,0,0]){return this.part('box',at,size,c,m,pivot,rot);}
  orb(at,size,c,m='',pivot=at){return this.part('ellipsoid',at,size,c,m,pivot);}
  // The renderer keeps these as the same cheap retained ellipsoids as heads and wheels.
@@ -27,5 +36,8 @@ export class Sculpt {
   for(const a of [0,Math.PI/2])this.box([at[0],at[1],z+Math.sign(z)*.02],[r*1.7,.035,.035],c,'roll',at,[0,0,a]);
   return wheel;
  }
+ // Metadata stays beside the retained primitive rather than changing its geometry
+ // contract. The renderer can drop ornament and rotate coherent subassemblies.
+ tag(start,{material,detail,joint,aim,pivot}={}){for(const p of this.parts.slice(start)){if(material)p.material=material;if(detail!==undefined)p.detail=detail;if(joint)p.joint=joint;if(aim)p.aim=aim;if(pivot)p.pivot=[...pivot];}}
  transform(start,scale,offset){for(const p of this.parts.slice(start)){p.at=p.at.map((x,i)=>x*scale+offset[i]);p.size=p.size.map(x=>x*scale);p.pivot=p.pivot.map((x,i)=>x*scale+offset[i]);if(p.kneeDrop)p.kneeDrop*=scale;if(p.points)p.points=p.points.map(x=>x*scale);if(p.profile)p.profile=p.profile.map(r=>r.map(x=>x*scale));}}
 }

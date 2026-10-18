@@ -100,3 +100,19 @@ fn a_short_naval_search_keeps_land_targets_without_claiming_an_unchecked_crossin
     assert!(!naval_rank_case(84,20000.0,false));
     assert!(naval_rank_case(84,20000.0,true));
 }
+
+#[test]
+fn rts_prefers_a_supported_land_front_to_a_richer_unstaffed_crossing() {
+    let world = obj! { "waters"=>arr![], "units"=>arr![], "provinces"=>arr![
+        obj! { "id"=>0, "owner"=>6 },
+        obj! { "id"=>1, "owner"=>-1, "cores"=>1, "adj"=>arr![0], "routes"=>obj! { "sea"=>arr![], "air"=>arr![], "pass"=>arr![] } },
+        obj! { "id"=>2, "owner"=>-1, "cores"=>20, "adj"=>arr![], "routes"=>obj! { "sea"=>arr![0], "air"=>arr![], "pass"=>arr![] } }] };
+    let me = obj! { "id"=>6, "rts"=>obj! { "cpu"=>obj! { "income"=>40000 } } };
+    let args = views(&[world, me]);
+    let rim = vec![realm::index(args[0]).get(1.0), realm::index(args[0]).get(2.0)];
+    let hold = rank_hold(args[0], args[1]);
+    let supported: Vec<f64> = rim.iter().filter(|q| hold(**q, 30000.0)).map(|q| q.get("id").num()).collect();
+    let preferred = prefer_supported(rim, true, &supported);
+    assert_eq!(preferred.len(), 1);
+    assert_eq!(preferred[0].get("id").num(), 1.0, "a reachable land front precedes a richer unsupported crossing");
+}

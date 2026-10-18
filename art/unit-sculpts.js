@@ -18,12 +18,13 @@ export const HOUSE_SCULPTS=[
 ];
 export function hasSculpt(id){if(typeof id!=='string'||!/^\d:[A-Za-z_][A-Za-z0-9_]{0,23}$/.test(id))return false;const [seat,body]=id.split(':');return HOUSE_SCULPTS[Number(seat)].includes(body);}
 
-function human(s,{coat=P,skin='#d6a17e',legs=DARK,hat='cap',trim=S,armor=false,robe=false,lean=0,frame='common'}={}){
+function human(s,{coat=P,skin='#d6a17e',legs=DARK,hat='cap',trim=S,armor=false,robe=false,lean=0,frame='common',mounted=false,detail=true}={}){
  const start=s.parts.length;
  // Every frame owns its torso and head.  The shared tool sockets deliberately stay
  // put so a role can change equipment without turning each faction into the same pawn.
  if(frame==='null'){
   for(const z of [-.31,.31]){const m=z<0?'strideL':'strideR';s.taper([-.14,.78,z],[.18,.10,z],.060,LIGHT,m,[-.14,.78,z]);s.box([.26,.08,z],[.42,.10,.18],IRON,m,[-.14,.78,z]);s.orb([-.02,.45,z],[.15,.15,.15],LIGHT,m,[-.14,.78,z]);}
+  const legEnd=s.parts.length;s.tag(start,{joint:'legs'});
   s.lathe([lean,.62,0],[[0,.13,.14],[.10,.34,.28],[.52,.25,.22],[.67,.10,.10]],DARK);
   s.part('cylinder',[lean+.03,1.38,0],[.48,.48,.22],IRON,'',[lean+.03,1.38,0],[Math.PI/2,0,0]);
   s.box([lean+.20,1.39,0],[.05,.08,.30],LIGHT);for(const z of [-.36,.36])s.taper([lean,1.04,z],[lean+.42,.83,z],.052,IRON,z<0?'strideR':'strideL',[lean,1.04,z]);
@@ -38,6 +39,7 @@ function human(s,{coat=P,skin='#d6a17e',legs=DARK,hat='cap',trim=S,armor=false,r
   s.capsule([.06,.20,z],[.16,.29,.17],legs,knee,pivot);
   s.poly([.15,.075,z],[-.18,-.06,.20,-.06,.30,.045,.08,.10,-.22,.06],.23,DARK,knee,pivot);
  }
+ const legEnd=s.parts.length;
  let customHead=false;
  if(frame==='steppe'){
   s.lathe([lean,.38,0],[[0,.34,.31],[.13,.48,.43],[.53,.48,.41],[.78,.29,.27]],coat);s.orb([lean-.10,1.16,0],[.62,.20,.54],'#493e34');
@@ -68,9 +70,29 @@ function human(s,{coat=P,skin='#d6a17e',legs=DARK,hat='cap',trim=S,armor=false,r
  if(!customHead){s.capsule([lean+.03,1.40,0],[.29,.34,.28],skin);s.box([lean+.193,1.40,0],[.075,.09,.11],skin);s.box([lean+.174,1.46,0],[.035,.035,.24],DARK);}
  for(const z of [-.31,.31]){
   const m=z<0?'strideR':'strideL',pivot=[lean,1.15,z];
-  if(frame==='garden'){s.taper([lean,1.12,z],[lean+.36,.72,z*1.25],.055,'#587450','sway',pivot);s.poly([lean+.39,.69,z*1.28],[-.12,0,.12,0,.20,.07,.04,.12,-.13,.06],.024,'#91aa75','sway',pivot);}else{s.taper([lean,1.15,z],[.17,.84,z],frame==='fleet'?.09:.135,coat,m,pivot);s.orb([.18,.84,z],[.15,.16,.16],skin,m,pivot);}
+  if(frame==='garden'){s.taper([lean,1.12,z],[lean+.36,.72,z*1.25],.055,'#587450','sway',pivot);s.poly([lean+.39,.69,z*1.28],[-.12,0,.12,0,.20,.07,.04,.12,-.13,.06],.024,'#91aa75','sway',pivot);}else{
+   s.taper([lean,1.15,z],[.17,.84,z],frame==='fleet'?.09:.135,coat,m,pivot);s.orb([.18,.84,z],[.15,.16,.16],skin,m,pivot);
+   // A cuff and two fingers give a weapon hand a readable grip at inspection
+   // scale; they are omitted from the overview LOD with the other close detail.
+   const hand=s.parts.length;s.box([.14,.88,z],[.12,.07,.19],armor?IRON:trim,m,pivot);
+   for(const dz of [-.045,.045])s.box([.28,.84,z+dz],[.10,.035,.025],skin,m,pivot);
+   s.tag(hand,{material:armor?'iron':'cloth',detail:2});
+  }
  }
  if(!customHead)headwear(s,hat,lean,trim);
+ // Belts, collar plates, and a visible nose make the shared frame read as a
+ // clothed person at close zoom. They are mid-detail so distant armies stay clean.
+ if(detail&&frame!=='null'){
+  const ornament=s.parts.length;
+  s.box([lean,.88,0],[.57,.055,.49],trim);s.box([lean+.22,.89,-.01],[.065,.10,.08],GOLD);
+  s.rod([lean-.20,1.20,-.25],[lean+.22,.82,-.25],.027,trim);s.box([lean+.235,1.41,0],[.055,.07,.08],skin);
+  if(armor){for(const z of [-.28,.28])s.box([lean+.03,1.08,z],[.30,.18,.055],IRON);}
+  s.tag(ornament,{material:armor?'iron':'cloth',detail:1});
+ }
+ if(!mounted)s.tag(start,{joint:'legs'}); else s.tag(start,{joint:'legs'});
+ // Undo the broad tag immediately after the leg segment.  The rider's torso, head,
+ // and equipment must remain independent from the walking leg joint.
+ for(const p of s.parts.slice(legEnd))if(p.joint==='legs')delete p.joint;
  return start;
 }
 function headwear(s,hat,x=0,trim=S){
@@ -87,21 +109,25 @@ function headwear(s,hat,x=0,trim=S){
 }
 function tool(s,kind,{x=.25,y=.9,z=.37}={}){
  const first=s.parts.length;
- if(['bow','crossbow','rifle','musket'].includes(kind))s.muzzle=[x+(kind==='bow'?.44:kind==='crossbow'?.45:.79),y+(kind==='rifle'||kind==='musket'?.035:0),z];
+ if(['bow','crossbow','rifle','musket'].includes(kind)){s.muzzle=[x+(kind==='bow'?.44:kind==='crossbow'?.45:.79),y+(kind==='rifle'||kind==='musket'?.035:0),z];s.muzzleJoint='weapon';s.muzzlePivot=[x,y,z];}
  if(kind==='bow'){
   s.poly([x+.25,y,z],[0,-.43,.14,-.27,.19,0,.14,.28,0,.44,.06,.20,.08,0,.04,-.20],.065,WOOD);
   s.rod([x+.25,y-.43,z],[x+.25,y+.44,z],.022,IVORY);
   s.box([-.30,1.13,-z],[.16,.53,.18],'#594332');
  }
- else if(kind==='crossbow'){s.box([x+.1,y,z],[.70,.09,.10],WOOD);s.rod([x+.35,y,z-.32],[x+.35,y,z+.32],.07,IRON);}
- else if(kind==='rifle'||kind==='musket'){s.box([x,y,z],[.43,.13,.12],WOOD);s.box([x+.44,y+.035,z],[.70,.055,.06],IRON);if(kind==='rifle')s.box([x+.17,y+.13,z],[.26,.055,.07],DARK);for(const p of s.parts.slice(first))p.motion='recoil';}
- else if(kind==='spear'||kind==='staff'){s.rod([x,y-.62,z],[x+.24,y+.90,z],.055,WOOD);s.poly([x+.24,y+.90,z],[-.07,-.02,.07,-.02,0,.28],.065,IRON);}
+ else if(kind==='crossbow'){s.box([x+.1,y,z],[.70,.09,.10],WOOD);s.rod([x+.35,y,z-.32],[x+.35,y,z+.32],.07,IRON);s.box([x-.12,y-.10,z],[.16,.20,.07],WOOD);s.box([x+.18,y-.10,z],[.055,.18,.045],IRON);}
+ else if(kind==='rifle'||kind==='musket'){s.box([x,y,z],[.43,.13,.12],WOOD);s.box([x+.44,y+.035,z],[.70,.055,.06],IRON);s.box([x-.17,y-.13,z],[.10,.25,.075],WOOD);s.box([x+.18,y-.08,z],[.055,.20,.035],IRON);if(kind==='rifle')s.box([x+.17,y+.13,z],[.26,.055,.07],DARK);for(const p of s.parts.slice(first))p.motion='recoil';}
+ else if(kind==='spear'||kind==='staff'){s.rod([x,y-.62,z],[x+.24,y+.90,z],.055,WOOD);s.poly([x+.24,y+.90,z],[-.07,-.02,.07,-.02,0,.28],.065,IRON);s.box([x+.02,y+.05,z],[.13,.045,.10],GOLD);}
  else if(kind==='sword'){s.box([x+.32,y+.20,z],[.065,.70,.045],IRON,'strike',[x,y,z],[0,0,-.4]);s.box([x+.19,y-.10,z],[.29,.055,.065],GOLD,'strike',[x,y,z]);}
  else if(kind==='pick'){s.rod([x,y-.45,z],[x+.27,y+.26,z],.055,WOOD,'strike',[x,y,z]);s.rod([x+.01,y+.20,z],[x+.51,y+.35,z],.075,IRON,'strike',[x,y,z]);}
  else if(kind==='hammer'){s.rod([x,y-.22,z],[x+.16,y+.40,z],.07,WOOD,'strike',[x,y,z]);s.box([x+.16,y+.38,z],[.32,.20,.23],IRON,'strike',[x,y,z]);}
  else if(kind==='mace'){s.rod([x,y-.20,z],[x+.16,y+.46,z],.075,WOOD,'strike',[x,y,z]);s.orb([x+.16,y+.48,z],[.31,.30,.31],GOLD,'strike',[x,y,z]);}
  else if(kind==='book'){s.box([x+.10,y,z],[.30,.08,.39],WOOD);s.box([x+.10,y+.04,z],[.25,.045,.33],IVORY);}
  else if(kind==='lantern'){s.rod([x,y,z],[x,y+.5,z],.045,DARK);s.box([x,y-.12,z],[.22,.30,.22],GOLD,'sway',[x,y+.3,z]);s.box([x+.12,y-.10,z],[.025,.18,.13],'#fff1b4','sway',[x,y+.3,z]);}
+ const ranged=['bow','crossbow','rifle','musket'].includes(kind);
+ // Every piece of a weapon turns as one rigid assembly. Its socket uses the
+ // same pivot, so the muzzle and visible barrel cannot separate while aiming.
+ s.tag(first,{detail:0,aim:ranged?'weapon':undefined,pivot:ranged?[x,y,z]:undefined});
 }
 function shield(s,c=P,cross=false){
  s.poly([.10,.92,-.46],[-.27,.25,.27,.25,.23,-.13,0,-.35,-.23,-.13],.10,c);
@@ -109,6 +135,7 @@ function shield(s,c=P,cross=false){
 }
 function banner(s,c=P,x=-.20,height=2.1){s.rod([x,.65,-.35],[x,height,-.35],.035,WOOD);s.box([x+.27,height-.19,-.35],[.55,.34,.04],c,'sway',[x,height,-.35]);}
 function animal(s,{coat='#926044',camel=false,elephant=false,compact=false}={}){
+ const start=s.parts.length;
  const h=elephant?.9:.65,L=elephant?1.45:1.25;
  (compact?s.capsule.bind(s):s.orb.bind(s))([-.05,h,0],[L,elephant?.90:.55,elephant?.80:.52],coat);
  for(const x of [-.45,.43])for(const z of [-.23,.23]){
@@ -123,24 +150,28 @@ function animal(s,{coat='#926044',camel=false,elephant=false,compact=false}={}){
  if(camel){s.orb([-.24,h+.34,0],[.5,.45,.4],coat);s.orb([.19,h+.32,0],[.43,.42,.4],coat);}
  if(elephant){s.orb([.65,h+.15,.36],[.12,.59,.35],coat);s.orb([.65,h+.15,-.36],[.12,.59,.35],coat);s.taper([1.02,h+.1,0],[1.12,.18,0],.19,coat);for(const z of [-.23,.23])s.taper([1,h+.35,z],[1.35,h+.28,z],.07,IVORY);}
  else {s.box([.79,h+.66,0],[.33,.06,.36],WOOD);s.box([.42,h+.28,0],[.55,.065,.57],P);}
+ // Saddle blanket, cinch, bridle and reins make cavalry legible as cavalry.
+ s.tag(start,{material:'organic'});const tack=s.parts.length;s.box([-.02,h+.48,0],[.69,.06,.61],P);s.box([-.02,h+.31,0],[.075,.35,.64],WOOD);s.rod([.80,h+.55,-.18],[.18,h+.48,-.25],.022,WOOD);s.rod([.80,h+.55,.18],[.18,h+.48,.25],.022,WOOD);s.tag(tack,{material:'leather',detail:1});
 }
 function mounted(s,{coat,camel=false,rider={},weapon='spear',standard=false}={}){
  animal(s,{coat,camel});
- const start=human(s,rider);s.transform(start,.74,[-.17,.72,0]);
+ const start=human(s,{...rider,mounted:true});s.transform(start,.74,[-.17,.72,0]);
  tool(s,weapon,{x:.05,y:1.30,z:.28});if(standard)banner(s,P,-.34,2.20);
 }
 function cart(s,{tank=false,truck=false,cannon=false,rockets=false,culture=0}={}){
  const c=tank?'#60704c':culture===3?'#947855':WOOD;
+ const turret=(pivot,build,muzzle)=>{const first=s.parts.length;build();s.tag(first,{joint:'turret',pivot});if(muzzle){s.muzzle=muzzle;s.muzzleJoint='turret';s.muzzlePivot=[...pivot];}};
  if(tank){
-  for(const z of [-.45,.45]){s.box([0,.28,z],[1.65,.43,.28],DARK);for(const x of [-.60,-.20,.20,.60])s.wheel([x,.27,z+(z<0?-.15:.15)],.15,IRON);}
-  s.poly([0,.42,0],[-.83,0,.83,0,.57,.38,-.64,.38],.85,c);s.poly([-.1,.79,0],[-.39,0,.44,0,.27,.28,-.25,.28],.64,c);s.box([.67,.99,0],[1.05,.09,.11],IRON);s.box([-.12,1.10,0],[.30,.035,.29],DARK);s.box([.04,.89,-.33],[.16,.12,.02],P);return;
+  const start=s.parts.length;for(const z of [-.45,.45]){s.box([0,.28,z],[1.65,.43,.28],DARK);for(const x of [-.60,-.20,.20,.60]){s.wheel([x,.27,z+(z<0?-.15:.15)],.15,IRON);s.part('cylinder',[x,.27,z+(z<0?-.31:.31)],[.095,.095,.035],GOLD,'roll',[0,.27,z],[Math.PI/2,0,0]);}for(const x of [-.61,-.40,-.19,.02,.23,.44,.65])s.box([x,.14,z+(z<0?-.31:.31)],[.11,.09,.06],IRON,'roll',[0,.27,z]);s.rod([-.64,.33,z],[.64,.33,z],.045,IRON,'roll',[0,.27,z]);}
+  s.poly([0,.42,0],[-.83,0,.83,0,.57,.38,-.64,.38],.85,c);s.tag(start,{material:'iron'});
+  turret([-.12,.89,0],()=>{const detail=s.parts.length;s.poly([-.1,.79,0],[-.39,0,.44,0,.27,.28,-.25,.28],.64,c);s.box([.67,.99,0],[1.05,.09,.11],IRON,'recoil',[-.12,.89,0]);s.box([-.12,1.10,0],[.30,.035,.29],DARK);s.box([.04,.89,-.33],[.16,.12,.02],P);s.box([-.13,.91,.34],[.24,.14,.04],DARK);s.part('cylinder',[-.24,1.11,0],[.20,.20,.035],IRON,'',[-.12,.89,0],[Math.PI/2,0,0]);s.box([-.25,1.15,0],[.13,.035,.04],GOLD);s.tag(detail,{material:'iron',detail:1});},[1.19,1.03,0]);return;
  }
  s.box([0,.30,0],[1.48,.16,.80],c);
  for(const x of [-.48,.48])for(const z of [-.47,.47])s.wheel([x,.22,z],.22,DARK);
  if(truck||rockets){s.box([.42,.67,0],[.56,.56,.65],culture===8?'#8c8a5b':'#68754d');s.box([.72,.74,0],[.025,.22,.55],'#98c7cf');s.box([-.30,.48,0],[.81,.17,.72],c);}
- if(rockets){for(const z of [-.23,0,.23]){s.rod([-.73,.72,z],[.14,1.05,z],.10,IRON);s.rod([-.75,.86,z],[.12,1.19,z],.10,IRON);}s.box([-.39,.70,0],[.12,.43,.72],DARK);}
- if(truck&&culture===8){s.rod([-.3,.5,0],[-.3,1.02,0],.07,IRON);s.box([.01,1.04,0],[.95,.075,.09],DARK);s.part('cylinder',[-.12,1.12,0],[.27,.27,.05],DARK,'recoil',[-.12,1.12,0],[Math.PI/2,0,0]);}
- if(cannon){s.part('cylinder',[.03,.72,0],[.39,.39,1.10],DARK,'strike',[0,.63,0],[0,Math.PI/2,0],.08);s.box([-.30,.55,0],[.37,.16,.63],GOLD);}
+ if(rockets)turret([-.39,.70,0],()=>{for(const z of [-.23,0,.23]){s.rod([-.73,.72,z],[.14,1.05,z],.10,IRON);s.rod([-.75,.86,z],[.12,1.19,z],.10,IRON);}s.box([-.39,.70,0],[.12,.43,.72],DARK);},[.22,1.20,0]);
+ if(truck&&culture===8)turret([-.3,1.02,0],()=>{s.rod([-.3,.5,0],[-.3,1.02,0],.07,IRON);s.box([.01,1.04,0],[.95,.075,.09],DARK);s.part('cylinder',[-.12,1.12,0],[.27,.27,.05],DARK,'recoil',[-.3,1.02,0],[Math.PI/2,0,0]);},[.36,1.12,0]);
+ if(cannon)turret([-.30,.55,0],()=>{s.part('cylinder',[.03,.72,0],[.39,.39,1.10],DARK,'recoil',[-.30,.55,0],[0,Math.PI/2,0],.08);s.box([-.30,.55,0],[.37,.16,.63],GOLD);},[.58,.72,0]);
 }
 function emu(s,{forager=false,gunner=false}={}){
  const coat=forager?'#9c8b69':'#786c55';
@@ -170,7 +201,7 @@ function kublai(s,body){
 function arjuna(s,body){
  if(body==='chariot'){
   animal(s,{coat:'#e9e1c9',compact:true});const start=s.parts.length;animal(s,{coat:'#d5cdbb',compact:true});s.transform(start,.82,[.15,0,-.47]);
-  const a=s.parts.length;human(s,{coat:P,hat:'crown',trim:GOLD,skin:'#b77f59'});s.transform(a,.67,[-.95,.54,0]);
+  const a=s.parts.length;human(s,{coat:P,hat:'crown',trim:GOLD,skin:'#b77f59',detail:false});s.transform(a,.67,[-.95,.54,0]);
   s.box([-.94,.43,0],[.78,.17,.86],GOLD);for(const z of [-.48,.48]){s.wheel([-.98,.28,z],.30,GOLD);s.poly([-1.15,.51,z],[-.18,0,.52,0,.43,.45,-.18,.34],.07,P);}
   s.rod([-.80,.48,0],[.50,.60,0],.055,GOLD);tool(s,'bow',{x:-.6,y:1.40,z:.35});banner(s,S,-1.23,2.10);return;
  }
@@ -275,6 +306,16 @@ function garden(s,body){
  else {s.orb([.35,1.03,.35],[.16,.15,.16],'#d68c8c','sway',[.25,.9,.35]);s.rod([.25,.8,.35],[.35,1.03,.35],.025,'#526f4e');s.box([-.25,1.03,.30],[.09,.44,.41],IVORY);}
 }
 function vessel(s,style,role='hull'){s.parts.push(...navalSculpt(style,role).parts);}
+function landRig(seat,body){
+ // Names recur between factions: Arjuna's archer is on foot while Kublai's is
+ // mounted.  Bind the locomotion class to the authored chassis, never a name alone.
+ if((seat===0&&['archer','keshig','horseman','camel'].includes(body))||(seat===1&&['chariot','elephant'].includes(body))||(seat===2&&['turcopole','marshal'].includes(body))||(seat===5&&body==='cavalry')||(seat===7&&body==='dragoon'))return 'rider';
+ if(['trebuchet','ballista','engine','tank','katyusha','rockets','collector','carronade','truck'].includes(body))return 'vehicle';
+ if(['ship','junk','merchantman'].includes(body))return 'ship';
+ if(['qilin','tree','thorn','bug'].includes(body))return 'beast';
+ if(['watch','bomb','eye','flyer'].includes(body))return 'hover';
+ return 'biped';
+}
 // A house mark is deliberately structural, not a colour decal.  It sits above the
 // common role body so a monochrome army still separates into ten cultures at a glance.
 function houseSilhouette(s,seat){
@@ -304,9 +345,9 @@ function houseSilhouette(s,seat){
 export function houseSculpt(id,flags=0,airRole='fighter'){
  if(!hasSculpt(id))return null;
  const [a,body]=id.split(':'),seat=Number(a),s=new Sculpt();
- if(flags&1){const model=airSculpt(seat,airRole);if(flags&2)model.parts.push({shape:'box',at:[-.33,.53,-.36],size:[.29,.30,.24],pivot:[-.33,.53,-.36],motion:'',color:'#b89458',on:[]});return model;}
+ if(flags&1){const model=airSculpt(seat,airRole);if(flags&2)model.parts.push({shape:'box',at:[-.33,.53,-.36],size:[.29,.30,.24],pivot:[-.33,.53,-.36],motion:'',color:'#b89458',on:[],material:'brass',detail:1});return {...model,rig:'air'};}
  [kublai,arjuna,templar,atlantis,fleet,manifesto,nullSociety,nations,(s,b)=>b==='truck'?cart(s,{truck:true,culture:8}):emu(s,{forager:b==='forager',gunner:b==='gunner'}),garden][seat](s,body);
  houseSilhouette(s,seat);
  if(flags&2)s.box([-.33,.83,-.36],[.29,.30,.24],'#b89458');
- return {parts:s.parts,sculpt:id,muzzle:s.muzzle};
+ return {parts:s.parts,sculpt:id,muzzle:s.muzzle,muzzleJoint:s.muzzleJoint,muzzlePivot:s.muzzlePivot,rig:landRig(seat,body)};
 }
