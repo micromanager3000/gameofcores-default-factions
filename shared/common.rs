@@ -477,11 +477,12 @@ use super::{air, theme};
         let home = receiving_dock(world, me)
             .and_then(|p| world.path("logistics.docks").iter().find(|d| d.get("p").num() == p))
             .map_or(-1.0, |d| d.get("water").num_or(-1.0));
-        let packed = plan::for_units(me, units, world);
-        let now = world.get("seconds").num_or(-1.0);
-        let stamped = packed.get("convoyAt").num_or(-1e9);
-        let current = now >= stamped && now - stamped <= 12.0;
-        let convoy: Vec<f64> = if current { packed.get("convoy").items().iter().map(|w| w.num_or(-1.0)).filter(|w| *w >= 0.0).collect() } else { Vec::new() };
+        let convoy: Vec<f64> = if cycles_left() < 8500.0 { Vec::new() } else {
+            let packed = plan::for_units(me, units, world);
+            let now = world.get("seconds").num_or(-1.0);
+            let stamped = packed.get("convoyAt").num_or(-1e9);
+            if now >= stamped && now - stamped <= 12.0 { packed.get("convoy").items().iter().map(|w| w.num_or(-1.0)).filter(|w| *w >= 0.0).collect() } else { Vec::new() }
+        };
         let contacts: Vec<View> = me.path("rts.sea.contacts").iter().filter(|c| c.get("ship").truthy()).collect();
         // the rival dock nearest home by sea, where laden rival freighters come and go
         let mut prey = (usize::MAX, -1.0);

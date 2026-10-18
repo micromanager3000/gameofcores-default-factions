@@ -2,7 +2,7 @@
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
-use shared::common::{hauler, freighter, escort as common_escort};
+use shared::common::{hauler, freighter, escort};
 
 program!(think, hauler, freighter, escort, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, reflex, research, duel, challenge, look, build3d, live3d);
 
@@ -120,11 +120,6 @@ fn concat(orders: &mut Value, key: &str, items: Vec<Value>) {
 /// `me.rts`, the CPU RTS state: whether the world runs on a shared CPU bank.
 fn rts(me: View) -> bool {
     me.get("rts").truthy()
-}
-
-fn escort_funded(cycles: f64, units: usize) -> bool { cycles >= 6800.0 + units as f64 * 800.0 }
-fn escort(units: View, world: View, me: View) {
-    if !rts(me) || escort_funded(cycles_left(), units.len()) { common_escort(units, world, me); }
 }
 
 /// The unit whose turn it is: the list starts one unit further along each second, so every unit gets to go first.
