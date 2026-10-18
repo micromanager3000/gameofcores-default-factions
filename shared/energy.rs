@@ -191,7 +191,6 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
     if !me.path("rts.structureCosts").truthy() { return; }
     let e = me.get("energy");
     let id = me.get("id");
-    let income = me.path("rts.cpu.income").num_or(0.0);
     let bank = me.path("rts.cpu.bank").num_or(0.0);
     let Some(floor)=construction_funding(world,me) else {return};
     let sites = me.path("rts.structures");
