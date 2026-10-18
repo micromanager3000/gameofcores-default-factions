@@ -51,3 +51,29 @@ fn recovery_recruitment_preserves_think_control_and_fabrication_commitments() {
         assert!(orders.get("spawn").is_empty());
     }
 }
+
+fn naval_rank_case(waters: usize, remaining: f64, land_border: bool) -> bool {
+    let mut sea = Value::arr();
+    for id in 0..waters {
+        sea.push(obj! {"id"=>id,"adj"=>if id == 0 {arr![1]} else if id == 1 {arr![0]} else {arr![]},
+            "coast"=>if id == 0 {arr![0]} else if id == 1 {arr![1]} else {arr![]} });
+    }
+    let world = obj! {"waters"=>sea,"provinces"=>arr![
+        obj! {"id"=>0,"owner"=>6},
+        obj! {"id"=>1,"owner"=>-1,"adj"=>if land_border {arr![0]} else {arr![]},"routes"=>obj! {"sea"=>arr![0],"air"=>arr![],"pass"=>arr![]}}],
+        "units"=>arr![obj! {"owner"=>6,"rts"=>obj! {"sea"=>obj! {"ship"=>true,"water"=>0}}}]};
+    let args = views(&[world,obj! {"id"=>6,"rts"=>obj! {"cpu"=>obj! {"income"=>40000}}}]);
+    rank_hold(args[0],args[1])(realm::index(args[0]).get(1.0),remaining)
+}
+
+#[test]
+fn affordable_naval_ranking_recognizes_the_ship_holding_its_crossing() {
+    assert!(naval_rank_case(2,20000.0,false));
+    assert!(naval_rank_case(84,50000.0,false));
+}
+
+#[test]
+fn a_short_naval_search_keeps_land_targets_without_claiming_an_unchecked_crossing() {
+    assert!(!naval_rank_case(84,20000.0,false));
+    assert!(naval_rank_case(84,20000.0,true));
+}

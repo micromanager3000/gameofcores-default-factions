@@ -429,6 +429,17 @@ fn think(world: View, me: View) -> Value {
     orders
 }
 
+// A sea station compares shore-pair routes. Keep that optional ranking pass behind the
+// remaining allowance; land and pass targets need no naval search.
+fn rank_hold(world: View, me: View) -> impl Fn(View, f64) -> bool {
+    let land = common::can_hold(world, me, false);
+    let naval = common::can_hold(world, me, true);
+    let water_work = 300.0 * world.get("waters").len() as f64;
+    let rts = me.path("rts.cpu").truthy();
+    move |q, remaining| land(q) || ((!rts || remaining > 18000.0 + water_work
+        * (q.path("routes.sea").len() + q.path("routes.air").len()).max(1) as f64) && naval(q))
+}
+
 fn strategy(world: View, me: View) -> Value {
     let rts = me.get("rts");
     if rts.truthy() && cycles_left() < 3000.0 {
@@ -449,7 +460,7 @@ fn strategy(world: View, me: View) -> Value {
     let fighters = common::fighters(me);
     let rim = common::frontier(world, me);
     // the best land first, marked down where the army couldn't hold on to it (common::can_hold)
-    let hold = common::can_hold(world, me, true);
+    let hold = rank_hold(world, me);
     let ranked = realm::rank(world, me, rim, |w, m, q| {
         let owner = q.get("owner").num_or(-1.0);
         let rival = realm::is_rival(w, m, owner);
@@ -465,7 +476,7 @@ fn strategy(world: View, me: View) -> Value {
             + if approach { 5.0 } else { 0.0 }
             + if rival && infiltrated { 7.0 } else { 0.0 }
             + if rival && owner == campaign { 4.0 } else { 0.0 }
-            - if hold(q) { 0.0 } else { common::OVER_WATER }
+            - if hold(q, cycles_left()) { 0.0 } else { common::OVER_WATER }
     });
     let ranked = common::rally(world, me, ranked);
     // Survey scans provinces for mines and defense, and may scan visible fighters for a picket.
@@ -584,7 +595,8 @@ fn strategy(world: View, me: View) -> Value {
         orders.set("rent", 0);
     }
     orders.entry("compute").set("cpu", policy);
-    if rts.truthy() && !think_room(&orders, 3000.0) { return orders; }
+    // Recruitment review, cargo governance and ABI serialization still run after strategy.
+    if rts.truthy() && !think_room(&orders, 12000.0) { return orders; }
     // the ledger: techs stolen so far, counted when a tech a spy was copying arrives (page 225)
     let ledger = mem::get(me.get("ramCapital"), LEDGER);
     let mut stolen = vor0(&ledger.get("stolen"));
@@ -616,7 +628,7 @@ fn strategy(world: View, me: View) -> Value {
     orders.set("memo", nullptr_ext::memo(world, me, &spies, stolen, sab, skirms, screens));
     // A short second keeps what's decided so far (the plan, spawns and the CPU policy): trade and diplomacy wait a
     // second rather than run think out of cycles and lose it all.
-    let diplomacy = 3000.0 + 500.0 * world.get("factions").len() as f64;
+    let diplomacy = 18000.0 + 500.0 * world.get("factions").len() as f64;
     if (rts.truthy() && !think_room(&orders, diplomacy)) || cycles_left() < 5000.0 {
         return orders;
     }
