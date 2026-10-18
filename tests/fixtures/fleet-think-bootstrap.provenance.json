@@ -1,0 +1,104 @@
+{
+  "fixture": "fleet-think-bootstrap.json",
+  "scope": "Public default Fleet startup observation, not player data.",
+  "sourceRevision": "892b4d151cf128869d41b488966742126091aa37",
+  "engineRevision": "e790bf1f9726812068b9e115523b6b7f0caf5a9b",
+  "binarySha256": "6bb0ba29ba56af31e632f9cb6ae43e5481493004be985a9b61a89a15070199e2",
+  "world": {
+    "seed": 241,
+    "factions": 2,
+    "provinces": 14,
+    "maxFactions": 2,
+    "maxProvinces": 14,
+    "worldCycles": 4166667,
+    "cpuRts": true,
+    "structures": true,
+    "energy": true,
+    "seconds": 3,
+    "tick": 15,
+    "seats": {
+      "0": "fleet",
+      "1": "nullptr"
+    }
+  },
+  "capture": "The frozen simulator generated the same initial world with --secs0. Its initial snapshot was resumed15ticks using frozen programs. The saved owner observation is copied without edits. This is a startup observation, not a failed callback capture.",
+  "fixtureSha256": "a6258ae44aeb0b9ecd4774e29a638b7a586c6e3e044986989ca8bceb1b9138bf",
+  "resources": {
+    "units": 0,
+    "queued": 0,
+    "income": 12350,
+    "cpuBank": 27470.984375,
+    "preparedThinkFuel": 13992,
+    "spendCap": 15438,
+    "fabricationBase": 9600
+  },
+  "oldAndFixedCalls": {
+    "baseline": {
+      "ok": true,
+      "used": 4478.765625,
+      "spawn": [
+        {
+          "type": "miner",
+          "name": "Felt Maker"
+        }
+      ],
+      "memo": "Recovering production",
+      "fabrication": 9700,
+      "research": 0,
+      "sourceRevision": "9abe662723ee38ebdaf3038b096b0e58bd269b02",
+      "moduleSha256": "20ef110fdfaf6e8af369a0e537323e4bcfdf7bb2c40878ee234a1aea5f1a4be8"
+    },
+    "final892": {
+      "ok": true,
+      "used": 3952.34375,
+      "spawn": [],
+      "memo": "Fleet rebuilding crew and research",
+      "fabrication": 21600,
+      "research": 0
+    },
+    "fixed": {
+      "ok": true,
+      "used": 4557.828125,
+      "spawn": [
+        {
+          "type": "miner",
+          "name": "Felt Maker"
+        }
+      ],
+      "memo": "Recovering production",
+      "fabrication": 9700,
+      "research": 0
+    }
+  },
+  "cause": "The rich-capped rebuild shortcut ran before common::govern. At zero units it used cheap recovery, which does not recruit, then posted positive fabrication without a spawn. fit_cpu kept research zero below four bodies. A saved bank could grow indefinitely while every subsequent call repeated this shortcut.",
+  "repair": "Require four current units before optional rich-capped rebuilding. The existing governed first-miner path retains its affordability checks and establishes the crew. Populated capped planning and urgent aircraft control are unchanged.",
+  "authoredCountercases": "Source tests use the captured financial envelope and one authored local mine with zero, one or three miners; a zero-CPU-bank case must wait. Direct meter resource derivatives are labeled separately.",
+  "validation": {
+    "sourceStrategies": {
+      "passed": 23,
+      "failed": 0,
+      "log": "/tmp/gameplay-depth-fleet-bootstrap-strategies.log"
+    },
+    "sourceChecks": {
+      "passed": 5,
+      "failed": 0,
+      "log": "/tmp/gameplay-depth-fleet-bootstrap-sourcechecks.log"
+    },
+    "exportBytes": 515244,
+    "wasmSha256": "6403e70fb0eb88113f5f49e558692002186fa07d1e53b654e4a6e7f200566e19",
+    "meter": {
+      "rate": 64,
+      "calls": 255,
+      "allOk": true,
+      "seconds": 179.1684100839775,
+      "budgets": "Actual zero-unit observation500\u201318000 in100-cycle steps plus799/800/5999/6000/6001/13991/13992/13993/15430/15438; authored1/3-miner and unfunded cases; prior urgent/cold-deck/cold-land/kite/picket, rich-capped15163/20k/24k, and normal64554 funded recruitment.",
+      "report": "/tmp/gameplay-depth-fleet-bootstrap-sweep.json",
+      "normalRecruitment": "Zero/1/3 miners recruit at every tested allowance>=7000. Existing64554 case retains picket+kite; populated24k case resumes Quiet Fleet; urgent1394\u20132400 keeps3landings; captured kite6000 keeps2flightorders."
+    }
+  },
+  "limitations": [
+    "This fixes a demonstrated zero-unit startup regression; it does not establish a naval balance improvement or a general cause for every decline in naval activity.",
+    "The original Fleet\u2013Nullptr swap0 private endpoint was accidentally overwritten during the zero-tick capture and reconstructed by an exact frozen full replay. Its original JSONL and result are unchanged;158 gameplay minute samples and all other gameplay output fields match. No original private-state byte hash was available. Restoration details remain in /tmp/gameplay-depth-fleet-restoration-provenance.json."
+  ],
+  "comparisonMethod": "Old9abe source and the fixed source compiled under the current SDK with Rust1.97.0; frozen892 module from its program manifest. All calls use the same saved public observation,13992fuel and64instructions/cycle."
+}

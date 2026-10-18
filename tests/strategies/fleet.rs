@@ -184,9 +184,9 @@ fn fleet_rich_capped_rebuild_funds_an_active_study_without_admitting_the_planner
 
 #[test]
 fn fleet_lean_rebuild_requires_paid_unstalled_crew() {
-    let low_bank = Value::parse(r#"{"units":{"stalled":0},"rts":{"cpu":{"income":12130,"bank":24259}}}"#);
-    let stalled = Value::parse(r#"{"units":{"stalled":1},"rts":{"cpu":{"income":12130,"bank":1000000}}}"#);
-    let paid = Value::parse(r#"{"units":{"stalled":0},"rts":{"cpu":{"income":12130,"bank":24260}}}"#);
+    let low_bank = Value::parse(r#"{"units":{"total":6,"stalled":0},"rts":{"cpu":{"income":12130,"bank":24259}}}"#);
+    let stalled = Value::parse(r#"{"units":{"total":6,"stalled":1},"rts":{"cpu":{"income":12130,"bank":1000000}}}"#);
+    let paid = Value::parse(r#"{"units":{"total":4,"stalled":0},"rts":{"cpu":{"income":12130,"bank":24260}}}"#);
     assert!(!super::rich_rebuild_ready(views(&[low_bank])[0]),
         "low savings must stay in recovery rather than fund optional study and fabrication");
     assert!(!super::rich_rebuild_ready(views(&[stalled])[0]),
@@ -358,4 +358,32 @@ fn urgent_landings_include_moving_wings_before_normal_flight_admission() {
     let out=emitted();
     assert_eq!(out.iter().map(|order|order.get("id").num()).collect::<Vec<_>>(),vec![1.0,2.0,3.0]);
     assert!(out.iter().all(|order|order.get("land").truthy()));
+}
+
+#[test]
+fn fleet_funded_zero_unit_startup_reaches_the_governed_miner_bootstrap() {
+    // The captured startup's financial envelope, with an authored local mine.
+    let world=obj!{"seconds"=>3,"logistics"=>obj!{},"units"=>arr![],"waters"=>arr![],"techs"=>obj!{},
+        "provinces"=>arr![obj!{"id"=>0,"owner"=>0,"hops"=>0,"mines"=>arr![1],"staff"=>arr![0]}]};
+    let me=Value::parse(r#"{"id":0,"seat":0,"capital":0,"bank":184,"costs":{"unit":30},"units":{"total":0,"queued":0,"stalled":0,"byType":{}},
+        "types":{"miner":{}},"rts":{"bank":27470.984375,"cpu":{"income":12350,"bank":27470.984375,"capacity":6400000,
+        "spendCap":15438,"burst":15430,"available":{"think":13992},"limits":{},"reserve":{}},
+        "costs":{"priceLevel":8,"fabrication":{"base":9600,"module":4800}}}}"#);
+    let mut args=vec![world,me];
+    for total in [0,1,3] {
+        args[1].entry("units").set("total",total);
+        args[1].entry("units").entry("byType").set("miner",total);
+        let v=views(&args);
+        assert!(!super::rich_rebuild_ready(v[1]),"the first four bodies belong to the governed bootstrap");
+        let out=super::think(v[0],v[1]);
+        assert!(out.get("spawn").items().iter().any(|s|s.get("type").str()=="miner"),"a funded startup must recruit: {out:?}");
+        assert!(out.get("compute").get("cpu").get("limits").get("fabrication").num()>0.0);
+    }
+    args[1].entry("units").set("total",0);
+    args[1].entry("units").set("byType",obj!{});
+    args[1].entry("rts").entry("cpu").set("bank",0);
+    args[1].entry("rts").set("bank",0);
+    let v=views(&args);
+    let out=super::think(v[0],v[1]);
+    assert!(out.get("spawn").is_empty(),"a genuinely unfunded startup must wait for a body and income: {out:?}");
 }

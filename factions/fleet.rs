@@ -693,7 +693,8 @@ fn lean_rebuild(world: View, me: View) -> Value {
 
 fn rich_rebuild_ready(me: View) -> bool {
     let cpu = me.path("rts.cpu");
-    cpu.truthy() && me.path("units.stalled").num_or(0.0)==0.0
+    // Let the governor establish its first four bodies before optional rebuilding.
+    cpu.truthy() && me.path("units.total").num_or(0.0)>=4.0 && me.path("units.stalled").num_or(0.0)==0.0
         && cpu.get("bank").num_or(0.0)>=cpu.get("income").num_or(0.0)*2.0
 }
 
