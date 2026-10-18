@@ -701,7 +701,7 @@ use super::{air, theme};
     /// into the fog, so it ranks below any land in sight but a well-held capital.
     pub const UNSEEN: f64 = -4.0;
 
-    /// A target's worth: cores first; free land is cheap to take; a garrison and a capital cost; restive land, rebels
+    /// A target's worth: cores first; free land is cheap to take; town defenders and a capital cost; restive land, rebels
     /// and a runaway leader's land invite attack; land deep in another faction's faith costs its zeal ÷ 15, since it
     /// keeps winning its founder favour and revolts back after you take it. Land you've never seen scores [`UNSEEN`],
     /// and a figure you can't read counts as none, so the score is always a number.
@@ -713,7 +713,7 @@ use super::{air, theme};
         if q.get("owner").num() < 0.0 {
             s += 2.5;
         } else {
-            s -= q.get("garrison").or(0.0) * 1.1 + if q.get("capital").truthy() { 6.0 } else { 0.0 };
+            s -= town_defenders(q) * 1.1 + if q.get("capital").truthy() { 6.0 } else { 0.0 };
         }
         if q.get("loyaltyBand").str() == "restive" {
             s += 2.0;
@@ -884,6 +884,11 @@ use super::{air, theme};
     /// (`RULES.siegeOdds`).
     pub const SIEGE_ODDS: f64 = 3.0;
 
+    /// Visible owner defenders in the capture ring. Older observations count the whole province garrison.
+    pub fn town_defenders(q: View) -> f64 {
+        q.get("townGarrison").num_or(q.get("garrison").or(0.0))
+    }
+
     /// Gather two capturers for free land. For a rival, use visible town defenders plus two reinforcements.
     /// Capitals need at least four capturers. Older observations fall back to the whole province's garrison.
     pub fn muster_for(q: View) -> f64 {
@@ -893,7 +898,7 @@ use super::{air, theme};
         if n(q.get("owner")) < 0.0 {
             return 2.0;
         }
-        (q.get("townGarrison").num_or(q.get("garrison").or(0.0)) * SIEGE_ODDS + 2.0)
+        (town_defenders(q) * SIEGE_ODDS + 2.0)
             .max(if q.get("capital").truthy() { 4.0 } else { 3.0 })
     }
 
@@ -914,7 +919,7 @@ use super::{air, theme};
     /// ([`fighters`]), so your units there would die without taking it. A siege that came to this, its defenders
     /// reinforced or your army worn down, is given up: the army goes elsewhere until it's big enough.
     pub fn hopeless(me: View, q: View) -> bool {
-        q.get("townGarrison").num_or(q.get("garrison").or(0.0)) * SIEGE_ODDS > fighters(me)
+        town_defenders(q) * SIEGE_ODDS > fighters(me)
     }
 
     /// The next target from a ranked list, sticky: the last plan's (`last`, its id) while it's still on the list, so
