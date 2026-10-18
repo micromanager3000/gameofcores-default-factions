@@ -1,0 +1,40 @@
+{
+  "kind": "public-default-program regression",
+  "fixture": "arjuna-think-bounded.json",
+  "fixtureSha256": "cbd5de8cdfa620d93952378141bd2036c41011c67305db3df9a0a600e5f891e1",
+  "sourceContext": "Arjuna own observation at the end of development candidate-4 seed101, after 24 simulated hours. The faction is the public default program. See arjuna-think-bounded.provenance.json for captured-world provenance.",
+  "failure": {
+    "module": "/tmp/goc-depth-arjuna-lean.wasm",
+    "budgetCycles": 63500,
+    "instructionRate": 64,
+    "result": "out of fuel while returning a large building-service response",
+    "nearby63500HardCap": 52269,
+    "interpretation": "The original snapshot cannot receive63500 cycles under its hard cap; the same response also fails with only its public spendCap raised to75000. The larger allowance is an authored boundedness counterexample."
+  },
+  "change": "Reserve additional return cycles for each accumulated structure job, service and grant. Preserve that allowance through siege and construction searches.",
+  "validation": {
+    "report": "/tmp/gameplay-depth-structures-tail-meter.json",
+    "calls": 130,
+    "failures": 0,
+    "compiler": "Rust1.97.0 guest; existing engine SDK;64 instructions/cycle",
+    "modules": {
+      "/tmp/goc-depth-structures-tail-isolated.wasm": "352572baf9d9ad25d96fdd53d7bd0629a26ef43588d4b39e6b35406d4d211fc5",
+      "/tmp/goc-depth-structures-tail.wasm": "6c2f1c4646a5f6f3dbea0ae4c6c567ec10ff82da84b09aa45e9b711ed0179b9a"
+    },
+    "isolatedChange": {
+      "source": "/tmp/goc-depth-structures-tail-isolated.rs",
+      "basis": "/tmp/goc-depth-arjuna-lean.rs with only shared/structures.rs replaced",
+      "at63500": {
+        "module": "/tmp/goc-depth-structures-tail-isolated.wasm",
+        "budget": 63500,
+        "ok": true,
+        "used": 53530.734375,
+        "error": null,
+        "jobs": 15,
+        "fabrication": 20488
+      }
+    },
+    "sharedBehaviorTests": 86
+  },
+  "limits": "A metered callback establishes bounded execution and retained service output. It does not establish campaign strength or building profitability."
+}

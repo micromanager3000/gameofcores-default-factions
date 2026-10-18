@@ -55,8 +55,8 @@ fn open_slot(p: View, me: View) -> Option<usize> {
 
 /// Clear visible hostile buildings once nearby soldiers have room to fire.
 /// Short orders leave normal combat in control when an enemy army arrives.
-fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: View, now: f64) {
-    let hostile: Vec<View> = sites.iter().take_while(|_| cycles_left() > TAIL + 3000.0).filter(|s| s.get("state").str() != "ruin"
+fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: View, now: f64, tail: f64) {
+    let hostile: Vec<View> = sites.iter().take_while(|_| cycles_left() > tail + 3000.0).filter(|s| s.get("state").str() != "ruin"
         && realm::is_rival(world, me, s.get("owner").num_or(-1.0))).collect();
     if hostile.is_empty() { return; }
     // A live passage contract covers some of our units while they stand in its host's land. The public unit view only
@@ -66,7 +66,7 @@ fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: Vie
     let provinces = realm::index(world);
     let mut attacks = Value::arr();
     for &u in units {
-        if attacks.len() >= 8 || cycles_left() < TAIL { break; }
+        if attacks.len() >= 8 || cycles_left() < tail { break; }
         // Ranged aircraft attack buildings; scouts and interceptors keep their other orders.
         let bomber = u.get("air").truthy() && u.path("build.range").num_or(0.0) > 0.0;
         if (u.get("air").truthy() && !bomber) || u.get("stalled").truthy()
@@ -74,7 +74,7 @@ fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: Vie
             || matches!(u.get("doing").str(), "gather" | "study") { continue; }
         let reach = if u.path("build.range").num_or(0.0) > 0.0 { 3.0 + u.path("build.range").num() } else { 1.5 };
         let conduct = u.get("conduct");
-        let target = hostile.iter().copied().take_while(|_| cycles_left() > TAIL).filter(|s| {
+        let target = hostile.iter().copied().take_while(|_| cycles_left() > tail).filter(|s| {
             let protected = conduct.get("seconds").num_or(0.0) > 0.0 && same(conduct.get("from"), s.get("owner"));
             let host = s.get("owner").num_or(-1.0);
             let passage = passage_hosts.contains(&host) && same(provinces.get(u.get("at").num_or(-1.0)).get("owner"), s.get("owner"));
@@ -87,7 +87,7 @@ fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: Vie
             priority(*a).total_cmp(&priority(*b))
         });
         let Some(target) = target else { continue; };
-        let enemy_near = world.get("units").iter().any(|foe| cycles_left() < TAIL || (foe.get("owner").num_or(-1.0) != me.get("id").num()
+        let enemy_near = world.get("units").iter().any(|foe| cycles_left() < tail || (foe.get("owner").num_or(-1.0) != me.get("id").num()
             && realm::is_rival(world, me, foe.get("owner").num_or(-1.0))
             && same(foe.path("pos.p"), u.path("pos.p"))
             && (foe.path("pos.x").num() - u.path("pos.x").num()).hypot(foe.path("pos.y").num() - u.path("pos.y").num()) < reach + 1.0));
@@ -132,8 +132,10 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     let safe = funded && me.path("units.stalled").num_or(0.0) == 0.0;
     let mut jobs = Value::arr();
     let mut services = Value::arr();
+    // Returned jobs still need serialization after grid funding and the house's final work.
+    let mut tail = TAIL;
     for s in &own {
-        if cycles_left() < TAIL || jobs.len() >= 24 { break; }
+        if cycles_left() < tail + 1500.0 || jobs.len() >= 24 { break; }
         if s.get("state").str() != "ready" { continue; }
         let mut j = obj! { "id" => s.get("id"), "extract" => 0, "extractSlot" => 0, "faith" => 0, "civic" => 0,
             "watch" => 0, "watchWater" => -1, "supply" => 0, "guard" => false, "target" => 0,
@@ -172,46 +174,49 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
             }
         }
         jobs.push(j);
+        tail = TAIL + jobs.len() as f64 * 400.0 + services.len() as f64 * 120.0;
     }
     // Nearby allies can use a funded repair court. Merchant houses charge a
     // small accepted fee; other houses donate a bounded amount to their pact.
     let grants = me.path("rts.structureGrants");
-    if safe && cycles_left() > TAIL + 3000.0 {
+    if safe && cycles_left() > tail + 3000.0 {
         let mut offered = Value::arr();
         for s in &own {
-            if cycles_left() < TAIL || offered.len() >= 4 { break; }
+            if cycles_left() < tail || offered.len() >= 4 { break; }
             if s.get("state").str() != "ready" || !port(*s, "repair") { continue; }
-            if let Some(guest) = world.get("units").iter().take_while(|_| cycles_left() > TAIL).find(|u|
+            if let Some(guest) = world.get("units").iter().take_while(|_| cycles_left() > tail).find(|u|
                 realm::is_ally(me, u.get("owner").num()) && u.get("owner").num() != id.num()
                 && u.get("hp").num() < u.get("hpMax").num_or(0.0) && near(*u, *s, 6.0)) {
                 if !grants.iter().any(|g| same(g.get("site"), s.get("id")) && same(g.get("user"), guest.get("owner"))
                     && g.get("until").num_or(0.0) > now) {
                     offered.push(obj! {"site"=>s.get("id"),"user"=>guest.get("owner"),"quota"=>6,"rate"=>0.5,
                         "price"=>if style == 7 {0.25} else {0.0},"until"=>now+60.0,"payer"=>"owner"});
+                    tail += 240.0;
                 }
             }
         }
         if !offered.is_empty() { orders.set("structureGrants", offered); }
     }
-    if safe && cycles_left() > TAIL {
+    if safe && cycles_left() > tail {
         for grant in grants.iter() {
-            if cycles_left() < TAIL || services.len() >= 8 { break; }
+            if cycles_left() < tail || services.len() >= 8 { break; }
             if !same(grant.get("user"), id) || grant.get("quota").num_or(0.0) <= 0.0 || grant.get("until").num_or(0.0) <= now
                 || grant.get("price").num_or(0.0) > 0.25 { continue; }
             let site = sites.iter().find(|s| same(s.get("id"), grant.get("site")) && s.get("state").str() == "ready");
             if let Some(site) = site {
                 if let Some(u) = units.iter().find(|u| near(**u, site, 6.0) && u.get("hp").num() < u.get("hpMax").num_or(0.0)) {
                     services.push(obj! {"site"=>site.get("id"),"target"=>u.get("id"),"amount"=>0.5,"maxPrice"=>0.25});
+                    tail += 120.0;
                 }
             }
         }
     }
     if !jobs.is_empty() { orders.set("structureJobs", jobs); }
     if !services.is_empty() { orders.set("structureService", services); }
-    if safe && cycles_left() > TAIL + 5000.0 { besiege(orders, world, me, &units, sites, now); }
+    if safe && cycles_left() > tail + 5000.0 { besiege(orders, world, me, &units, sites, now, tail); }
     if !safe || now < 35.0 || now % 20.0 >= 10.0
-        || own.iter().any(|s| s.get("state").str() != "ready") || cycles_left() < TAIL + 2000.0 { return; }
-    plan(orders, world, me, style, &own, &units, sites, now);
+        || own.iter().any(|s| s.get("state").str() != "ready") || cycles_left() < tail + 2000.0 { return; }
+    plan(orders, world, me, style, &own, &units, sites, now, tail);
 }
 
 /// One building the planner could order next.
@@ -220,7 +225,7 @@ struct Want { p: View, role: Role, r: f64, ports: Value, quote: f64, value: f64 
 /// Grow the towns one building at a time. Every province gets a civic hall once the loyalty it buys repays it (the
 /// capital's is the house landmark); then districts: supply yards where troops gather, bastions on open borders, works
 /// at free mines and repair bays behind busy yards. Economic sites must repay their quote within five minutes.
-fn plan(orders: &mut Value, world: View, me: View, style: usize, own: &[View], units: &[View], sites: View, now: f64) {
+fn plan(orders: &mut Value, world: View, me: View, style: usize, own: &[View], units: &[View], sites: View, now: f64, tail: f64) {
     let id = me.get("id");
     let d = design(style);
     let c = me.path("rts.structureCosts");
@@ -240,7 +245,7 @@ fn plan(orders: &mut Value, world: View, me: View, style: usize, own: &[View], u
     let repair = tech.get("repair").truthy() && !matches!(style, 5 | 6);
     let mut wants: Vec<Want> = Vec::new();
     for p in land.iter().copied().take(16) {
-        if cycles_left() < TAIL + 2000.0 { break; }
+        if cycles_left() < tail + 2000.0 { break; }
         let pid = p.get("id").num();
         let here: Vec<View> = own.iter().copied().filter(|s| same(s.get("p"), p.get("id"))).collect();
         let has = |kind: &str| here.iter().any(|s| port(*s, kind));
@@ -296,10 +301,10 @@ fn plan(orders: &mut Value, world: View, me: View, style: usize, own: &[View], u
     wants.sort_by(|a, b| b.value.total_cmp(&a.value));
     for w in wants.into_iter().take(4) {
         // A site search reads the ground round the town before its own checks: leave it room to finish.
-        if cycles_left() < TAIL + 16000.0 { break; }
+        if cycles_left() < tail + 16000.0 { break; }
         // Keep unit fabrication and several seconds of income ahead of each new site.
         if bank < income * 2.0 + w.quote * 3.0 { continue; }
-        let Some((x, y)) = spot(w.p, sites, w.r, units) else { continue; };
+        let Some((x, y)) = spot_with_tail(w.p, sites, w.r, units, tail) else { continue; };
         let province = w.p.get("id").num();
         let height = match w.role { Role::Landmark => d.height + 2.0, Role::Hall => d.height, _ => (d.height - 1.0).max(2.5) };
         let integrity = if w.role == Role::Bastion { d.integrity * 1.3 } else { d.integrity };
@@ -314,7 +319,10 @@ fn plan(orders: &mut Value, world: View, me: View, style: usize, own: &[View], u
 /// A spot for a shell of radius r round province p's town, nearest the square first: clear of the square itself, its
 /// mines, water, cliffs and every standing site, on the province's own side of each border, with a builder near.
 pub fn spot(p: View, sites: View, r: f64, units: &[View]) -> Option<(f64, f64)> {
-    if cycles_left() < TAIL + 4000.0 { return None; }
+    spot_with_tail(p, sites, r, units, TAIL)
+}
+fn spot_with_tail(p: View, sites: View, r: f64, units: &[View], tail: f64) -> Option<(f64, f64)> {
+    if cycles_left() < tail + 4000.0 { return None; }
     let pid = p.get("id").num();
     // Neighbouring towns stand about twelve cells away; the border runs halfway.
     let towns: Vec<(f64, f64)> = p.get("adj").iter().map(|q| { let t = realm::toward(p, q.num(), 1.0); (t.x, t.y) })
@@ -322,7 +330,7 @@ pub fn spot(p: View, sites: View, r: f64, units: &[View]) -> Option<(f64, f64)> 
     let inside = |x: f64, y: f64, margin: f64| towns.iter().all(|(tx, ty)| x * tx + y * ty < 6.0 - margin);
     let mut mines = Vec::new();
     for q in -6i32..=6 { for rr in (-6i32).max(-q - 6)..=6i32.min(-q + 6) {
-        if cycles_left() < TAIL + 2000.0 { return None; }
+        if cycles_left() < tail + 2000.0 { return None; }
         let (x, y) = (q as f64 + rr as f64 / 2.0, rr as f64 * 0.866_025_4);
         if realm::ground(p, x, y).is_some_and(|g| g.kind == "mine") { mines.push((x, y)); }
     } }
@@ -334,7 +342,7 @@ pub fn spot(p: View, sites: View, r: f64, units: &[View]) -> Option<(f64, f64)> 
         let rad = start + ring as f64 * 0.5;
         let mut best: Option<(f64, f64, f64)> = None;
         for k in 0..24 {
-            if cycles_left() < TAIL { return None; }
+            if cycles_left() < tail { return None; }
             let a = (k as f64 * 15.0 + if ring % 2 == 1 { 7.5 } else { 0.0 }).to_radians();
             let (x, y) = (rad * a.cos(), rad * a.sin());
             if !inside(x, y, r * 0.55) || others.iter().any(|(ox, oy, or)| (ox - x).hypot(oy - y) < or + r + 0.15)
