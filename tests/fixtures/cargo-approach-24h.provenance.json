@@ -27,5 +27,10 @@
       "used": 2069.640625,
       "orders": "both original unload endpoints, via empty, real local walking points to town"
     }
+  },
+  "completedWayCorrection": {
+    "reason": "The engine preserves progress when a newly submitted way equals the completed standing way. Cargo cancellation alone could not replay the same approach from a displaced resting position.",
+    "order": "Cancel the job and issue move to the carrier own current province and position, clearing completed way without discarding cargo. A later callback rebuilds the local transfer route.",
+    "behaviorTests": "cargo_behavior.rs checks cancellation plus same-position move, real unload retry and preservation of crossing, moving, ship, unpaid and unloading jobs."
   }
 }

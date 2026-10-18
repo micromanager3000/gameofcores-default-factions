@@ -486,9 +486,7 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     Some(field)
 }
 
-// What a full think costs: about 7,000 cycles plus 50 for each unit in sight (the census of rivals' units below), or
-// the most a think took in the last 5 seconds when that's more. Think's CPU limit and the research reserve are sized
-// from it, so a poor bank still pays for think.
+// Fixed planning work and its recent peak. Admission prices map-wide work separately.
 fn think_need(world: View, me: View) -> f64 {
     let units = world.get("units");
     let seen = if units.truthy() { units.len() as f64 } else { 0.0 };
@@ -496,8 +494,9 @@ fn think_need(world: View, me: View) -> f64 {
 }
 
 fn think(world: View, me: View) -> Value {
-    // A nearly empty callback only opens the next allowance. Existing type schedules and orders stand.
-    if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
+    if cycles_left()<800.0 {return obj!{};}
+    // A short callback only opens the next allowance; standing unit schedules continue.
+    if me.path("rts.cpu").truthy() && cycles_left() < 6000.0 {
         return obj! { "compute" => obj! { "cpu" => obj! {
             "limits" => obj! { "think" => 24000, "control" => 0.5, "upkeep" => 0.65,
                 "research" => 0, "influence" => 0, "fabrication" => 0, "visuals" => 0,
@@ -547,12 +546,9 @@ fn strategy(world: View, me: View) -> Value {
     // of rivals' units and the trade, and still shares the plan, spawns and sets the CPU policy. Running out instead
     // would throw away every order and leave the army on stale ones.
     let need = think_need(world, me);
-    // Under three quarters of a full think even the lean path may run out, and a think that runs out sets no policy:
-    // its limit, a share of income, stays too small when income falls, every second after. Set only the policy then.
-    if rts(me) && cycles_left() < need * 0.75 {
-        return common::recovery(world, me);
-    }
-    let lean = rts(me) && cycles_left() < need + 3000.0;
+    // Routes, the census and metadata grow with the map. A short call refreshes mines and keeps standing science.
+    let lean = rts(me) && cycles_left().min(me.path("rts.cpu.available.think").num_or(f64::INFINITY))
+        < need + 700.0 * world.get("provinces").len() as f64;
     let me_id = me.get("id").num();
     let mut orders = obj! { "policy" => obj! { "extraction" => 0.47, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true } };
     let prev = if lean { mem::get(me.get("ramCapital"), 0) } else { Value::Undef };
@@ -613,7 +609,7 @@ fn strategy(world: View, me: View) -> Value {
     }
     if lean { air_guard = prev.get("airGuard").num_or(-1.0); }
     survey.set("airGuard", air_guard);
-    common::share(&mut orders, &survey, world, me);
+    if lean {plan::share(&mut orders,&survey,me);} else {common::share(&mut orders, &survey, world, me);}
     // Distant visible armies shape the mix. Only invaders and aircraft over our land cut research funding.
     let pressure = invaded_n + if air_guard >= 0.0 { 1.0 } else { 0.0 };
     let cpu = me.get("rts").get("cpu");
@@ -645,7 +641,7 @@ fn strategy(world: View, me: View) -> Value {
         mix_set(&mut mix,"aeronaut",0.12);
     }
     let pick = |a: (bool, &'static str), b: (bool, &'static str)| -> Vec<&'static str> { [a, b].into_iter().filter(|x| x.0).map(|x| x.1).collect() };
-    match choose_spawn(me, &mix, common::miner_room(me, &survey)) {
+    if !lean || common::unit_upkeep(me)<=income*0.4 {match choose_spawn(me, &mix, common::miner_room(me, &survey)) {
         Some("miner") => spawn_one(&mut orders, me, "miner", miner_body(), &[]),
         Some("line") => spawn_one(&mut orders, me, "line", line_body(), &[]),
         Some("bulwark") => spawn_one(&mut orders, me, "bulwark", line_body(), &pick((has("armor"), "armor"), (has("dash"), "dash"))),
@@ -661,7 +657,7 @@ fn strategy(world: View, me: View) -> Value {
             spawn_one(&mut orders,me,"aeronaut",frame.build(),&[]);
         },
         _ => spawn_one(&mut orders, me, "scout", scout_body(), &[]),
-    }
+    }}
 
     // Compute chooses research/type schedules; shared-CPU policy below replaces
     // the old split and makes every execution lane trade against one bank.
@@ -690,6 +686,13 @@ fn strategy(world: View, me: View) -> Value {
         if available.truthy() { available.get("control").num() * 0.8 } else { f64::INFINITY },
         me.get("units").get("byType"),
     );
+    if lean {
+        orders.entry("compute").set("types",types);
+        let mut policy=cpu_policy(world,me,&orders,pressure,need);
+        common::fit_cpu(&mut policy,me);
+        orders.entry("compute").set("cpu",policy);
+        return affordable(orders,me,start);
+    }
     // common::budget sets the split, the types and the rent; the tech to research is Salomon's House's own choice
     common::budget(&mut orders, world, me, &common::Budget { research: 0.13, code: 0.66, techs: &[], types: Some(&types) });
     atlantis_ext::choose_research(&mut orders, world, me);
@@ -700,7 +703,7 @@ fn strategy(world: View, me: View) -> Value {
     let pact_leader = realm::leader(world).map(|l| l.get("id").num());
     let no_pacts = me.get("pacts").is_empty();
     let pact = move |m: View| no_pacts && pact_leader.is_none_or(|l| m.get("from").num() != l);
-    if lean || cycles_left() < 6000.0 {
+    if cycles_left() < need + 12000.0 {
         if cycles_left() > 2000.0 {
             common::answer(&mut orders, me, world, pact, &TECHS);
         }

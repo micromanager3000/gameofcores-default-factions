@@ -19,7 +19,8 @@ fn cargo_orders(world:Value,me:Value,units:Value)->Vec<Value>{
 fn resting_land_approach_releases_only_its_job_then_retries_the_loaded_delivery(){
     let (world,me,mut units)=approach_case();
     let orders=cargo_orders(world.clone(),me.clone(),units.clone());
-    assert_eq!(orders,vec![obj!{"id"=>107,"cargo"=>Value::Null}],"keep the loaded hold; clear the stale job before rebuilding a route");
+    assert_eq!(orders,vec![obj!{"id"=>107,"cargo"=>Value::Null,"do"=>"move","target"=>0,
+        "at"=>obj!{"p"=>0,"x"=>0,"y"=>-1.7}}],"keep the hold and clear the completed way by targeting the carrier's current position");
     item(&mut units,0).entry("rts").entry("cargo").set("job",Value::Null);
     let orders=cargo_orders(world,me,units);
     assert_eq!(orders.len(),1);
@@ -39,5 +40,51 @@ fn active_approaches_and_unpaid_or_ship_jobs_keep_their_standing_work(){
             status=>u.entry("rts").entry("cargo").entry("job").set("status",status),
         }
         assert!(cargo_orders(world,me,units).is_empty(),"{kind}");
+    }
+}
+#[test]
+fn recovery_funds_a_loaded_home_hauler_before_idle_miners_without_reserving_income_for_optional_code(){
+    let (mut world,mut me,units)=approach_case();
+    world.set("seconds",3);world.set("units",units.clone());
+    me.entry("units").set("stalled",1);me.entry("rts").entry("cpu").set("bank",1000);
+    let args=views(&[world,me]);
+    let out=common::govern(args[0],args[1],0.4,||panic!("the unpaid army needs recovery"));
+    let cpu=out.get("compute").get("cpu");
+    assert_eq!(cpu.get("upkeepOrder").at(0).str(),"hauler");
+    assert_eq!(cpu.get("limits").get("upkeep").num(),0.65);
+    assert_eq!(cpu.get("reserve").get("upkeep").num(),200.0/40000.0);
+    assert!(cpu.get("reserve").get("think").is_undef());
+    assert!(cpu.get("reserve").get("duel").is_undef());
+    assert_eq!(out.get("compute").get("types").get("miner").get("share").num(),0.0);
+    assert_eq!(out.get("compute").get("types").get("hauler").get("cycles").num(),10000.0);
+    assert!(out.get("disband").is_empty(),"the cargo and its carriers stay intact");
+}
+#[test]
+fn a_healthy_cargo_policy_keeps_its_normal_reserves_and_miner_controllers(){
+    let (mut world,mut me,units)=approach_case();world.set("units",units);world.set("seconds",3);
+    me.entry("rts").entry("cpu").set("bank",400000);
+    let args=views(&[world,me]);let out=common::govern(args[0],args[1],0.4,||obj!{});
+    let cpu=out.get("compute").get("cpu");
+    assert_eq!(cpu.get("reserve").get("think").num(),0.25);
+    assert_eq!(cpu.get("reserve").get("duel").num(),0.05);
+    assert_eq!(cpu.get("upkeepOrder").at(0).str(),"miner");
+    assert_eq!(out.get("compute").get("types").get("miner").get("cycles").num(),4500.0);
+}
+#[test]
+fn a_funded_planner_retry_keeps_normal_reserves_and_working_recovery_keeps_miner_priority(){
+    for rich in [false,true]{
+        let (mut world,mut me,units)=approach_case();world.set("units",units);world.set("seconds",3);
+        me.entry("rts").entry("cpu").set("bank",if rich {400000}else{1000});
+        me.entry("units").set("stalled",if rich {0}else{1});
+        if !rich {me.entry("units").entry("doing").set("gather",1);}
+        let args=views(&[world,me]);
+        let out=common::govern(args[0],args[1],0.4,||common::recovery(args[0],args[1]));
+        let cpu=out.get("compute").get("cpu");
+        assert_eq!(cpu.get("upkeepOrder").at(0).str(),"miner");
+        assert_eq!(out.get("compute").get("types").get("miner").get("cycles").num(),4500.0);
+        if rich {
+            assert_eq!(cpu.get("reserve").get("upkeep").num(),0.1);
+            assert_eq!(cpu.get("reserve").get("think").num(),0.25);
+        }
     }
 }

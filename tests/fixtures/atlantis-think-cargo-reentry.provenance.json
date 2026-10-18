@@ -1,0 +1,159 @@
+{
+  "source": "/tmp/gameplay-depth-cargo-resume/cargo_first/errors/error-01-faction-3-think.json",
+  "sourceSha256": "875d128fc769497475d5bb7d4366b71b5c5d462f8efd9644febb31458fa83bbd",
+  "seed": 307,
+  "tick": 432137,
+  "seconds": 86427,
+  "faction": 3,
+  "rate": 64,
+  "fuel": 19520,
+  "envelope": {
+    "ok": false,
+    "error": "ran out of cycles",
+    "line": 0,
+    "fuel": true,
+    "logs": [],
+    "used": 19520,
+    "instr": 1249280,
+    "pages": 0,
+    "read": 895,
+    "ns": 1101375,
+    "module": true
+  },
+  "context": "Actual callback captured after resuming the authored public-house 24-hour 307 world. Shared recovery experiment preserved bank-scaled reserves, prioritized loaded home haulers and retained the 65% recovery upkeep cap. No observation fields altered.",
+  "validation": {
+    "oldNativeFuel": 19520,
+    "actualMeterRate": 64,
+    "sweep": "At rate64,102 calls passed at18k\u201320k by100,20.5k\u201360k by500,+19520. Final short-budget guard and miner guard receive separate recorded sweeps.",
+    "exact19520": {
+      "used": 18684.703125,
+      "fabrication": 23640,
+      "clearsRecoveryPage": true
+    },
+    "authoredPeakCounterfactual": {
+      "onlyField": "me.compute.thinkPeak",
+      "value": 90000,
+      "basis": "A successful full market pass in this diagnostic used 87908 cycles; high recent work must not prohibit bounded lean planning.",
+      "usedAt19520": 18564.53125
+    },
+    "limits": "One diagnostic world proves recovery mechanics; it does not establish improved match balance or Crown probability.",
+    "finalShortGuard": {
+      "moduleSha256": "51dd7de5b7d0f988a3691b14fc8714215ecfa0877be709b149ce0b8b7da436bc",
+      "sourceSha256": "5719db77075667da249972b5a3201ec82507d51bb3517fffee1834c92f0d582d",
+      "rate": 64,
+      "calls": 75,
+      "errors": 0,
+      "inputs": "Exact 19520 fixture plus actual 149/229-cycle captured continuation observations. Each swept 100,149,200,229,500,799,800,801,1000,2000,3000,3359,3900,5000,5999,6000,6500,10000,17999,18000,19000,19520,24000,40000,60000.",
+      "exact19520Used": 18684.796875,
+      "at149Used": 16.515625,
+      "at3359And3900Used": 563.796875
+    }
+  },
+  "recoveryReplay": {
+    "binary": "/tmp/gameplay-depth-cargo-resume/hypercycle-sim-trace",
+    "binarySha256": "0fcf819a7dadc7ba159e5d620d48887cd56d8f84541c2d713af0360525188b73",
+    "sdkToolchain": "1.97.0",
+    "instructionsPerCycle": 64,
+    "input": "/tmp/gameplay-depth-cargo-resume/scoped_miner/snapshot.json",
+    "inputSha256": "cda85861eb3f47c141a97928d7d1f69bb28bd554dc5478fc85e96f4159ee583a",
+    "atlantisSourceSha256": "b86020ffe2066a039510892767460dd09eb1665c20c33ec1572d039e54d4df1e",
+    "controls": "Identical saved world and RNG. All eight programs exported from 2078d11; only Atlantis is replaced with the tested source. Both arms use the same engine, including own-unit stalled and active-verb fixes. Final tiny-budget guards were added after these replay records.",
+    "selected600Seconds": {
+      "produced": 18644295.63514948,
+      "delivered": 31085024.0,
+      "spawned": 47,
+      "errors": 5,
+      "alive": true,
+      "units": {
+        "total": 40,
+        "cap": 52,
+        "queued": 0,
+        "hiredOut": 0,
+        "hiredOutByType": {},
+        "spawned": 683,
+        "stalled": 25,
+        "grumbling": 0,
+        "byType": {
+          "hauler": 8,
+          "miner": 14,
+          "escort": 1,
+          "bulwark": 7,
+          "artillery": 4,
+          "interceptor": 2,
+          "piercer": 2,
+          "aeronaut": 1,
+          "line": 1
+        },
+        "doing": {
+          "move": 7,
+          "idle": 14,
+          "gather": 10,
+          "capture": 6,
+          "fight": 3
+        },
+        "morale": 59,
+        "max": 240,
+        "upkeepRate": 1
+      },
+      "cpuBank": 10944.109343529039,
+      "income": 62942.11281321138
+    },
+    "following1200Seconds": {
+      "produced": 30784928.367640257,
+      "delivered": 24963840.0,
+      "spawned": 29,
+      "errors": 9,
+      "alive": true,
+      "units": {
+        "total": 32,
+        "cap": 34,
+        "queued": 0,
+        "hiredOut": 0,
+        "hiredOutByType": {},
+        "spawned": 712,
+        "stalled": 19,
+        "grumbling": 1,
+        "byType": {
+          "hauler": 8,
+          "miner": 14,
+          "escort": 1,
+          "bulwark": 4,
+          "artillery": 2,
+          "interceptor": 2,
+          "piercer": 1
+        },
+        "doing": {
+          "move": 7,
+          "idle": 6,
+          "gather": 10,
+          "capture": 4,
+          "fight": 5
+        },
+        "morale": 49,
+        "max": 240,
+        "upkeepRate": 1
+      },
+      "cpuBank": 682.6838926919584,
+      "income": 16436.725300722697
+    },
+    "rejectedIntermediateArms": [
+      {
+        "arm": "cancel-only99af",
+        "result": "Zero fresh production, delivery or recruitment after 600 seconds. Actual hauler allowances732\u20131670 could not enter its 3600-cycle controller."
+      },
+      {
+        "arm": "cargo-first with completed-way reset",
+        "result": "Restored delivery and recruitment, but fixed absolute recovery reserves could leave THINK atzero after income fell. Changed to fractional reserves."
+      },
+      {
+        "arm": "narrow recovery funding before cheap-miner unload",
+        "result": "First 600 seconds produced 1,139,830 cycles, delivered 12,109,984 and recruited 17. Following 1200 seconds produced, delivered and recruited zero; rejected as sustained recovery."
+      },
+      {
+        "arm": "preserve fractional recovery reserves for every Recovering policy",
+        "result": "Restored Atlantis output, but drained rich old Null savings. Chosen scope retains normal reserves while no units are stalled and bank covers two seconds of income."
+      }
+    ],
+    "limitations": "The selected continuation still ends with low savings and 19 unpaid units. It proves repeated fresh production, delivery and combat recruitment in this saved world, not permanent economic stability, improved match balance or Crown probability. Reactivating the miner controller also drains rich old Null savings with the old reserve policy, so that interaction is not attributable to reserve preservation alone."
+  }
+}
