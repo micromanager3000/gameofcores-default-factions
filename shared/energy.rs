@@ -360,7 +360,7 @@ fn faction_shell(p: &mut Vec<Value>, kind: &str, style: usize) {
     };
     match style.min(9) {
         // felt court / temple / Gothic chapter works
-        0 => { shell_piece(p,"pyramid",x,y,z,w*1.06,0.54,d*0.94,"marble"); shell_piece(p,"pyramid",x-w*0.42,y,z,w*0.36,0.34,d*0.36,"faction"); shell_piece(p,"spire",x+w*0.48,y,z,0.14,1.62,0.,"gold"); },
+        0 => { shell_piece(p,"spire",x,y,z,w*1.06,0.54,d*0.94,"marble"); shell_piece(p,"spire",x-w*0.42,y,z,w*0.36,0.34,d*0.36,"faction"); shell_piece(p,"spire",x+w*0.48,y,z,0.14,1.62,0.,"gold"); },
         1 => { shell_piece(p,"pyramid",x,y,z,w*1.12,0.66,d,"sand"); shell_piece(p,"pyramid",x,y,z+0.50,w*0.72,0.60,d*0.68,"sand"); shell_piece(p,"pyramid",x,y,z+1.00,w*0.42,0.56,d*0.38,"faction"); },
         2 => { shell_piece(p,"arch",x,y,z,w,1.06,d*0.44,"stone"); shell_piece(p,"spire",x,y,z+1.02,w*0.24,0.88,0.,"faction"); shell_piece(p,"arch",x-w*0.52,y,z,0.34,0.78,0.22,"stone"); },
         // glass pressure laboratory / timber harbour pavilion / brick factory

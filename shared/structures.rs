@@ -518,7 +518,7 @@ fn house_massing(a: &mut Art, style: usize, role: Role) {
     let (x, y) = (0.0, 0.35);
     match style {
         // A low radial tent court: several canopies, none large enough to read as a civic dome.
-        0 => { a.add(b'P', x, y, 0.16, w*0.92, h*0.52, d*0.86, b'm'); a.add(b'P', x-w*0.38, y-0.18, 0.16, w*0.38, h*0.35, d*0.42, b'F'); a.add(b'P', x+w*0.38, y-0.18, 0.16, w*0.38, h*0.35, d*0.42, b'F'); a.add(b's', x, y+d*0.34, 0.16, 0.14, h*1.45, 0., b'g'); }
+        0 => { a.add(b's', x, y, 0.16, w*0.92, h*0.52, d*0.86, b'm'); a.add(b's', x-w*0.38, y-0.18, 0.16, w*0.38, h*0.35, d*0.42, b'F'); a.add(b's', x+w*0.38, y-0.18, 0.16, w*0.38, h*0.35, d*0.42, b'F'); a.add(b's', x, y+d*0.34, 0.16, 0.14, h*1.45, 0., b'g'); }
         // A tall stepped stone temple.  The receding levels are its silhouette, never a lotus dome.
         1 => { a.add(b'P', x, y, 0.16, w*1.08, h*0.54, d*1.04, b'n'); a.add(b'P', x, y, 0.16+h*0.42, w*0.72, h*0.54, d*0.68, b'n'); a.add(b'P', x, y, 0.16+h*0.84, w*0.42, h*0.62, d*0.38, b'F'); a.add(b's', x, y, 0.16+h*1.42, 0.12, h*0.62, 0., b'g'); }
         // A cathedral is a long roofed nave, two west spires and buttresses rather than one flat arch.
