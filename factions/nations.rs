@@ -1688,38 +1688,12 @@ fn carry_order(o: Option<Value>, u: View, pl: &std::rc::Rc<Value>, me: View) -> 
     Some(o)
 }
 
-// Move a complete, idle ground field through a paid gate only when its plan's own staging town is
-// disconnected from the field. The gate helper emits its orders, so infantry returns immediately.
-fn gate_attack_field(units: View, world: View, me: View, pl: &Value) -> bool {
-    if !rts(me) || cycles_left() < 6000.0 || num(pl.get("defend")) >= 0.0 { return false; }
-    let (attack, stage) = (num(pl.get("attack")), num(pl.get("stage")));
-    let field = pl.get("field");
-    if attack < 0.0 || stage < 0.0 || attack == stage || field.get("to").num_or(-1.0) != attack || !me.get("techs").get("gate").truthy() { return false; }
-    let action = 1500.0 * me.path("rts.costs.priceLevel").num_or(1.0);
-    let room = (me.path("rts.cpu.available.gate").num_or(0.0) / action).floor() as usize;
-    if room == 0 { return false; }
-    let by = realm::index(world); let ours = me.get("id").num();
-    let field: Vec<View> = units.iter().filter(|u| {
-        let at=u.get("at").num(); let p=by.get(at);
-        u.get("to").num_or(-1.0)<0.0 && u.get("doing").str()=="idle" && u.get("target").num_or(-1.0)<0.0
-            && !u.get("stalled").truthy() && !u.get("carry").truthy() && u.path("rts.cargo.load").num_or(0.0)<=0.0
-            && !u.path("build.wings").truthy() && !u.path("rts.sea.ship").truthy() && p.get("owner").num_or(-1.0)==ours
-            && path::home(world,me,at,stage).is_none() && common::defends(pl,*u)<0.0
-    }).collect();
-    let mut origin=-1.0; let mut most=0usize;
-    for u in &field { let at=u.get("at").num(); let n=field.iter().filter(|v|v.get("at").num()==at).count(); if n>most {origin=at;most=n;} }
-    if most<2 || field.get("next").key(origin).truthy() { return false; }
-    let group: Vec<View> = field.into_iter().filter(|u|u.get("at").num()==origin).take(room.min(16)).collect();
-    !orders::gate(group,stage,world,me,"capture",Some(attack)).is_empty()
-}
-
 // Under 2,500 cycles a call can't pay for the plan lookup and an order: its units keep their orders a second longer.
 fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
     if short(me, 2500.0, 1200.0) {
         return Value::arr();
     }
     let pl = plan::for_units(me, units, View::undefined());
-    if gate_attack_field(units, world, me, &pl) { return Value::Undef; }
     for turn in 0..units.len() {
         if rts(me) && cycles_left() < 2200.0 {
             break;
