@@ -1,0 +1,111 @@
+{
+  "fixture": "kublai-wing-c10-2655.json",
+  "scope": "Captured public default Kublai unit callback, no player data.",
+  "capturePath": "artifacts/balance-oct16/gameplay-depth-day-candidate10-rerun-f088d91/day-307.errors/error-20-faction-0-wing.json",
+  "captureSha256": "d8278a10fba82ae1e6e18290af65cfed6a123c2d15242746b8f6fb68476c46bd",
+  "fixtureSha256": "b5cca9b39774bc76b6267e5ff2d2433c89c152fa49533e553750abc85bc87ecd",
+  "engineRevision": "bb166360fbe96ce94a0a6e5ed7a8610a4d8377e8",
+  "factionRevision": "f088d9159884225fe97868c42e759f922f636d4d",
+  "binarySha256": "042e9842756686d362dfeac710feb05e763b79ce43f52c42b33b7381fc526859",
+  "capturedSourceSha256": "9eb9e985ec214f2d43b58e985f58f0eea8a980e81d6951233fe04cb17c5a6520",
+  "guestToolchain": "1.97.0",
+  "instructionsPerCycle": 64,
+  "call": {
+    "tick": 75075,
+    "seconds": 15015,
+    "faction": 0,
+    "function": "wing",
+    "fuel": 2655,
+    "unit": 1365,
+    "province": 1,
+    "coldPlanJsonBytes": 542,
+    "condition": "One paid, grounded, cool, idle aircraft; positive fabrication; no urgent landing needed."
+  },
+  "frozenResult": {
+    "ok": false,
+    "used": 2655,
+    "orders": []
+  },
+  "phaseEvidence": {
+    "method": "Only a /tmp export added authored phase flags; canonical source was not instrumented. Phase calls use the exact observation plus an explicitly authored world._probe flag.",
+    "beforePlanUsed": 182.5,
+    "afterPlanUsed": 2457.828125,
+    "afterIndexUsedAt6000": 2717.140625,
+    "afterIndexAt2655": "out of cycles",
+    "report": "/tmp/gameplay-depth-c10-kublai-wing-phase.json"
+  },
+  "sameInputBaseline": {
+    "sourceRevision": "9abe662723ee38ebdaf3038b096b0e58bd269b02",
+    "method": "Historical source recompiled under the same current SDK and Rust1.97.0; this is not the original historical compiled module.",
+    "resultAt2655": "out of cycles",
+    "funded5000Used": 3109.65625,
+    "fundedOrder": {
+      "id": 1365,
+      "do": "fight",
+      "target": 14
+    },
+    "report": "/tmp/gameplay-depth-c10-kublai-wing-baseline.json"
+  },
+  "cause": "The first2500-cycle admission runs before a cold542-byte plan decode. That decode finishes, but the following map index exceeds the remaining allowance. The existing per-unit loop would then stop below2500 without issuing an order.",
+  "repair": "After plan::for_units, return below the same2500-cycle RTS loop floor before building the map index. Urgent landings remain before the cold read. No planner/engine allocation was raised.",
+  "limitations": [
+    "The full39-game f088 matrix remains frozen; targeted final-source replay validates this narrow safety guard.",
+    "A still larger plan could exhaust fuel inside the initial cold read; pre-read admission is a separate issue not solved or claimed here.",
+    "At4200 this exact cold view already produces no order; the repair preserves that behavior. Funded6k/8k calls must retain target14.",
+    "This one captured failure does not establish its final repetition count; use the completed run counters."
+  ],
+  "validation": {
+    "strategiesPassed": 112,
+    "sharedBehaviorsPassed": 94,
+    "sourceChecksPassed": 5,
+    "logs": [
+      "/tmp/gameplay-depth-c10-wing-source-strategies.log",
+      "/tmp/gameplay-depth-c10-wing-source-behavior.log",
+      "/tmp/gameplay-depth-c10-wing-source-checks.log"
+    ],
+    "fixedExportBytes": 509999,
+    "fixedWasmSha256": "7ff589d4a3273bc5602ad2c6877c57eb3275fc36671fa168b55adfd37e63a158",
+    "runtimeCoresSha256": "8483f46373477e19644dbc5e79b2476dfd3cfe355329c61864d721e78d26dac3",
+    "runtimeCoresPath": "/Users/reddybot/code/gameofcores-work/gameofcores-gameplay/target/release/cores",
+    "runtimeHostParity": "After the older /tmp cores path was removed during cleanup, engine target/release/cores exactly reproduced frozen2655 OOF, frozen6000 used3179.140625 with target14, and the fixed2500 used161.09375 control. All final metering uses this host and the unchanged SDK1.97 guest.",
+    "meter": {
+      "calls": 160,
+      "rate": 64,
+      "seconds": 235.156149041,
+      "report": "/tmp/gameplay-depth-c10-kublai-wing-fixed-sweep.json",
+      "actualBand": "2500\u20133000 in5-cycle steps plus2654/2656; broader500\u201310000 controls. All safe.",
+      "exact2655": {
+        "case": "actual-cold-plan",
+        "budget": 2655,
+        "ok": true,
+        "used": 2434.3125,
+        "orders": [],
+        "error": null
+      },
+      "funded6000": {
+        "case": "actual-cold-plan",
+        "budget": 6000,
+        "ok": true,
+        "used": 3181.1875,
+        "orders": [
+          {
+            "id": 1365,
+            "do": "fight",
+            "target": 14,
+            "via": [
+              14
+            ],
+            "alert": 6,
+            "power": {
+              "drive": 600,
+              "armor": 0,
+              "weapon": 420
+            }
+          }
+        ],
+        "error": null
+      },
+      "positiveControls": "Actual6k/8k/10k retains fight target14; prior wing fixture5k/6k/8k retains target9; authored3hot stationary aircraft retain all3landings at1000+; prior zero-fabrication recovery lands at949+."
+    }
+  }
+}

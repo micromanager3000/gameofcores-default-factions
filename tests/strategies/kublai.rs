@@ -118,3 +118,25 @@ fn road_phase_leaves_the_standing_field_when_a_new_plan_cannot_publish() {
     assert_eq!(plan.get("field").get("to").num(),3.0);
     assert_eq!(plan.get("field").get("next").get("0").num(),3.0);
 }
+
+#[test]
+fn kublai_wing_preserves_urgent_landings_and_a_funded_sortie() {
+    let mut me=obj!{"id"=>0,"capital"=>1,"allies"=>arr![],"rts"=>obj!{"cpu"=>obj!{"limits"=>obj!{"fabrication"=>20488}}},"ramProvince"=>obj!{}};
+    me.entry("ramProvince").set("1",pages(&obj!{"attack"=>14,"hunt"=>14,"defend"=>-1,"stage"=>1}));
+    let unit=obj!{"id"=>1365,"owner"=>0,"type"=>"wing","at"=>1,"to"=>-1,"doing"=>"idle","target"=>-1,
+        "build"=>obj!{"wings"=>1,"vision"=>0},"rts"=>obj!{"air"=>obj!{"aloft"=>false,"heat"=>0}}};
+    let world=obj!{"seconds"=>15015,"factions"=>arr![obj!{"id"=>0,"alive"=>true},obj!{"id"=>1,"alive"=>true}],
+        "provinces"=>arr![obj!{"id"=>1,"owner"=>0,"adj"=>arr![14]},obj!{"id"=>14,"owner"=>1,"adj"=>arr![1],"units"=>obj!{"1"=>1}}]};
+    let v=views(&[arr![unit.clone()],world.clone(),me.clone()]);
+    super::wing(v[0],v[1],v[2]);
+    let out=emitted();
+    assert!(out.iter().any(|o|o.get("id").num()==1365.0 && o.get("target").num()==14.0),"funded wing keeps its sortie: {out:?}");
+    let mut hot=unit;
+    hot.entry("rts").entry("air").set("aloft",true);
+    hot.entry("rts").entry("air").set("heat",65);
+    let v=views(&[arr![hot],world,me]);
+    super::wing(v[0],v[1],v[2]);
+    let out=emitted();
+    assert_eq!(out.len(),1,"hot aircraft land before optional route work");
+    assert!(out[0].get("land").truthy());
+}

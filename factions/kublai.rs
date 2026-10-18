@@ -1622,6 +1622,8 @@ fn wing(units: View, world: View, me: View) {
         return;
     }
     let pl = plan::for_units(me, units, world);
+    // The loop below cannot issue an order with less runway; skip its map index too.
+    if me.get("rts").truthy() && cycles_left() < 2500.0 { return; }
     let by_id = realm::index(world);
     let hunt = pl.get("hunt");
     let abroad = hunt.is_undef();
