@@ -441,7 +441,7 @@ fn think(world: View, me: View) -> Value {
     if !me.path("rts.cpu").truthy() {
         return common::govern(world, me, 0.4, || strategy(world, me));
     }
-    if cycles_left() < 3000.0 { return think_emergency(); }
+    if cycles_left() < 3900.0 { return think_emergency(); }
     // Do not let a profitable cargo crew remain worker-only while a full planner waits for a rare high-burst second.
     if productive_reentry(me) { return think_reentry(me); }
     if world.get("logistics").truthy() && me.path("units.total").num_or(0.0) < 4.0
