@@ -1034,6 +1034,8 @@ fn lancer(units: View, world: View, me: View) {
 }
 
 fn gun(units: View, world: View, me: View) {
+    // Route planning can exhaust a low scaled callback before a single gun reaches its loop guard.
+    if me.get("rts").truthy() && cycles_left() < 2500.0 { return; }
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
         if rts && cycles_left() < 2200.0 {

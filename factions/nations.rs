@@ -1734,6 +1734,8 @@ fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
 }
 
 fn shade(units: View, world: View, me: View) {
+    // A scaled shade batch needs room to decode its plan before infantry can retain each standing order.
+    if short(me, 3000.0, 1200.0) { return; }
     infantry(units, world, me, true);
 }
 
