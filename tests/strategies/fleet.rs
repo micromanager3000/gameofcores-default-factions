@@ -187,5 +187,5 @@ fn fleet_corsair_spawn_keeps_a_profitable_unescorted_prey_eligible() {
     let prey=Value::parse(r#"{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":3},"cargo":{"load":3}}"#);
     let empty=Value::arr();
     let args=views(&[me,prey,empty]);
-    assert!(super::paying_corsair_prey(args[1],args[2],args[0],160000.0,true));
+    assert!(super::paying_corsair_prey(args[1],args[2],args[0],300000.0,true));
 }
