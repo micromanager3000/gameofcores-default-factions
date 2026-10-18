@@ -669,11 +669,12 @@ use super::{air, theme};
         let depots=me.path("rts.logistics.depots");let stock=depots.iter().filter(|d|d.get("p").num()!=me.get("capital").num()||d.get("dock").truthy()).map(|d|d.get("cycles").num_or(0.0)).sum::<f64>();
         let have=me.path("units.byType");let n=me.path("units.total").num_or(0.0);let away=me.path("units.hiredOut").num_or(0.0);
         let count=n+away;let cap=me.path("units.cap").num_or(0.0);
+        let loans=me.path("units.hiredOutByType");let loan=|ty:&str|if loans.is_undef(){away}else{loans.get(ty).num_or(0.0)};
         if stock>16000.0 && depots.iter().filter(|d|d.get("dock").truthy()).count()>=2 && !me.path("techs.seaTraversal").truthy(){out.set("research","seaTraversal");}
         if stock>16000.0 && out.get("spawn").is_empty() && count<cap && me.path("units.queued").num_or(0.0)==0.0 && me.get("bank").num_or(0.0)>me.path("costs.unit").num_or(1e9)+8.0 && me.path("rts.cpu.bank").num_or(0.0)>fabrication(me,1.0)+income*2.0 {
             let mut port = None;
-            let ty = if have.get("hauler").num_or(0.0)+away < (me.get("provinces").num_or(1.0)/2.0).clamp(2.0,6.0) { "hauler" }
-            else if me.path("techs.seaTraversal").truthy() && have.get("freighter").num_or(0.0)+away < 2.0
+            let ty = if have.get("hauler").num_or(0.0)+loan("hauler") < (me.get("provinces").num_or(1.0)/2.0).clamp(2.0,6.0) { "hauler" }
+            else if me.path("techs.seaTraversal").truthy() && have.get("freighter").num_or(0.0)+loan("freighter") < 2.0
                 && world.get("seconds").num_or(0.0) >= mem::get(me.get("ramCapital"), FREIGHT_PAGE).get("until").num_or(0.0) {
                 for p in me.path("rts.sea.ports").iter() {
                     // Reserve the freight tail.
