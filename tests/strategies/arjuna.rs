@@ -57,6 +57,18 @@ fn wing_full_path_runway_covers_a_four_aircraft_forty_five_province_call() {
 }
 
 #[test]
+fn sky_routes_can_be_built_before_the_return_home_distances() {
+    let args = views(&[flight_world(), flight_me()]);
+    let (world, me) = (args[0], args[1]);
+    let mut geo = super::sky::Geo::route_only(world);
+    assert!(geo.route(0.0, 1.0).is_some());
+    assert!(geo.home_d(0.0).is_infinite());
+    geo.ensure_home(world, me, 12.0);
+    assert_eq!(geo.home_d(0.0), 0.0);
+    assert_eq!(geo.home_d(1.0), 1.0);
+}
+
+#[test]
 fn fresh_home_launch_carries_the_sdk_core_plan_with_its_sky_sortie() {
     let mut me = flight_me();
     let plan = obj! {"attack"=>2,"sky"=>1,"stage"=>0,"defend"=>-1};

@@ -922,7 +922,6 @@ fn wing(units: View, world: View, me: View) {
         return;
     }
 
-    let geo = sky::Geo::new(world, me, 12.0);
     // A home province supplies the current squadron plan. Abroad, each aircraft keeps its paid sortie.
     let home = units.iter().find(|u| plan::here(me, *u));
     let pl = match home {
@@ -936,15 +935,22 @@ fn wing(units: View, world: View, me: View) {
         .filter(|u| u.get("air").truthy() && realm::is_rival(world, me, u.get("owner").num_or(-1.0)))
         .take(12).collect();
     let verb = if is_str_v(pl.get("skyVerb"), "raid") { "raid" } else { "fight" };
-    let by_id = realm::index(world);
     let me_id = n(me.get("id"));
-    let ours = |id: f64| geo.is_home(id);
+    let mut geo = None;
     // the squadron: how many are down and cool
     let mut cool = 0usize;
     for u in units.iter() {
         let a = u.path("rts.air");
         if a.truthy() && !a.get("aloft").truthy() && n(a.get("heat")) <= READY {
             cool += 1;
+        }
+    }
+    let mut urgent_lands = Vec::new();
+    for u in units.iter().take_while(|_| !rts || cycles_left() > 400.0) {
+        let a = u.path("rts.air");
+        if a.get("aloft").truthy() && n(a.get("heat")) >= 45.0 {
+            order(obj! { "id" => u.get("id"), "land" => true });
+            urgent_lands.push(n(u.get("id")));
         }
     }
     for i in 0..units.len() {
@@ -956,6 +962,8 @@ fn wing(units: View, world: View, me: View) {
         if !a.truthy() || !a.get("glide").is_nullish() {
             continue;
         }
+        if urgent_lands.contains(&n(u.get("id"))) { continue; }
+        let geo = geo.get_or_insert_with(|| sky::Geo::route_only(world));
         let heat = n(a.get("heat"));
         let doing = u.get("doing");
         let (at, to, tgt) = (n(u.get("at")), n(u.get("to")), n(u.get("target")));
@@ -967,13 +975,21 @@ fn wing(units: View, world: View, me: View) {
                 .map(|v|v.get("id").num())
         } else { None };
         let verb = if home.is_none() && standing { if is_str(doing, "raid") { "raid" } else { "fight" } } else { verb };
-        let go = target >= 0.0 && (ours(target) || cool >= units.len().min(3));
+        let go = target >= 0.0 && (cool >= units.len().min(3) || {
+            geo.ensure_home(world, me, 12.0);
+            geo.is_home(target)
+        });
         let carried = home.map(|_| &pl);
         if a.get("aloft").truthy() {
-            if is_str(doing, "move") && ours(tgt) {
+            if rts && cycles_left() < 5000.0 { continue; }
+            if is_str(doing, "move") {
+                geo.ensure_home(world, me, 12.0);
+                if geo.is_home(tgt) {
                 // on its way down
-                continue;
+                    continue;
+                }
             }
+            geo.ensure_home(world, me, 12.0);
             let here = if to >= 0.0 { to } else { at };
             let back = geo.home_d(here);
             if heat + HOP * back >= TURN {
@@ -999,13 +1015,13 @@ fn wing(units: View, world: View, me: View) {
                 // over its target: with no rival there left to hit, raid a rival town no ground unit guards, else home
                 let (foes, guards, _) = sky::hostiles(world, me, at);
                 if foes == 0.0 {
-                    let q = by_id.get(at);
+                    let q = realm::index(world).get(at);
                     let rival = q.get("owner").is_num() && q.get("owner").num() >= 0.0 && q.get("owner").num() != me_id && realm::is_rival(world, me, q.get("owner").num());
                     if rival && guards == 0.0 {
                         if is_str(doing, "fight") {
                             order(obj! { "id" => u.get("id"), "do" => "raid", "target" => at, "alert" => 8 });
                         }
-                    } else if !ours(at) || target != at {
+                    } else if !geo.is_home(at) || target != at {
                         order(obj! { "id" => u.get("id"), "land" => true });
                     }
                 }
@@ -1485,16 +1501,18 @@ mod sky {
 
     impl Geo {
         pub fn new(world: View, me: View, max: f64) -> Geo {
+            let mut geo = Geo::route_only(world);
+            geo.ensure_home(world, me, max);
+            geo
+        }
+
+        pub fn route_only(world: View) -> Geo {
             let ps = world.get("provinces");
             let mut size = 0usize;
             for p in ps.iter() {
                 size = size.max(p.get("id").num_or(0.0) as usize + 1);
             }
             let mut adj = vec![Vec::new(); size];
-            let mut home = vec![f64::INFINITY; size];
-            let mut ring = Vec::new();
-            let me_id = me.get("id").num();
-            let allies = me.get("allies");
             for p in ps.iter() {
                 let id = p.get("id").num_or(-1.0);
                 if !(id >= 0.0) {
@@ -1508,9 +1526,24 @@ mod sky {
                     each(r.get("pass"), &mut adj[i]);
                     each(r.get("air"), &mut adj[i]);
                 }
+            }
+            Geo { adj, home: Vec::new() }
+        }
+
+        pub fn ensure_home(&mut self, world: View, me: View, max: f64) {
+            if !self.home.is_empty() || self.adj.is_empty() { return; }
+            let size = self.adj.len();
+            self.home = vec![f64::INFINITY; size];
+            let mut ring = Vec::new();
+            let me_id = me.get("id").num();
+            let allies = me.get("allies");
+            for p in world.get("provinces").iter() {
+                let id = p.get("id").num_or(-1.0);
+                if !(id >= 0.0) { continue; }
+                let i = id as usize;
                 let o = p.get("owner");
                 if o.is_num() && o.num() >= 0.0 && (o.num() == me_id || allies.has_num(o.num())) {
-                    home[i] = 0.0;
+                    self.home[i] = 0.0;
                     ring.push(i);
                 }
             }
@@ -1519,17 +1552,16 @@ mod sky {
                 d += 1.0;
                 let mut next = Vec::new();
                 for &p in &ring {
-                    for k in 0..adj[p].len() {
-                        let q = adj[p][k];
-                        if q < size && home[q] > d {
-                            home[q] = d;
+                    for k in 0..self.adj[p].len() {
+                        let q = self.adj[p][k];
+                        if q < size && self.home[q] > d {
+                            self.home[q] = d;
                             next.push(q);
                         }
                     }
                 }
                 ring = next;
             }
-            Geo { adj, home }
         }
 
         /// Hops from our land or an ally's (0 on it; infinite past the search).
