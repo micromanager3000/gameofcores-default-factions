@@ -122,8 +122,11 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     let units: Vec<View> = world.get("units").iter().filter(|u| same(u.get("owner"), id) && u.get("hp").num_or(0.0) > 0.0).collect();
     let income = me.path("rts.cpu.income").num_or(0.0);
     let bank = me.path("rts.cpu.bank").num_or(0.0);
-    let safe = orders.get("memo").str() != "Recovering production" && me.path("units.stalled").num_or(0.0) == 0.0
+    let funded = orders.get("memo").str() != "Recovering production"
         && bank > income.max(1000.0 * price(me)) && me.path("rts.cpu.last.upkeep").num_or(0.0) < income * 0.7;
+    // An isolated stalled unit must not stop funded supply, repairs and defence.
+    // New construction still waits until the existing force can operate.
+    let safe = funded && me.path("units.stalled").num_or(0.0) == 0.0;
     let mut jobs = Value::arr();
     let mut services = Value::arr();
     for s in &own {
@@ -132,7 +135,7 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
         let mut j = obj! { "id" => s.get("id"), "extract" => 0, "extractSlot" => 0, "faith" => 0, "civic" => 0,
             "watch" => 0, "watchWater" => -1, "supply" => 0, "guard" => false, "target" => 0,
             "repair" => 0, "repairSite" => s.get("id"), "budget" => 0, "until" => now + 45.0 };
-        if safe {
+        if funded {
             j.set("budget", (income * 0.025).min(260.0 * price(me)));
             let p = world.get("provinces").iter().find(|p| same(p.get("id"), s.get("p")));
             if let Some(p) = p {
