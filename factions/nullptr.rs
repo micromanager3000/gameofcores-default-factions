@@ -370,6 +370,44 @@ fn think_recovery(me: View) -> Value {
         "memo" => "Recovering production" };
 }
 
+/// A cargo economy can have a large bank while its last recovery policy still gives fabrication nothing.  Put one
+/// screen back on the field before asking the expensive planner to re-enter: the workers keep their routes, and the
+/// screen gives the carried plan somebody who can claim its target.
+fn productive_reentry(me: View) -> bool {
+    if !me.path("rts.cpu").truthy() || !mem::get(me.get("ramCapital"), 244).get("r").truthy() {
+        return false;
+    }
+    if me.path("units.stalled").num_or(0.0) > 0.0 || me.path("units.queued").num_or(0.0) > 0.0 {
+        return false;
+    }
+    let have = me.path("units.byType");
+    let workers = have.get("miner").num_or(0.0) + have.get("hauler").num_or(0.0) + have.get("freighter").num_or(0.0);
+    let armed = me.path("units.total").num_or(0.0) - workers - have.get("escort").num_or(0.0);
+    let income = me.path("rts.cpu.income").num_or(0.0);
+    workers >= 8.0 && armed < 4.0 && me.path("units.total").num_or(0.0) < me.path("units.cap").num_or(0.0)
+        && income > 0.0 && me.path("rts.cpu.bank").num_or(0.0) >= income * 3.0
+}
+
+fn think_reentry(me: View) -> Value {
+    let mut orders = think_recovery(me);
+    let modules = mods(me, "screen");
+    let fabrication = common::fabrication(me, modules.len() as f64) + 200.0;
+    {
+        let cpu = orders.entry("compute").entry("cpu");
+        cpu.entry("limits").set("fabrication", fabrication);
+        let control = cpu.get("limits").get("control").num_or(0.0).max(22000.0);
+        cpu.entry("limits").set("control", control);
+        cpu.set("upkeepOrder", vec!["miner", "hauler", "freighter", "screen"]);
+    }
+    let types = orders.entry("compute").entry("types");
+    types.set("hauler", obj! { "cycles"=>10000, "every"=>2 });
+    types.set("freighter", obj! { "cycles"=>12000, "every"=>2 });
+    types.set("screen", obj! { "cycles"=>6000, "every"=>1 });
+    orders.set("spawn", vec![obj! { "type"=>"screen", "build"=>build(SCREEN), "modules"=>modules }]);
+    orders.set("memo", "Address Zero: rearming a screen for the carried front.");
+    orders
+}
+
 // Output serialization runs after think returns; RAM writes are paid from what it leaves.
 fn think_return_cost(orders: &Value) -> f64 {
     let began = cycles_left();
@@ -404,6 +442,8 @@ fn think(world: View, me: View) -> Value {
         return common::govern(world, me, 0.4, || strategy(world, me));
     }
     if cycles_left() < 3000.0 { return think_emergency(); }
+    // Do not let a profitable cargo crew remain worker-only while a full planner waits for a rare high-burst second.
+    if productive_reentry(me) { return think_reentry(me); }
     if world.get("logistics").truthy() && me.path("units.total").num_or(0.0) < 4.0
         && me.path("rts.cpu.income").num_or(0.0) < 30000.0 {
         return common::govern(world, me, 0.4, || strategy(world, me));
