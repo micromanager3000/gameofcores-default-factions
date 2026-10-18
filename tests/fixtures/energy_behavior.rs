@@ -167,3 +167,54 @@ fn power_requests_reject_disconnected_or_non_native_or_already_committed_supply(
     let (world, exported) = power_market(12.0, 4.0, 0.0, true, arr![obj! { "give"=>true, "with"=>3, "mw"=>8 }]);
     rejects(exported, world, 1.0);
 }
+
+fn power_buyer() -> (Value, Value, Value) {
+    let (mut world, mut seller) = power_market(12.0, 4.0, 0.0, true, arr![]);
+    world.set("seconds", 33);
+    world.set("factions", arr![obj! { "id"=>7, "alive"=>true, "powered"=>1, "techs"=>arr!["transmission"] },
+        obj! { "id"=>2, "alive"=>true, "powered"=>0.5, "techs"=>arr![] }]);
+    seller.set("bank", 1000);
+    seller.set("contracts", arr![]);
+    seller.set("units", obj! { "total"=>0, "queued"=>0, "cap"=>20 });
+    let buyer = obj! { "id"=>2, "seat"=>2, "capital"=>2, "bank"=>1000, "techs"=>obj! {},
+        "compute"=>obj! { "cycles"=>15000 }, "rts"=>obj! { "cpu"=>obj! { "income"=>40000, "bank"=>300000 }, "structures"=>arr![] },
+        "energy"=>obj! { "powered"=>0.5, "supply"=>3, "demand"=>6, "met"=>3, "deals"=>arr![],
+            "islands"=>arr![obj! { "provinces"=>arr![2], "supply"=>3, "demand"=>6, "met"=>3, "capital"=>true }] } };
+    (world, buyer, seller)
+}
+
+#[test]
+fn a_short_grid_requests_affordable_power_that_a_connected_seller_can_accept() {
+    let (world, buyer, seller) = power_buyer();
+    let args = views(&[world.clone(), buyer]);
+    let mut orders = obj! {};
+    shared::energy::apply(&mut orders, args[0], args[1]);
+    assert_eq!(orders.get("send").len(), 1, "{orders:?}");
+    let mut request = orders.get("send").at(0).clone();
+    assert_eq!(request.get("to").num(), 7.0);
+    assert_eq!(request.get("ask").get("power").get("mw").num(), 3.0);
+    assert_eq!(request.get("give").get("coinPerSecond").num(), 0.375);
+    request.set("from", 2);
+    let args = views(&[request, seller, world]);
+    assert!(common::fair(args[0], args[1], args[2], &[]));
+}
+
+#[test]
+fn power_buyers_preserve_savings_and_avoid_duplicate_or_unroutable_imports() {
+    for case in ["healthy", "poor", "imported", "split", "disconnected", "unresearched", "short-seller"] {
+        let (mut world, mut buyer, _) = power_buyer();
+        match case {
+            "healthy" => buyer.entry("energy").set("powered", 0.95),
+            "poor" => buyer.set("bank", 100),
+            "imported" => buyer.entry("energy").set("deals", arr![obj! { "give"=>false, "mw"=>2, "with"=>7 }]),
+            "split" => buyer.entry("energy").entry("islands").push(obj! { "provinces"=>arr![3] }),
+            "disconnected" => world.set("provinces", arr![obj! { "id"=>2, "owner"=>2, "adj"=>arr![] }]),
+            "unresearched" => world.set("factions", arr![obj! { "id"=>7, "alive"=>true, "powered"=>1, "techs"=>arr![] }]),
+            _ => world.set("factions", arr![obj! { "id"=>7, "alive"=>true, "powered"=>0.8, "techs"=>arr!["transmission"] }]),
+        };
+        let args = views(&[world, buyer]);
+        let mut orders = obj! {};
+        shared::energy::apply(&mut orders, args[0], args[1]);
+        assert!(orders.get("send").is_empty(), "{case}: {orders:?}");
+    }
+}

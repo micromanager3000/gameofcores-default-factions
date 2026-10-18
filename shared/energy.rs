@@ -1,9 +1,5 @@
-// Power, in worlds with energy. A house plans its grid from what every program reads: `me.energy` (its grid last
-// second: supply, demand, islands and plants), `world.energy` (the sky, and what each plant kind needs and costs) and
-// each province's `power` (where it lies, the sun, wind and tide there now, and the room it has for water, rift and
-// reactor plants). The planner builds plants where a builder stands, names the land to darken first, keeps a battery
-// reserve for the dark, and sells what it has spare. Research and war stay with each house: `prize` lets a house's
-// targeting value a rival's weak grid, its plants and its rich sites.
+// Plan plants, storage, shedding and trades from me.energy, world.energy and province.power.
+// Research stays with each house. `prize` values a rival's grid and plant sites for targeting.
 use std::cell::RefCell;
 use std::f64::consts::PI;
 
@@ -49,8 +45,7 @@ pub fn doctrine(seat: usize) -> Doctrine {
     }
 }
 
-/// What a rated MW of `kind` makes in province `p` over a day, on average: sun after the ground and the latitude
-/// (the sun stands over the equator), the wind's mean, the tide's, and steady plants in full.
+/// Estimated mean output per rated MW, including local terrain and latitude.
 pub fn duty(kind: &str, p: View) -> f64 {
     let w = p.get("power");
     match kind {
@@ -94,9 +89,7 @@ fn plants_seen(world: View, me: View) -> Vec<(f64, f64)> {
     out
 }
 
-/// What a province of a rival's adds to a house's wish to take it, in the units of `common::score`: its owner's grid
-/// running short (its miners and army slowed), the plants that would change hands with it, and its water, rift and
-/// reactor room.
+/// Target value in common::score units: weak rival power, visible plants and useful plant sites.
 pub fn prize(world: View, me: View, q: View) -> f64 {
     if !world.get("energy").truthy() { return 0.0; }
     let o = q.get("owner");
@@ -112,9 +105,7 @@ pub fn prize(world: View, me: View, q: View) -> f64 {
 /// One plant the planner could order next.
 struct Pick { p: View, kind: &'static str, cap: f64, cost: f64, score: f64 }
 
-/// The grid for a second: a look for a plant to build every six seconds, settings every twelve, power for sale once a
-/// minute. A resting house thinks in full only every third second (`common::govern`), and `structures` plans its
-/// buildings on every sixth, so the grid takes the full-think seconds between them and the two never share a call.
+/// Stagger grid planning between building passes. Trade at most once per direction per minute.
 pub fn apply(orders: &mut Value, world: View, me: View) {
     let e = me.get("energy");
     if !e.truthy() || !world.get("energy").truthy() || cycles_left() < 7000.0 { return; }
@@ -126,11 +117,10 @@ pub fn apply(orders: &mut Value, world: View, me: View) {
     if cycles_left() > 30000.0 { build(orders, world, me, &d, now); }
     if now % 12.0 == 9.0 && cycles_left() > 10000.0 { settings(orders, world, me, &d); }
     if now % 60.0 == 3.0 && cycles_left() > 10000.0 { sell(orders, world, me, &d); }
+    if now % 60.0 == 33.0 && cycles_left() > 10000.0 { buy(orders, world, me, now); }
 }
 
-/// A plant going up is charged a twelfth of its build cost a second through the fabrication lane, which recruits share,
-/// and a standing plant its upkeep through the upkeep lane, before any unit. A compute policy sent this second gets
-/// that much more room in each, so the house's own limits stay for its units.
+/// Add plant construction and upkeep to any submitted lane limits, preserving the unit allowance.
 fn fund(orders: &mut Value, me: View) {
     let id = me.get("id").num_or(-1.0);
     let income = me.path("rts.cpu.income").num_or(0.0);
@@ -177,10 +167,7 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
     let id = me.get("id");
     let income = me.path("rts.cpu.income").num_or(0.0);
     let bank = me.path("rts.cpu.bank").num_or(0.0);
-    // Plants are paid from savings above the floor an army keeps: common::govern drops to its recovery policy, which
-    // disbands units, below four seconds of income. The floor comes down to just above that while the grid runs short,
-    // since a dim province mines less. In cargo worlds the army lives on the bank between loads, so the floor also
-    // keeps half a minute of the whole upkeep bill, as recruits do.
+    // Keep over four seconds of income, plus enough upkeep to bridge cargo deliveries.
     let short = e.get("powered").num_or(1.0) < 0.92;
     let gap = if world.get("logistics").truthy() { me.path("rts.cpu.last.upkeep").num_or(0.0) * 30.0 } else { 0.0 };
     let floor = (income * if short { 4.5 } else { 5.0 }).max(gap);
@@ -193,14 +180,13 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
     let land: Vec<View> = world.get("provinces").iter().filter(|p| same(p.get("owner"), id) && p.get("power").truthy()).collect();
     if land.is_empty() { return; }
     let find = |pid: f64| land.iter().copied().find(|p| p.get("id").num() == pid);
-    // Each grid island balances alone (`me.energy.islands`): a plant lights only the island it stands on, and the house
-    // generator only the capital's. Overseas towns and cut-off provinces need plants of their own.
+    // Islands balance separately. Only the capital's island receives house generation.
     let islands: Vec<View> = e.get("islands").iter().collect();
     if islands.is_empty() { return; }
     let home = islands.iter().position(|i| i.get("capital").truthy()).unwrap_or(0);
     let island = |pid: f64| islands.iter().position(|i| i.get("provinces").has_num(pid));
     let house = e.get("house").num_or(3.0);
-    // what the plants on each island make in a day, on average, and how much of that comes and goes with the sky
+    // Mean generation and its variable portion, per island.
     let (mut expected, mut fickle) = (vec![0.0; islands.len()], vec![0.0; islands.len()]);
     expected[home] = house;
     for s in &mine {
@@ -213,9 +199,7 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
             if variable(kind) { fickle[i] += mw; }
         }
     }
-    // The islands short of their draw × margin, the furthest short first. The house generator carries a young capital
-    // island, and plants follow the draw once its mines outgrow it; any other island gets a plant from its first fifth
-    // of a MW of draw.
+    // Rank deficits against expected generation, leaving small loads to the house generator.
     let mut wants: Vec<(usize, f64)> = Vec::new();
     for (i, isl) in islands.iter().enumerate() {
         let draw = isl.get("demand").num_or(0.0);
@@ -225,9 +209,7 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
     }
     wants.sort_by(|a, b| b.1.total_cmp(&a.1));
     if building == 1 && wants.first().map_or(0.0, |w| w.1) <= 1.5 { return; }
-    // The first construction second (a twelfth of the quote) comes out of the fabrication lane when the site is
-    // accepted. A policy sent this second makes room for it; otherwise the plant fits what the lane has left. The
-    // rest is charged over the next twelve seconds.
+    // Construction debits 1/12 of the quote per second. A submitted policy can enlarge its lane.
     let fab = orders.get("compute").get("cpu").get("limits").get("fabrication").num_or(0.0);
     let policy = fab > 1.0;
     let spare = (bank - floor) * 0.7;
@@ -262,8 +244,7 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
                 let cap = (short / duty).min(room.min(hi).min(most)).min(spend / quote);
                 let cap = (cap * 10.0).floor() / 10.0;
                 if cap < lo { continue; }
-                // cheapest MW for the house's taste, safer behind the border
-                // (a boiler's fuel is cargo that would have been income: it counts thrice its build price)
+                // Weight cost by doctrine and border exposure. Boiler fuel displaces cargo income.
                 let fuel = if kind == "boiler" { 3.0 } else { 1.0 };
                 let score = quote * fuel / duty * (1.0 + 0.4 * rank as f64) * if interior(p) { 1.0 } else { 1.3 };
                 picks.push(Pick { p, kind, cap, cost: quote * cap, score });
@@ -312,20 +293,19 @@ fn place(orders: &mut Value, me: View, sites: View, units: &[View], mut picks: V
 fn price(me: View) -> f64 { me.path("rts.costs.priceLevel").num_or(1.0).max(0.01) }
 fn seat_style(me: View) -> usize { me.get("seat").num_or(9.0).max(0.0) as usize }
 
-/// Native MW available on the engine's export route to `buyer`, after local demand and existing sales.
-/// Returns zero without Transmission or a live route. Imports, battery discharge and boiler output are excluded.
+/// Exportable native MW after demand and sales. Requires Transmission and a live route.
 pub fn export_spare(me: View, buyer: f64) -> f64 {
     let e = me.get("energy");
     if !me.get("techs").get("transmission").truthy() { return 0.0; }
-    // Only the engine can identify the active crossing and the island supplying this buyer.
+    // The engine identifies the active crossing.
     let Some(link) = e.get("exportLinks").iter().find(|l| l.get("with").num_or(-1.0) == buyer) else { return 0.0 };
     let Some(island) = e.get("islands").iter().find(|i| i.get("provinces").has_num(link.get("at").num_or(-1.0))) else { return 0.0 };
-    // Imports, batteries and boiler fuel cannot be exported. A mixed plant's split is unavailable, so omit it.
+    // Exclude batteries, boilers and imports. Omit mixed plants whose native split is unknown.
     let native = e.get("plants").iter().filter(|p| island.get("provinces").has_num(p.get("p").num()))
         .filter(|p| p.get("ports").iter().all(|q| !matches!(q.get("kind").str(), "battery" | "boiler")))
         .map(|p| p.get("mw").num_or(0.0)).sum::<f64>()
         + if island.get("capital").truthy() { e.get("house").num_or(3.0) } else { 0.0 };
-    // Reserve all current exports, including those whose other end is temporarily short of demand.
+    // Reserve committed exports even when the buyer draws less.
     let committed = e.get("deals").iter().filter(|d| d.get("give").truthy()).map(|d| d.get("mw").num_or(0.0)).sum::<f64>();
     (native - island.get("demand").num_or(0.0) * 1.15 - committed).max(0.0)
 }
@@ -347,6 +327,34 @@ fn sell(orders: &mut Value, world: View, me: View, d: &Doctrine) {
     // `common::fair` values a MW at one eighth of a ◆ per second, so this remains a fair default offer.
     let ask = obj! { "coinPerSecond" => mw / 8.0, "seconds" => 180 };
     diplomacy::send(orders, buyer.get("id").num(), "power for sale", obj! { "give" => give, "ask" => ask });
+}
+
+// Ask on a known land border. The seller checks its private native surplus before accepting.
+// A single connected grid ensures any accepted border import reaches our deficit.
+fn buy(orders: &mut Value, world: View, me: View, now: f64) {
+    let e = me.get("energy");
+    if e.get("powered").num_or(1.0) >= 0.9 || e.get("islands").len() != 1
+        || e.get("deals").iter().any(|d| !d.get("give").truthy()) { return; }
+    let mw = (e.get("demand").num_or(0.0) - e.get("met").num_or(0.0)).floor().min(3.0);
+    if mw < 1.0 || me.get("bank").num_or(0.0) < 40.0 + mw * 180.0 / 8.0 * 4.0 { return; }
+    let ps = realm::index(world);
+    let mut sellers: Vec<f64> = Vec::new();
+    for p in world.get("provinces").iter().filter(|p| same(p.get("owner"), me.get("id"))) {
+        if cycles_left() < 7500.0 { break; }
+        for q in p.get("adj").iter() {
+            let owner = ps.get(q.num()).get("owner").num_or(-1.0);
+            if owner < 0.0 || owner == me.get("id").num() || sellers.contains(&owner) { continue; }
+            if world.get("factions").iter().any(|f| f.get("id").num_or(-1.0) == owner
+                && f.get("alive").truthy() && f.get("powered").num_or(0.0) >= 0.98
+                && f.get("techs").iter().any(|t| t.str() == "transmission")) { sellers.push(owner); }
+        }
+    }
+    if sellers.is_empty() { return; }
+    sellers.sort_by(f64::total_cmp);
+    let to = sellers[(now as usize / 60) % sellers.len()];
+    diplomacy::send(orders, to, "power wanted", obj! {
+        "give" => obj! { "coinPerSecond" => mw / 8.0, "seconds" => 180 },
+        "ask" => obj! { "power" => obj! { "mw" => mw, "seconds" => 180 } } });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
