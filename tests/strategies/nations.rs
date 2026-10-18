@@ -86,7 +86,7 @@ fn planner_allowance(policy: &Value, income: f64) -> f64 {
 fn exhausted_planner_repairs_its_next_allowance_before_reentering_expensive_work() {
     let mut me=planner_fixture();
     let args=views(&[me.clone()]);
-    let orders=planner_recovery(args[0],31893.0).expect("a funded exhausted planner repairs its allowance");
+    let PlannerAdmission::Raise(orders)=planner_admission(args[0],31893.0) else { panic!("a funded exhausted planner repairs its allowance") };
     let policy=orders.get("compute").get("cpu");
     let next=planner_allowance(policy,106000.0);
     assert!(next>32000.0*1.2+4000.0,"exhaustion is a lower bound with a further invocation margin");
@@ -95,7 +95,7 @@ fn exhausted_planner_repairs_its_next_allowance_before_reentering_expensive_work
     assert_eq!(policy.get("reserve"),me.get("rts").get("cpu").get("reserve"));
     me.entry("rts").entry("cpu").set("limits",policy.get("limits").clone());
     let args=views(&[me]);
-    assert!(planner_recovery(args[0],next-3000.0).is_none(),"the outgoing policy must admit the following call, including wrapper costs");
+    assert!(matches!(planner_admission(args[0],next-3000.0),PlannerAdmission::Full),"the outgoing policy must admit the following call, including wrapper costs");
 }
 
 #[test]
@@ -103,13 +103,13 @@ fn planner_repair_respects_hard_caps_without_creating_a_recovery_loop() {
     let mut me=planner_fixture();
     me.entry("rts").entry("cpu").set("spendCap",45000);
     let args=views(&[me.clone()]);
-    let orders=planner_recovery(args[0],31893.0).expect("the hard cap still permits a useful allowance increase");
+    let PlannerAdmission::Raise(orders)=planner_admission(args[0],31893.0) else { panic!("the hard cap still permits a useful allowance increase") };
     let policy=orders.get("compute").get("cpu");
     let next=planner_allowance(policy,106000.0);
     assert!(next<=45000.0);
     me.entry("rts").entry("cpu").set("limits",policy.get("limits").clone());
     let args=views(&[me]);
-    assert!(planner_recovery(args[0],next-3000.0).is_none(),"a binding hard cap must not request an impossible larger call forever");
+    assert!(matches!(planner_admission(args[0],next-3000.0),PlannerAdmission::Lean),"a binding cap selects local planning rather than silently admitting the full pass");
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn a_low_income_planner_keeps_its_viable_lean_admission() {
     let cpu=me.entry("rts").entry("cpu");
     cpu.set("income",20000);cpu.set("spendCap",25000);cpu.entry("limits").set("think",20000);
     let args=views(&[me]);
-    assert!(planner_recovery(args[0],17000.0).is_none(),"a cheap 15k planner need not wait for a large-world allowance");
+    assert!(matches!(planner_admission(args[0],17000.0),PlannerAdmission::Full),"a cheap 15k planner need not wait for a large-world allowance");
 }
 
 #[test]
@@ -131,7 +131,71 @@ fn planner_repair_leaves_other_lanes_reserved_cycles_in_the_shared_bank() {
     cpu.set("bank",240000);
     cpu.set("reserve",obj! {"think"=>3500,"control"=>190000});
     let args=views(&[me]);
-    let orders=planner_recovery(args[0],31893.0).expect("the remaining shared bank can fund one larger planner call");
+    let PlannerAdmission::Raise(orders)=planner_admission(args[0],31893.0) else { panic!("the remaining shared bank can fund one larger planner call") };
     let next=planner_allowance(orders.get("compute").get("cpu"),106000.0);
     assert!(next<=240000.0-190000.0-4000.0,"other lanes' reserves and the repair call are funded first");
+}
+
+#[test]
+fn a_cap_below_observed_work_selects_lean_even_with_a_larger_configured_limit() {
+    let mut me=planner_fixture();
+    me.entry("compute").set("thinkPeak",114494);
+    me.entry("rts").entry("cpu").set("spendCap",124276);
+    me.entry("rts").entry("cpu").entry("limits").set("think",162588);
+    me.entry("rts").entry("cpu").set("available",obj! {"think"=>119418});
+    let args=views(&[me]);
+    assert!(matches!(planner_admission(args[0],119000.0),PlannerAdmission::Lean));
+    assert!(matches!(planner_admission(args[0],1.0e9),PlannerAdmission::Lean),"the public allowance also bounds a synthetic native callback");
+}
+
+#[test]
+fn capped_strategy_refreshes_a_local_plan_recruits_and_researches_without_global_work() {
+    let world=Value::parse(r#"{"seconds":600,"factions":[null,{"id":1,"alive":true},{"id":2,"alive":true,"techs":["turbines"]}],
+        "provinces":[{"id":0,"owner":1,"adj":[1,2],"hops":0,"mines":[2],"staff":[2],"units":{"1":8}},
+          {"id":1,"owner":2,"visible":true,"cores":4,"name":"Gate","adj":[0],"townGarrison":1,"garrison":1,"units":{"2":1}},
+          {"id":2,"owner":-1,"visible":true,"cores":1,"adj":[0],"townGarrison":0}],
+        "techs":{"turbines":{"offer":1000,"requires":["armor"]}},
+        "units":[{"id":99,"owner":2,"air":true,"at":1,"doing":"gather","build":{"wings":1,"range":2}}]}"#);
+    let mut me=planner_fixture();
+    me.set("capital",0);me.set("provinces",1);me.set("bank",10000);me.set("ramCapital",obj! {});
+    me.set("costs",obj! {"unit"=>100,"upkeep"=>100});me.set("contracts",arr![]);me.set("allies",arr![]);
+    me.set("techs",obj! {"extraction"=>true,"seaTraversal"=>true,"armor"=>true,"ranged"=>true,
+        "dash"=>true,"cloak"=>true,"antiAir"=>true,"scan"=>true,"flight"=>true});
+    me.entry("units").set("cap",40);me.entry("units").set("queued",0);me.entry("units").set("spawned",22);
+    me.entry("units").set("byType",obj! {"miner"=>6,"shade"=>4,"sentry"=>1,"kite"=>6});
+    me.entry("units").set("doing",obj! {"gather"=>6});
+    me.entry("compute").set("thinkPeak",80000);me.entry("compute").set("cycles",50000);
+    let cpu=me.entry("rts").entry("cpu");cpu.set("spendCap",62500);cpu.set("capacity",1000000);
+    cpu.entry("limits").set("think",120000);cpu.set("available",obj! {"think"=>60000,"control"=>50000,"fabrication"=>50000});
+    me.entry("rts").set("bank",1000000);
+    let args=views(&[world,me.clone()]);
+    let orders=strategy(args[0],args[1]);
+    let mut ram=Value::obj();
+    for op in orders.get("ram").items() {
+        if matches!(op.get("write"),Value::Num(_)) {ram.set(&op.get("write").num().to_string(),obj! {"bytes"=>op.get("bytes").clone(),"t"=>600});}
+    }
+    let saved=views(&[ram]);
+    let plan=mem::get(saved[0],0);
+    assert_eq!(plan.get("attack").num(),1.0,"the lean pass publishes a new legal local frontier");
+    assert_eq!(plan.get("stage").num(),0.0);
+    assert!(plan.get("field").is_undef() && plan.get("prey").is_undef() && plan.get("front").is_undef());
+    assert_eq!(orders.get("spawn").at(0).get("type").str(),"shade","the unseen global air census cannot trigger an AA recruit");
+    assert_eq!(orders.get("research").str(),"turbines","basic research continues even when another faction sells the tech");
+    assert!(orders.get("compute").get("cpu").get("limits").get("fabrication").num()>0.0);
+    for key in ["send","accept","hire","bribe","tolls","rent"] {assert!(orders.get(key).is_undef(),"lean planning skips {key}");}
+}
+
+#[test]
+fn lean_frontier_keeps_allies_passage_hosts_and_leased_land_safe() {
+    let world=Value::parse(r#"{"seconds":6,"factions":[null,{"id":1,"alive":true},{"id":2,"alive":true},{"id":3,"alive":true},{"id":4,"alive":true}],
+        "provinces":[{"id":0,"owner":1,"adj":[1,2,3,4],"units":{},"mines":[1],"staff":[0]},
+          {"id":1,"owner":2,"visible":true,"cores":10},{"id":2,"owner":3,"visible":true,"cores":10},
+          {"id":3,"owner":4,"visible":true,"cores":10,"leased":[{"to":1}]},
+          {"id":4,"owner":-1,"visible":true,"cores":1}]}"#);
+    let me=obj! {"id"=>1,"capital"=>0,"allies"=>arr![2],"contracts"=>arr![obj! {"with"=>3,"get"=>obj! {"passage"=>true}}],
+        "units"=>obj! {"total"=>10},"ramCapital"=>obj! {}};
+    let args=views(&[world,me]);let (plan,room)=lean_plan(args[0],args[1]);
+    assert_eq!(plan.get("attack").num(),4.0);
+    assert_eq!(room,2.0);
+    assert_eq!(plan.get("mines").len(),2);
 }

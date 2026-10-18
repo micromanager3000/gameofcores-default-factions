@@ -641,6 +641,88 @@ fn recovery_for_plan(world: View, me: View, need: f64) -> Value {
     orders
 }
 
+// A local land frontier needs no unit census, route field, or trade graph. Rotate the bounded province window so
+// a large realm still reviews each district, keeping the capital first and leaving the tail enough cycles to publish.
+fn lean_plan(world: View, me: View) -> Value {
+    let by = realm::index(world);
+    let ours = me.get("id").num();
+    let capital = me.get("capital").num();
+    let last = mem::get(me.get("ramCapital"), 0);
+    let old_attack = last.get("attack").num_or(-1.0);
+    let campaign = last.get("campaign").num_or(-1.0);
+    let hosts: Vec<f64> = me.get("contracts").iter().take(32)
+        .filter(|c| !c.get("ended").truthy() && c.path("get.passage").truthy())
+        .map(|c| c.get("with").num()).collect();
+    let provinces = world.get("provinces");
+    let count = provinces.len();
+    let offset = (world.get("seconds").num_or(0.0) / 3.0) as usize;
+    let (mut attack, mut stage, mut need, mut best) = (-1.0, capital, 0.0, f64::NEG_INFINITY);
+    let (mut defend, mut threat) = (-1.0, 0.0);
+    let mut mines = Vec::new();
+    for i in 0..count.min(48) + 1 {
+        if cycles_left() < 10000.0 { break; }
+        let p = if i == 0 { by.get(capital) } else { provinces.at((offset + i - 1) % count) };
+        let id = p.get("id").num_or(-1.0);
+        if p.get("owner").num_or(-1.0) != ours || (i > 0 && id == capital) { continue; }
+        let enemies: f64 = p.get("units").entries().filter_map(|(owner, count)| {
+            let owner=owner.parse::<f64>().ok()?;
+            (owner != ours && realm::is_rival(world,me,owner)).then_some(count.num_or(0.0))
+        }).sum();
+        if enemies > threat || (id == capital && enemies > 0.0) { defend = id; threat = enemies; }
+        for (k, value) in p.get("mines").iter().enumerate().take(8) {
+            if value.num_or(0.0) <= 0.0 || realm::worker(p, k as f64) != ours { continue; }
+            let staff = p.get("staff").at(k).num_or(0.0).max(0.0) as usize;
+            for _ in staff..2 { if mines.len() < 12 { mines.push(arr![id, k]); } }
+        }
+        for adjacent in p.get("adj").iter().take(12) {
+            if cycles_left() < 10000.0 { break; }
+            let q = by.at(adjacent);
+            let owner = q.get("owner").num_or(-1.0);
+            if !q.truthy() || owner == ours || (owner >= 0.0 && (!q.get("visible").truthy()
+                || me.get("contracts").len() > 32 || !realm::is_rival(world, me, owner))) || hosts.contains(&owner)
+                || q.get("leased").iter().take(16).any(|l| l.get("to").num_or(-1.0) == ours)
+                || common::hopeless(me, q) { continue; }
+            let target = q.get("id").num_or(-1.0);
+            let faith=q.get("faith");
+            let zeal=faith.get("zeal").num_or(0.0);
+            let crusade=if faith.get("by").num_or(-1.0)==ours {zeal/12.0} else {zeal/30.0};
+            let score = crusade + q.get("cores").num_or(0.0) * 2.0 - q.get("townGarrison").num_or(q.get("garrison").num_or(0.0)) * 1.6
+                + if owner >= 0.0 { 7.0 } else { 0.0 }
+                + if target == old_attack { 10000.0 } else { 0.0 }
+                + if campaign >= 0.0 && owner == campaign { 4.0 } else { 0.0 }
+                + if q.get("capital").truthy() && common::muster_for(q) <= common::fighters(me) { 12.0 } else { 0.0 };
+            if target >= 0.0 && score > best { attack = target; stage = id; need = common::muster_for(q); best = score; }
+        }
+    }
+    let owner = by.get(attack).get("owner").num_or(-1.0);
+    let mut plan = obj! {"home"=>capital,"attack"=>attack,"target"=>attack,"stage"=>stage,"need"=>need,
+        "defend"=>defend,"threat"=>threat,"campaign"=>if realm::is_rival(world,me,owner) {owner} else {-1.0},
+        "mines"=>mines,"fresh"=>(world.get("seconds").num_or(0.0)/15.0).floor()*15.0};
+    if last.get("pilgrims").truthy() {plan.set("pilgrims",last.get("pilgrims").clone());}
+    plan
+}
+
+fn lean_research(orders: &mut Value, world: View, me: View) {
+    let all = world.get("techs");
+    let mine = me.get("techs");
+    if !me.path("research.tech").str().is_empty() { return; }
+    for &want in &TECHS {
+        if cycles_left() < 7000.0 { break; }
+        let mut pick = want;
+        for _ in 0..8 {
+            let tech = all.get(pick);
+            let missing = tech.get("requires").iter().find(|t| !mine.get(t.str()).truthy());
+            match missing { Some(t) => pick = t.str(), None => break }
+        }
+        let tech = all.get(pick);
+        if !mine.get(pick).truthy() && tech.truthy()
+            && tech.get("requires").iter().all(|t| mine.get(t.str()).truthy())
+            && tech.get("offer").num_or(0.0) <= me.path("rts.cpu.capacity").num_or(f64::INFINITY) {
+            orders.set("research", pick); break;
+        }
+    }
+}
+
 fn think(world: View, me: View) -> Value {
     // A nearly empty slice cannot afford govern's scans. Open the next allowance,
     // keep miners first for upkeep, and leave type schedules and standing orders alone.
@@ -673,8 +755,10 @@ fn strategy(world: View, me: View) -> Value {
     if !plan_fuel_ready(allowance, cycles_left(), need) { return recovery_for_plan(world, me, need); }
     let mut orders = obj! { "policy" => obj! { "extraction" => 0.47, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true } };
     // Survey needs every candidate to retain an active siege or bypass an unwinnable one.
-    let ranked = targets(world, me);
-    let mut survey = common::survey(world, me, &ranked, 2.0);
+    let mut survey = if full_plan {
+        let ranked = targets(world, me);
+        common::survey(world, me, &ranked, 2.0)
+    } else {lean_plan(world, me)};
     let owner = realm::index(world).get(survey.get("attack").num_or(-1.0)).get("owner").num_or(-1.0);
     survey.set("campaign", if realm::is_rival(world, me, owner) { owner } else { -1.0 });
     survey.set("home", me.get("capital"));
@@ -687,12 +771,9 @@ fn strategy(world: View, me: View) -> Value {
         }
         // The pilgrims' holy sites travel in the plan to the scouts at home.
         survey.set("pilgrims", pilgrim_sites(world, me));
-    } else {
-        // A lean plan must not erase the routes its scouts are still following.
-        let pilgrims = mem::get(me.get("ramCapital"), 0).get("pilgrims").clone();
-        if pilgrims.truthy() { survey.set("pilgrims", pilgrims); }
     }
-    common::share(&mut orders, &survey, world, me);
+    if full_plan {common::share(&mut orders, &survey, world, me);}
+    else {plan::share(&mut orders, &survey, me);}
 
     let techs = me.get("techs");
     let has = |t: &str| techs.get(t).truthy();
@@ -790,12 +871,18 @@ fn strategy(world: View, me: View) -> Value {
         room,
         me.get("units").get("byType"),
     );
-    common::budget(&mut orders, world, me, &common::Budget { research: 0.13, code: 0.66, techs: &TECHS, types: Some(&types) });
+    if full_plan {
+        common::budget(&mut orders, world, me, &common::Budget { research: 0.13, code: 0.66, techs: &TECHS, types: Some(&types) });
+    } else {
+        orders.set("compute",obj! {"types"=>types});
+        lean_research(&mut orders,world,me);
+    }
     let mut policy = cpu_policy(world, me, &orders, pressure);
     common::fit_cpu(&mut policy, me);
     orders.entry("compute").set("cpu", policy);
     orders.set("memo", format!("Knights Templated: {} · pressure {}", if strained { "banking CPU" } else { "combined arms" }, jstr(pressure)));
     sermon_memo(&mut orders, me);
+    if !full_plan {return affordable(orders,me,start);}
     // A short second keeps what's decided so far (the plan, spawns and the CPU policy): diplomacy and the faith wait a
     // second rather than run think out of cycles and lose it all.
     if cycles_left() < 6000.0 {

@@ -379,6 +379,23 @@ fn add_spawn(orders: &mut Value, me: View, ty: &str, build: Value, modules: &[&s
     true
 }
 
+/// Establish a small Flight wing once the opening mines can sustain the house.
+/// The first two aircraft unlock the carrier order in `naval_spawn`; limiting
+/// replacements to this same pair avoids filling the yard with unsupported air.
+fn starter_kite(orders: &mut Value, me: View, miners: f64, room: f64, enemy_air: f64, specialist_bank: bool) -> bool {
+    let have = me.get("units").get("byType");
+    if !specialist_bank
+        || !me.path("techs.flight").truthy()
+        || enemy_air > 0.0
+        || miners < min(room, 4.0)
+        || have.get("kite").or(0.0) >= 2.0
+    {
+        return false;
+    }
+    let frame = common::airframe(me, have.get("kite").or(0.0));
+    add_spawn(orders, me, "kite", frame.build(), if me.path("techs.dash").truthy() { &["dash"][..] } else { &[][..] })
+}
+
 /// `bytes.length`: a RAM op's bytes, as a byte string or a list.
 fn byte_len(b: &Value) -> f64 {
     match b {
@@ -638,11 +655,21 @@ fn recovery_for_plan(world: View, me: View, need: f64) -> Value {
     orders
 }
 
+fn retirement_ready(world: View, me: View, remaining: f64) -> bool {
+    if !world.get("logistics").truthy() || me.path("units.byType.corsair").num_or(0.0) <= 0.0 || remaining < 5000.0 { return false; }
+    let bytes = me.get("ramCapital").key(0.0).get("bytes");
+    let read = if bytes.is_bytes() && bytes.len() >= 2 {
+        let b=bytes.bytes(); 4.0*f64::from(u16::from_le_bytes([b[0],b[1]]))
+    } else {0.0};
+    remaining >= 5000.0 + read
+}
+
 fn think(world: View, me: View) -> Value {
     let mut out=common::govern(world, me, 0.4, || strategy(world, me));
     // Retire an empty corsair when neither a paying target, a reachable wreck nor hunting water remains.
+    if !retirement_ready(world,me,cycles_left()) {return out;}
     let hunting = !mem::get(me.get("ramCapital"), 0).get("nv").get("rw").is_empty();
-    if !hunting && world.get("logistics").truthy() && me.path("units.byType.corsair").num_or(0.0)>0.0 && cycles_left()>5000.0 {
+    if !hunting && cycles_left()>5000.0 {
         for u in world.get("units").iter() {
             if cycles_left()<3500.0 {break;}
             if u.get("owner").num()!=me.get("id").num() || u.get("type").str()!="corsair" {continue;}
@@ -756,20 +783,23 @@ fn strategy(world: View, me: View) -> Value {
         && miners >= min(room, 4.0)
         && (miners >= room || shade_ready || have.get("runner").or(0.0) >= 3.0)
         && naval_spawn(&mut orders, world, me, &naval, rival_ships, threatened);
-    if miners < room {
+    let urgent_air_defense = specialist_bank && has("ranged") && has("dash") && has("antiAir") && enemy.air > 0.0 && needles < max(2.0, enemy.air);
+    if urgent_air_defense {
+        add_spawn(&mut orders, me, "needle", needle_body(), &["dash", "antiAir"]);
+    } else if starter_kite(&mut orders, me, miners, room, enemy.air, specialist_bank) {
+        // Keep a two-aircraft opening while the rest of the mining quota is built.
+    } else if miners < room {
         add_spawn(&mut orders, me, "miner", miner_body(), &[]);
     } else if !shade_ready {
         add_spawn(&mut orders, me, "runner", runner_body(), &[]);
     }
     // A sighted air wing takes precedence, then a scan anchor if opponents can
     // cloak, then short-range cloaked pressure against ranged screens.
-    else if specialist_bank && has("ranged") && has("dash") && has("antiAir") && enemy.air > 0.0 && needles < max(2.0, enemy.air) {
-        add_spawn(&mut orders, me, "needle", needle_body(), &["dash", "antiAir"]);
-    } else if specialist_bank && has("scan") && has("armor") && sentries < max(1.0, ((enemy.ranged + shades) / 5.0).ceil()) {
+    else if specialist_bank && has("scan") && has("armor") && sentries < max(1.0, ((enemy.ranged + shades) / 5.0).ceil()) {
         add_spawn(&mut orders, me, "sentry", sentry_body(), &["armor", "scan"]);
     } else if specialist_bank && has("artillery") && has("scan") && enemy.total >= 4.0 && spires < max(1.0, (enemy.ranged / 3.0).ceil()) {
         add_spawn(&mut orders, me, "spire", spire_body(), &["artillery", "scan"]);
-    } else if specialist_bank && has("flight") && have.get("kite").or(0.0) < min(6.0, max(2.0, (total / 10.0).floor())) {
+    } else if specialist_bank && has("flight") && have.get("carrier").or(0.0) >= 1.0 && have.get("kite").or(0.0) < min(6.0, max(2.0, (total / 10.0).floor())) {
         let frame=common::airframe(me,have.get("kite").or(0.0));
         add_spawn(&mut orders, me, "kite", frame.build(), if has("dash") { &["dash"][..] } else { &[][..] });
     } else if specialist_bank && has("pierce") && have.get("lancer").or(0.0) < max(2.0, (shades / 3.0).ceil()) {

@@ -31,6 +31,19 @@ fn ram_pages(orders: &Value) -> Value {
     }
     pages
 }
+
+#[test]
+fn classic_founder_bootstraps_a_miner_with_a_shared_mine_plan() {
+    let world = Value::parse(r#"{"seconds":1,"provinces":[{"id":7,"owner":1,"mines":[1],"staff":[0]}]}"#);
+    let me = Value::parse(r#"{"id":1,"capital":7,"bank":100,"costs":{"unit":10},"units":{"total":0,"queued":0},"ramCapital":{}}"#);
+    let args = views(&[world, me]);
+    let orders = common::govern(args[0], args[1], 0.4, || panic!("bootstrap must precede the house planner"));
+    assert_eq!(orders.get("spawn").at(0).get("type").str(), "miner");
+    let pages = ram_pages(&orders);
+    let plan = mem::get(views(&[pages])[0], 0);
+    assert_eq!(plan.get("mines").at(0), &arr![7, 0]);
+}
+
 fn maintain(world: &mut Value, me: &mut Value, units: &Value, now: f64) -> Value {
     world.set("seconds", now);
     world.set("units", units.clone());

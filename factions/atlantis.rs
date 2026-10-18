@@ -936,7 +936,7 @@ fn line(units: View, world: View, me: View) {
         let u = nth(units, turn, world);
         if !budget.has_room(me) { break; }
         let began = cycles_left();
-        if !budget.admits(u, world, me) { continue; }
+        if !budget.admits(u, world, me) { break; }
         // those the plan sends to defend (common::defends), the rest on the attack
         let defend = common::defends(&p, u);
         let (verb, target) = if defend >= 0.0 { ("fight", defend) } else { ("capture", attack) };
@@ -1038,11 +1038,13 @@ fn bulwark(units: View, world: View, me: View) {
 }
 
 fn artillery(units: View, world: View, me: View) {
+    let mut budget = ControlBudget::new(me);
     for turn in 0..units.len() {
-        if rts(me) && cycles_left() < 2200.0 {
-            break;
-        }
         let u = nth(units, turn, world);
+        if !budget.has_room(me) { break; }
+        let began = cycles_left();
+        // Price a cold plan before decoding it; committed gun orders stand on a short call.
+        if !budget.admits(u, world, me) { continue; }
         let r = u.get("rts");
         let p = plan::of(me, u);
         let target = if common::defends(&p, u) >= 0.0 {
@@ -1061,13 +1063,15 @@ fn artillery(units: View, world: View, me: View) {
                 let mut o = o.unwrap_or_else(|| obj! { "id" => u.get("id") });
                 o.set("deploy", false);
                 o.set("power", obj! { "drive" => 260, "armor" => 180, "weapon" => 650 });
-                order(o);
+                if !ControlBudget::submit(o) { break; }
             }
         } else if !r.get("deployed").truthy() && !r.get("deploying").truthy() {
             // The destination is reached: spend the one-second setup time, then let
             // reflex choose shell targets. Do not plant guns at their home province.
-            order(obj! { "id" => u.get("id"), "deploy" => true, "power" => obj! { "drive" => 120, "armor" => 180, "weapon" => 650 } });
+            if !ControlBudget::submit(obj! { "id" => u.get("id"), "deploy" => true,
+                "power" => obj! { "drive" => 120, "armor" => 180, "weapon" => 650 } }) { break; }
         }
+        budget.finish(began);
     }
 }
 

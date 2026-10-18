@@ -514,35 +514,112 @@ fn think(world: View, me: View) -> Value {
     common::govern(world, me, 0.4, || strategy(world, me))
 }
 
-// Repair a planner allowance before opening the map and market. A full allowance spent is a lower bound on work.
-fn planner_recovery(me: View, remaining: f64) -> Option<Value> {
+enum PlannerAdmission { Full, Raise(Value), Lean }
+
+// Repair a planner allowance before opening the map and market. A capped call runs a separate local pass.
+fn planner_admission(me: View, remaining: f64) -> PlannerAdmission {
     let cpu = me.path("rts.cpu");
     let income = cpu.get("income").num_or(0.0);
     let bank = cpu.get("bank").num_or(0.0);
     let cap = cpu.get("spendCap").num_or(0.0);
-    if income <= 0.0 || cap <= 0.0 || bank < income * 2.0 || me.path("units.stalled").num_or(0.0) > 0.0 { return None; }
+    if income <= 0.0 || cap <= 0.0 { return PlannerAdmission::Full; }
+    let remaining = remaining.min(cpu.path("available.think").num_or(remaining)).min(cap);
     let amount = |n: f64| if n <= 1.0 { n * income } else { n };
     let configured = amount(cpu.path("limits.think").num_or(cap));
     let peak = me.path("compute.thinkPeak").num_or(0.0).max(me.path("compute.used.think").num_or(0.0));
-    if peak <= 0.0 { return None; }
     let exhausted = peak >= configured * 0.97;
     let observed = if exhausted { peak.max(configured) } else { peak };
     let base: f64 = if me.path("units.total").num_or(0.0) < 20.0 { 15000.0 } else { 20000.0 };
     let required = base.max(observed * 1.2 + 4000.0);
-    if remaining >= required { return None; }
+    if remaining >= required { return PlannerAdmission::Full; }
+    if bank < income * 2.0 || me.path("units.stalled").num_or(0.0) > 0.0 { return PlannerAdmission::Lean; }
     let protected: f64 = cpu.get("reserve").entries().filter(|(lane, _)| *lane != "think")
         .map(|(_, value)| amount(value.num_or(0.0))).sum();
     let ceiling = cap.min((bank - protected - 4000.0).max(0.0)).floor();
     let next = (required + 4000.0).min(ceiling).floor();
-    // If the hard cap already binds, keep the ordinary lean admission path instead of requesting an unattainable call.
-    if next <= configured + 2000.0 || next < base + 4000.0 { return None; }
+    if next <= configured + 2000.0 || next < base + 4000.0 { return PlannerAdmission::Lean; }
     let mut policy = obj! {
         "limits"=>if cpu.get("limits").truthy() {cpu.get("limits").value()} else {obj! {}},
         "reserve"=>if cpu.get("reserve").truthy() {cpu.get("reserve").value()} else {obj! {}},
         "upkeepOrder"=>if cpu.get("upkeepOrder").is_arr() {cpu.get("upkeepOrder").value()} else {arr!["miner"]},
     };
     policy.entry("limits").set("think",if next <= income {next / income} else {next});
-    Some(obj! {"compute"=>obj! {"cpu"=>policy}})
+    PlannerAdmission::Raise(obj! {"compute"=>obj! {"cpu"=>policy}})
+}
+
+// A local land frontier needs no unit census, route field, or trade graph. Rotate the bounded province window so
+// a large realm still reviews each district, keeping the capital first and leaving the tail enough cycles to publish.
+fn lean_plan(world: View, me: View) -> (Value, f64) {
+    let by = realm::index(world);
+    let ours = me.get("id").num();
+    let capital = me.get("capital").num();
+    let last = mem::get(me.get("ramCapital"), 0);
+    let old_attack = last.get("attack").num_or(-1.0);
+    let campaign = last.get("campaign").num_or(-1.0);
+    let hosts: Vec<f64> = me.get("contracts").iter().take(32)
+        .filter(|c| !c.get("ended").truthy() && c.path("get.passage").truthy())
+        .map(|c| c.get("with").num()).collect();
+    let provinces = world.get("provinces");
+    let count = provinces.len();
+    let offset = (world.get("seconds").num_or(0.0) / 3.0) as usize;
+    let (mut attack, mut stage, mut need, mut best) = (-1.0, capital, 0.0, f64::NEG_INFINITY);
+    let (mut defend, mut threat, mut mine_room) = (-1.0, 0.0, 0.0);
+    let mut mines = Vec::new();
+    for i in 0..count.min(48) + 1 {
+        if cycles_left() < 10000.0 { break; }
+        let p = if i == 0 { by.get(capital) } else { provinces.at((offset + i - 1) % count) };
+        let id = p.get("id").num_or(-1.0);
+        if p.get("owner").num_or(-1.0) != ours || (i > 0 && id == capital) { continue; }
+        let enemies = rival_in(p, me);
+        if enemies > threat || (id == capital && enemies > 0.0) { defend = id; threat = enemies; }
+        for (k, value) in p.get("mines").iter().enumerate().take(8) {
+            if value.num_or(0.0) <= 0.0 || realm::worker(p, k as f64) != ours { continue; }
+            mine_room += 2.0;
+            let staff = p.get("staff").at(k).num_or(0.0).max(0.0) as usize;
+            for _ in staff..2 { if mines.len() < 12 { mines.push(arr![id, k]); } }
+        }
+        for adjacent in p.get("adj").iter().take(12) {
+            if cycles_left() < 10000.0 { break; }
+            let q = by.at(adjacent);
+            let owner = q.get("owner").num_or(-1.0);
+            if !q.truthy() || owner == ours || (owner >= 0.0 && (!q.get("visible").truthy()
+                || me.get("contracts").len() > 32 || !realm::is_rival(world, me, owner))) || hosts.contains(&owner)
+                || q.get("leased").iter().take(16).any(|l| l.get("to").num_or(-1.0) == ours)
+                || common::hopeless(me, q) { continue; }
+            let target = q.get("id").num_or(-1.0);
+            let score = q.get("cores").num_or(0.0) * 3.0 - rival_in(q, me) * 0.6
+                + if owner >= 0.0 { 9.0 } else { 2.0 }
+                + if target == old_attack { 10000.0 } else { 0.0 }
+                + if campaign >= 0.0 && owner == campaign { 4.0 } else { 0.0 }
+                + if q.get("capital").truthy() && common::muster_for(q) <= common::fighters(me) { 12.0 } else { 0.0 };
+            if target >= 0.0 && score > best { attack = target; stage = id; need = common::muster_for(q); best = score; }
+        }
+    }
+    let owner = by.get(attack).get("owner").num_or(-1.0);
+    (obj! {"home"=>capital,"attack"=>attack,"target"=>attack,"stage"=>stage,"need"=>need,
+        "defend"=>defend,"threat"=>threat,"campaign"=>if realm::is_rival(world,me,owner) {owner} else {-1.0},
+        "mines"=>mines,"fresh"=>(world.get("seconds").num_or(0.0)/15.0).floor()*15.0}, mine_room)
+}
+
+fn lean_research(orders: &mut Value, world: View, me: View) {
+    let all = world.get("techs");
+    let mine = me.get("techs");
+    if !me.path("research.tech").str().is_empty() { return; }
+    for &want in &TECHS {
+        if cycles_left() < 7000.0 { break; }
+        let mut pick = want;
+        for _ in 0..8 {
+            let tech = all.get(pick);
+            let missing = tech.get("requires").iter().find(|t| !mine.get(t.str()).truthy());
+            match missing { Some(t) => pick = t.str(), None => break }
+        }
+        let tech = all.get(pick);
+        if !mine.get(pick).truthy() && tech.truthy()
+            && tech.get("requires").iter().all(|t| mine.get(t.str()).truthy())
+            && tech.get("offer").num_or(0.0) <= me.path("rts.cpu.capacity").num_or(f64::INFINITY) {
+            orders.set("research", pick); break;
+        }
+    }
 }
 
 fn strategy(world: View, me: View) -> Value {
@@ -552,15 +629,17 @@ fn strategy(world: View, me: View) -> Value {
         return common::recovery(world, me);
     }
     let start = cycles_left();
-    if rts(me) {
-        if let Some(orders) = planner_recovery(me, start) { return orders; }
-    }
+    let full_plan = if rts(me) { match planner_admission(me, start) {
+        PlannerAdmission::Full => true,
+        PlannerAdmission::Raise(orders) => return orders,
+        PlannerAdmission::Lean => false,
+    } } else { true };
     // A full think costs 13,000 to 35,000 cycles as the world fills: under 20,000, keep standing orders rather than run
     // out halfway (the census below and the market at the end also wait for a fuller second). With under 20 units
     // the world is young and think cheap, and 15,000 will do: on the floor's income, with this program's code paid
     // for in RAM, a second rarely holds 20,000, and a think that never runs never sends a miner out.
     let available = me.get("rts").get("cpu").get("available");
-    let full = if me.get("units").get("total").or(0.0) < 20.0 { 15000.0 } else { 20000.0 };
+    let full = if full_plan && me.get("units").get("total").or(0.0) >= 20.0 { 20000.0 } else { 15000.0 };
     if rts(me) && (cycles_left() < full || (available.truthy() && available.get("think").num() < 5000.0)) {
         return conserve(world, me);
     }
@@ -568,47 +647,51 @@ fn strategy(world: View, me: View) -> Value {
     let techs = me.get("techs");
     let has = |t: &str| techs.get(t).truthy();
     let have = me.get("units").get("byType");
-    let ranked = frontline(world, me);
-    let mut plan = common::survey(world, me, &ranked, 2.0);
+    let ranked = if full_plan { frontline(world, me) } else { Vec::new() };
+    let (mut plan, local_mine_room) = if full_plan { (common::survey(world, me, &ranked, 2.0), 0.0) } else { lean_plan(world, me) };
     let target_id = plan.get("attack").num_or(-1.0);
-    let target = ranked.iter().copied().find(|q| q.get("id").num() == target_id);
+    let target = if full_plan { ranked.iter().copied().find(|q| q.get("id").num() == target_id) }
+        else { (target_id >= 0.0).then(|| realm::index(world).get(target_id)) };
     let owner = target.map_or(-1.0, |q| q.get("owner").num_or(-1.0));
     plan.set("target", target_id);
     plan.set("campaign", if realm::is_rival(world, me, owner) { owner } else { -1.0 });
     let defend = plan.get("defend").num_or(-1.0);
     let threatened = plan.get("threat").num_or(0.0) > 0.0;
     // unseen land the game said a partner holds (common::partner_land), remembered past the second it was refused
-    let partner = common::partner_land(world, me);
+    let partner = if full_plan { common::partner_land(world, me) } else { std::rc::Rc::new(Vec::new()) };
     if !partner.is_empty() {
         plan.set("partner", Value::Arr(partner.iter().map(|&id| Value::Num(id)).collect()));
     }
-    if let Some(field) = road(world, me, if defend >= 0.0 { defend } else { target_id }, 20000.0) {
-        plan.set("field", field);
+    if full_plan {
+        if let Some(field) = road(world, me, if defend >= 0.0 { defend } else { target_id }, 20000.0) {
+            plan.set("field", field);
+        }
     }
     // the census of rivals' units runs only when think can pay for it and still finish (the rest costs about 14,000)
-    let census = !rts(me) || cycles_left() > 55.0 * world.get("units").len() as f64 + 14000.0;
+    let census = full_plan && (!rts(me) || cycles_left() > 55.0 * world.get("units").len() as f64 + 14000.0);
     let enemy = if census { seen_threats(world, me) } else { Threats::default() };
-    if has("flight") {
+    if full_plan && has("flight") {
         plan.set("prey", prey(world, me, &enemy.miners));
     }
     let mut orders = obj! {
         "policy" => obj! { "extraction" => 0.42, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true },
         "provinces" => Value::arr(),
     };
-    common::share(&mut orders, &plan, world, me);
+    if full_plan { common::share(&mut orders, &plan, world, me); }
+    else { plan::share(&mut orders, &plan, me); }
 
     // The techs another faction holds, which the market buys rather than researches. While one is for sale the spawns
     // leave its price in the bank, except under attack and in the first four minutes, when units win land.
-    let sold = market::sold(world, me);
+    let sold = if full_plan { market::sold(world, me) } else { Vec::new() };
     let now = world.get("seconds").or(0.0).floor();
-    let at = mem::get(me.get("ramCapital"), CLOCK);
+    let at = if full_plan { mem::get(me.get("ramCapital"), CLOCK) } else { Value::obj() };
     let mut clock = Clock { at: if at.truthy() { at } else { Value::obj() }, changed: false };
-    SAVING.with(|s| s.set(if threatened || now < 240.0 { 0.0 } else { market::saving(world, me, &sold, &clock, now) }));
+    SAVING.with(|s| s.set(if !full_plan || threatened || now < 240.0 { 0.0 } else { market::saving(world, me, &sold, &clock, now) }));
     // Fabrication is paid from the combat bank.  Leave it alone until it can
     // afford a useful field unit instead of repeatedly queuing a rejected spawn.
     let tactical_bank = if rts(me) { me.get("rts").get("bank").num() } else { 0.0 };
     let miners = have.get("miner").or(0.0);
-    let room = realm::mine_room(world, me);
+    let room = if full_plan { realm::mine_room(world, me) } else { local_mine_room };
     let shades = have.get("shade").or(0.0);
     let sentries = have.get("sentry").or(0.0);
     let needles = have.get("needle").or(0.0);
@@ -673,8 +756,13 @@ fn strategy(world: View, me: View) -> Value {
         me.get("units").get("byType"),
     );
     // research what nobody sells first; what somebody holds, the market buys (market::research_order)
-    let research = market::research_order(&sold);
-    common::budget(&mut orders, world, me, &common::Budget { research: 0.12, code: 0.10, techs: &research, types: Some(&types) });
+    if full_plan {
+        let research = market::research_order(&sold);
+        common::budget(&mut orders, world, me, &common::Budget { research: 0.12, code: 0.10, techs: &research, types: Some(&types) });
+    } else {
+        orders.set("compute", obj! {"types"=>types});
+        lean_research(&mut orders, world, me);
+    }
     if rts(me) {
         // the tech under study: common::budget names it in orders.research only on the second it changes
         let studying = match orders.get("research") {
@@ -690,6 +778,7 @@ fn strategy(world: View, me: View) -> Value {
         common::fit_cpu(&mut policy, me);
         orders.entry("compute").set("cpu", policy);
     }
+    if !full_plan { return affordable(orders, me, start); }
     let pact_leader = realm::leader(world).map(|l| l.get("id").num());
     // A short second keeps what's decided so far (the plan, spawns and the CPU policy): the diplomats and the market
     // wait a second rather than run think out of cycles and lose it all. So does the second after a think that ran out

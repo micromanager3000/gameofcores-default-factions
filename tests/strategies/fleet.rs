@@ -1,4 +1,19 @@
 #[test]
+fn retirement_postamble_admits_the_cold_plan_only_for_a_funded_existing_corsair() {
+    let world=obj! {"logistics"=>obj! {}};
+    let mut me=obj! {"units"=>obj! {"byType"=>obj! {"corsair"=>0}},
+        "ramCapital"=>obj! {"0"=>obj! {"bytes"=>Value::Bytes(vec![0,4]),"t"=>1}}};
+    let args=views(&[world.clone(),me.clone()]);
+    assert!(!super::retirement_ready(args[0],args[1],50000.0),"a faction with no corsairs does not decode its naval plan after recovery");
+    me.entry("units").entry("byType").set("corsair",1);
+    let args=views(&[world.clone(),me.clone()]);
+    assert!(!super::retirement_ready(args[0],args[1],5000.0),"the cold 1024-byte plan needs its own decoding runway");
+    assert!(super::retirement_ready(args[0],args[1],10000.0),"funded cleanup remains available");
+    let args=views(&[obj! {},me]);
+    assert!(!super::retirement_ready(args[0],args[1],50000.0),"ordinary worlds have no cargo retirement task");
+}
+
+#[test]
 fn fleet_recruits_one_deck_carrier_after_two_kites_are_ready() {
     let world = Value::parse(r#"{"waters":[{"id":0,"p":0,"coast":[0],"adj":[]}]}"#);
     let me = Value::parse(r#"{"id":1,"seat":4,"capital":0,"bank":1000,"costs":{"unit":1},
@@ -30,6 +45,40 @@ fn fleet_does_not_recruit_a_carrier_before_a_two_kite_flight_exists() {
     let mut orders = Value::obj();
     assert!(!super::naval_spawn(&mut orders, args[0], args[1], &naval, 0.0, false));
     assert!(orders.get("spawn").is_empty(), "{orders:?}");
+}
+
+#[test]
+fn fleet_starts_a_funded_two_kite_wing_before_finishing_its_mining_quota() {
+    let me = Value::parse(r#"{"id":1,"seat":4,"bank":5000,"costs":{"unit":1},
+        "techs":{"flight":true},"units":{"cap":40,"total":30,"queued":0,"spawned":0,
+        "byType":{"miner":4,"kite":0,"carrier":0}},
+        "rts":{"bank":30000,"costs":{"fabrication":{"base":1200,"module":600}},
+        "cpu":{"available":{"fabrication":30000}}}}"#);
+    let me = views(&[me]);
+    let tactical_bank = me[0].path("rts.bank").num();
+    let funded = tactical_bank > 2450.0 * super::common::price_level(me[0]);
+    let mut orders = Value::obj();
+
+    assert!(super::starter_kite(&mut orders, me[0], 4.0, 12.0, 0.0, funded), "four miners establish the minimum economy even with eight still missing");
+    assert_eq!(orders.get("spawn").at(0).get("type").str(), "kite", "the opening wing is the selected production choice");
+    assert!(orders.get("spawn").at(0).get("build").get("wings").truthy(), "the airframe comes from the production cost helper");
+
+    let mut orders = Value::obj();
+    assert!(!super::starter_kite(&mut orders, me[0], 4.0, 12.0, 0.0, false), "no tactical reserve means no airframe");
+    assert!(orders.get("spawn").is_undef() || orders.get("spawn").is_empty());
+}
+
+#[test]
+fn fleet_keeps_its_opening_air_wing_small_until_a_carrier_is_fielded() {
+    let me = Value::parse(r#"{"id":1,"seat":4,"bank":5000,"costs":{"unit":1},
+        "techs":{"flight":true},"units":{"cap":40,"total":30,"queued":0,"spawned":0,
+        "byType":{"miner":4,"kite":2,"carrier":0}},
+        "rts":{"bank":30000,"costs":{"fabrication":{"base":1200,"module":600}},
+        "cpu":{"available":{"fabrication":30000}}}}"#);
+    let me = views(&[me]);
+    let mut orders = Value::obj();
+    assert!(!super::starter_kite(&mut orders, me[0], 4.0, 12.0, 0.0, true));
+    assert!(orders.get("spawn").is_undef() || orders.get("spawn").is_empty(), "two kites wait for the carrier order before expanding");
 }
 
 #[test]

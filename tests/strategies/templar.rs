@@ -53,3 +53,48 @@ fn capped_templar_keeps_a_funded_lean_retry() {
     assert!(super::plan_fuel_ready(retry, retry - super::PLAN_CALLBACK_OVERHEAD, need));
     assert!(!super::full_plan_selected(args[0], args[1]), "the lean retry must omit optional world scans");
 }
+
+#[test]
+fn capped_templar_executes_a_faithful_local_plan_and_keeps_its_standing_sermons() {
+    let world=Value::parse(r#"{"seconds":600,"factions":[null,{"id":1,"alive":true},{"id":2,"alive":true},
+        {"id":3,"alive":true},{"id":4,"alive":true},{"id":5,"alive":true}],
+        "provinces":[{"id":0,"owner":1,"adj":[1,2,3,4],"hops":0,"mines":[2],"staff":[0],"units":{"1":8}},
+          {"id":1,"owner":2,"visible":true,"cores":1,"name":"Chapel","adj":[0],"townGarrison":0,"faith":{"by":1,"zeal":120}},
+          {"id":2,"owner":3,"visible":true,"cores":4,"name":"Plain","adj":[0],"townGarrison":0},
+          {"id":3,"owner":4,"visible":true,"cores":100,"adj":[0]},
+          {"id":4,"owner":5,"visible":true,"cores":100,"adj":[0]}],
+        "techs":{"turbines":{"offer":1000,"requires":["armor"]}},
+        "units":[{"id":99,"owner":2,"air":true,"at":1,"build":{"wings":1,"range":2}}]}"#);
+    let me=obj! {"id"=>1,"capital"=>0,"provinces"=>1,"bank"=>10000,
+        "ramCapital"=>pages(&obj! {"pilgrims"=>arr![2]}),"allies"=>arr![4],
+        "contracts"=>arr![obj! {"with"=>5,"get"=>obj! {"passage"=>true}}],
+        "costs"=>obj! {"unit"=>100,"upkeep"=>100},
+        "compute"=>obj! {"cycles"=>50000,"thinkPeak"=>120000},
+        "techs"=>obj! {"extraction"=>true,"armor"=>true,"dash"=>true,"influence"=>true,"faith"=>true},
+        "sway"=>obj! {"faith"=>obj! {"name"=>"Rite","upkeep"=>100,"provinces"=>1},
+            "preach"=>arr![obj! {"p"=>1,"cycles"=>2000}],"propaganda"=>arr![obj! {"p"=>1,"cycles"=>1000}]},
+        "units"=>obj! {"total"=>14,"cap"=>40,"queued"=>0,"spawned"=>14,
+            "byType"=>obj! {"miner"=>6,"bulwark"=>2},"doing"=>obj! {"gather"=>6}},
+        "rts"=>obj! {"bank"=>1000000,"cpu"=>obj! {"income"=>50000,"bank"=>1000000,"capacity"=>1000000,
+            "spendCap"=>40000,"limits"=>obj! {"think"=>150000},
+            "available"=>obj! {"think"=>30000,"control"=>50000,"fabrication"=>50000}}}};
+    let args=views(&[world,me]);
+    assert!(!super::full_plan_selected(args[0],args[1]));
+    let orders=super::strategy(args[0],args[1]);
+    let mut ram=Value::obj();
+    for op in orders.get("ram").items() {
+        if matches!(op.get("write"),Value::Num(_)) {
+            ram.set(&op.get("write").num().to_string(),obj! {"bytes"=>op.get("bytes").clone(),"t"=>600});
+        }
+    }
+    let saved=views(&[ram]);let plan=mem::get(saved[0],0);
+    assert_eq!(plan.get("attack").num(),1.0,"the local crusade prefers land its faith already softened, avoiding allies and passage hosts");
+    assert_eq!(plan.get("stage").num(),0.0);
+    assert_eq!(plan.get("pilgrims"),&arr![2],"the scouts retain their existing stations");
+    assert_eq!(plan.get("mines").len(),2);
+    for key in ["field","front","convoy"] {assert!(plan.get(key).is_undef(),"lean planning omits {key}");}
+    assert_eq!(orders.get("spawn").at(0).get("type").str(),"bulwark");
+    assert_eq!(orders.get("research").str(),"turbines");
+    assert!(orders.get("compute").get("cpu").get("limits").get("influence").num()>=3100.0,"the standing faith and sermons remain funded");
+    for key in ["preach","propaganda","faith","send","accept"] {assert!(orders.get(key).is_undef(),"the lean turn preserves standing faith orders without recomputing {key}");}
+}

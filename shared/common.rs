@@ -1679,9 +1679,27 @@ use super::{air, theme};
         Economy { cap, count, body: body * count, art: art * count, units }
     }
 
+    // A large house source can leave a brand-new classic faction too little fuel for its whole planner. Publish one
+    // local mine and recruit its first worker before the regular strategy has anything to maintain.
+    fn classic_bootstrap(world: View, me: View) -> Option<Value> {
+        if me.get("rts").truthy() || me.path("units.total").num_or(0.0) != 0.0 || me.path("units.queued").num_or(0.0) != 0.0
+            || me.get("bank").num_or(0.0) < me.path("costs.unit").num_or(f64::INFINITY) { return None; }
+        let ours = me.get("id").num();
+        let p = world.get("provinces").iter().find(|p| p.get("owner").num_or(-1.0) == ours)?;
+        let (slot, _) = p.get("mines").iter().enumerate().find(|(k, ore)| {
+            ore.num_or(0.0) > 0.0 && realm::worker(p, *k as f64) == ours && p.get("staff").at(*k).num_or(0.0) < 2.0
+        })?;
+        let mut orders = obj! {};
+        plan::share(&mut orders, &obj! { "home" => me.get("capital"), "stage" => me.get("capital"), "attack" => -1,
+            "mines" => arr![arr![p.get("id"), slot]] }, me);
+        orders.set("spawn", vec![obj! { "type" => "miner" }]);
+        Some(orders)
+    }
+
     /// Runs a house's own strategy, with its own economic safety policy around every return path. Classic worlds
     /// keep the house's strategy. No engine allocation, exemption or rule is involved.
     pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
+        if let Some(orders) = classic_bootstrap(world, me) { return orders; }
         if resting(world, me) {
             return Value::obj();
         }

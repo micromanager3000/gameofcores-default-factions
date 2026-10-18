@@ -43,3 +43,22 @@ fn ground_tactical_unit_captures_the_planned_attack_when_unpressed() {
     assert_eq!(order.get("do").str(), "capture");
     assert_eq!(order.get("target").num(), 2.0);
 }
+
+#[test]
+fn artillery_commits_its_route_from_a_shared_plan() {
+    let plan = obj! {"attack"=>1,"stage"=>0,"defend"=>-1};
+    let world = obj! {"seconds"=>1,"factions"=>factions(),"provinces"=>arr![
+        obj! {"id"=>0,"owner"=>1,"adj"=>arr![1]}, obj! {"id"=>1,"owner"=>2,"adj"=>arr![0]},
+    ]};
+    let me = obj! {"id"=>1,"capital"=>0,"ramProvince"=>obj! {"0"=>pages(&plan)},
+        "rts"=>obj! {"cpu"=>obj! {"income"=>10000,"bank"=>100000}}};
+    let guns = arr![obj! {"id"=>103,"owner"=>1,"type"=>"artillery","at"=>0,"to"=>-1,
+        "doing"=>"idle","rts"=>obj! {"deployed"=>false,"deploying"=>false},"ramUnit"=>obj! {}}];
+    let args = views(&[guns, world, me]);
+    super::artillery(args[0], args[1], args[2]);
+    let orders = emitted();
+    assert_eq!(orders.len(), 1);
+    assert_eq!(orders[0].get("do").str(), "fight");
+    assert_eq!(orders[0].get("target").num(), 1.0);
+    assert!(!orders[0].get("deploy").truthy());
+}
