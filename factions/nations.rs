@@ -1751,9 +1751,45 @@ fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
     Value::Undef
 }
 
+
+// Interrupt useful local generation; leave batteries and distant sites to the campaign.
+fn energy_sabotage(u: View, world: View, me: View) -> Option<Option<Value>> {
+    if cycles_left()<2800.0 || !world.get("energy").truthy() || !u.get("hidden").truthy()
+        || !u.get("seenBy").is_empty() || u.get("stalled").truthy()
+        || me.get("bank").num_or(0.0)<150.0 || u.get("to").num_or(-1.0)>=0.0 {return None;}
+    let mut pick=None;let mut mw=2.0;
+    let sites=world.get("structures");
+    let start=(u.get("id").num_or(0.0)+world.get("seconds").num_or(0.0)/3.0) as usize;
+    for turn in 0..sites.len().min(24) {
+        if cycles_left()<2500.0 {break;}
+        let s=sites.at((start+turn)%sites.len());
+        let w=s.get("power");
+        if s.get("p").num_or(-2.0)!=u.get("at").num_or(-1.0) || s.get("state").str()!="ready"
+            || !realm::is_rival(world,me,s.get("owner").num_or(-1.0))
+            || w.get("disruptedFor").num_or(0.0)>0.0 || w.get("disruptionCooldown").num_or(0.0)>0.0
+            || !w.get("ports").iter().any(|p|p.get("kind").str()!="battery") {continue;}
+        let value=w.get("mw").num_or(0.0);
+        if value>=mw {mw=value;pick=Some(s);}
+    }
+    let s=pick?;
+    if let Some(o)=spy::sabotage_structure(u,world,me,s) {return Some(Some(o));}
+    (u.get("doing").str()=="sabotage" && u.get("sabotageStructure").num_or(-1.0)==s.get("id").num()).then_some(None)
+}
+
 fn shade(units: View, world: View, me: View) {
     // A scaled shade batch needs room to decode its plan before infantry can retain each standing order.
     if short(me, 3000.0, 1200.0) { return; }
+    if world.get("energy").truthy() && cycles_left()>4500.0 {
+        for u in units.iter().take(8) {
+            if cycles_left()<4000.0 {break;}
+            let doing=u.get("doing").str();
+            if doing!="idle" && !(matches!(doing,"capture"|"fight"|"sabotage") && u.get("target").num_or(-1.0)==u.get("at").num_or(-2.0)) {continue;}
+            if let Some(hit)=energy_sabotage(u,world,me) {
+                if let Some(mut hit)=hit {hit.set("cloak",true);order(hit);}
+                return;
+            }
+        }
+    }
     infantry(units, world, me, true);
 }
 

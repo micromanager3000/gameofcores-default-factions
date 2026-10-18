@@ -282,3 +282,87 @@ fn funded_shades_keep_their_local_plan_and_resume_an_idle_guard() {
     assert_eq!(orders[0].get("target").num(),0.0);
     assert!(orders[0].get("cloak").truthy());
 }
+
+fn sabotage_case(cloaked: bool) -> Vec<Value> {
+    let u=obj!{"id"=>10,"owner"=>1,"type"=>"shade","at"=>1,"to"=>-1,"doing"=>"idle","target"=>-1,
+        "hidden"=>true,"seenBy"=>arr![],"build"=>obj!{"stealth"=>if cloaked {0}else{1}},
+        "rts"=>obj!{"cloaked"=>cloaked,"modules"=>arr!["cloak"]}};
+    let world=Value::parse(r#"{"energy":true,"seconds":100,"factions":[null,{"id":1,"alive":true,"capital":0},{"id":2,"alive":true,"capital":2}],
+        "provinces":[{"id":0,"owner":1,"x":0,"y":0,"adj":[1]},{"id":1,"owner":2,"x":1,"y":0,"adj":[0,2]},{"id":2,"owner":2,"x":2,"y":0,"adj":[1]}],
+        "structures":[{"id":91,"p":1,"owner":2,"x":-4,"y":3,"radius":1,"hp":100,"state":"ready",
+        "power":{"mw":2,"ports":[{"kind":"wind","capacity":3}],"disruptedFor":0,"disruptionCooldown":0}}]}"#);
+    let me=obj!{"id"=>1,"capital"=>0,"bank"=>1000,"costs"=>obj!{"unit"=>100},"allies"=>arr![],"contracts"=>arr![],
+        "techs"=>obj!{},"rts"=>obj!{"cpu"=>obj!{}},"ramCapital"=>obj!{}};
+    vec![u,world,me]
+}
+
+#[test]
+fn local_energy_sabotage_uses_the_physical_site_and_preserves_pending_orders() {
+    let mut v=sabotage_case(true);let a=views(&v);
+    let o=energy_sabotage(a[0],a[1],a[2]).unwrap().unwrap();
+    assert_eq!(o.get("structure").num(),91.0);
+    assert_eq!(o.get("target").num(),1.0);
+    assert_eq!(o.get("at").get("x").num(),-4.0);
+    assert_eq!(o.get("at").get("y").num(),3.0);
+    assert_eq!(o.get("do").str(),"sabotage");
+    v[0].set("doing","sabotage");v[0].set("target",1);v[0].set("sabotageStructure",91);
+    let a=views(&v);assert!(matches!(energy_sabotage(a[0],a[1],a[2]),Some(None)));
+}
+
+#[test]
+fn local_energy_sabotage_skips_recent_allied_poor_detected_and_battery_sites() {
+    for case in 0..7 {
+        let mut v=sabotage_case(true);
+        let mut site=v[1].get("structures").at(0).clone();
+        match case {
+            0=>site.entry("power").set("disruptedFor",10),
+            1=>site.entry("power").set("disruptionCooldown",40),
+            2=>v[2].set("allies",arr![2]),
+            3=>v[2].set("bank",24),
+            4=>{v[0].set("hidden",false);v[0].set("seenBy",arr![2]);},
+            5=>site.entry("power").set("ports",arr![obj!{"kind"=>"battery","capacity"=>100}]),
+            _=>v[0].set("conduct",obj!{"from"=>2,"seconds"=>30}),
+        }
+        v[1].set("structures",vec![site]);
+        let a=views(&v);assert!(energy_sabotage(a[0],a[1],a[2]).is_none(),"case {case}");
+    }
+}
+
+#[test]
+fn structure_sabotage_sdk_routes_to_discovered_geometry_and_respects_guest_rights() {
+    let mut v=sabotage_case(false);v[0].set("at",0);
+    let mut site=v[1].get("structures").at(0).clone();site.set("p",2);v[1].set("structures",vec![site]);
+    let a=views(&v);let o=spy::sabotage_structure(a[0],a[1],a[2],a[1].get("structures").at(0)).unwrap();
+    assert_eq!(o.get("via").items().iter().map(|x|x.num()).collect::<Vec<_>>(),vec![1.0,2.0]);
+    v[2].set("contracts",arr![obj!{"with"=>2,"graceIn"=>10,"get"=>obj!{"passage"=>true}}]);
+    let a=views(&v);assert!(spy::sabotage_structure(a[0],a[1],a[2],a[1].get("structures").at(0)).is_none());
+}
+
+#[test]
+fn a_hidden_shade_interrupts_local_generation_without_replacing_detected_combat() {
+    let v=sabotage_case(true);let a=views(&[Value::Arr(vec![v[0].clone()]),v[1].clone(),v[2].clone()]);
+    shade(a[0],a[1],a[2]);
+    let out=emitted();assert_eq!(out.len(),1,"{out:?}");
+    assert_eq!(out[0].get("structure").num(),91.0);
+    assert!(out[0].get("cloak").truthy());
+    let mut v=sabotage_case(true);v[0].set("hidden",false);v[0].set("seenBy",arr![2]);
+    let a=views(&[Value::Arr(vec![v[0].clone()]),v[1].clone(),v[2].clone()]);shade(a[0],a[1],a[2]);
+    assert!(emitted().iter().all(|o|o.get("structure").is_undef()));
+}
+
+#[test]
+fn bounded_energy_search_rotates_past_earlier_unrelated_sites() {
+    let mut v=sabotage_case(true);
+    let site=v[1].get("structures").at(0).clone();
+    let mut sites=Vec::new();for id in 0..29 {let mut s=site.clone();s.set("id",id);s.set("owner",1);sites.push(s);}
+    sites.push(site);v[1].set("structures",sites);
+    let a=views(&v);let o=energy_sabotage(a[0],a[1],a[2]).unwrap().unwrap();
+    assert_eq!(o.get("structure").num(),91.0);
+}
+
+#[test]
+fn a_shade_keeps_its_committed_remote_military_destination() {
+    let mut v=sabotage_case(true);v[0].set("doing","capture");v[0].set("target",2);
+    let a=views(&[Value::Arr(vec![v[0].clone()]),v[1].clone(),v[2].clone()]);shade(a[0],a[1],a[2]);
+    assert!(emitted().iter().all(|o|o.get("structure").is_undef()));
+}

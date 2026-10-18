@@ -1167,6 +1167,31 @@ fn wing(units: View, world: View, me: View) {
 // it sabotages instead, draining the cycles the capital parries with. Caught, it runs for the quietest neighbouring
 // province and lies low for 40 s before it goes back to work. Inside a rival's walls a stealth-1 spy cloaks when the
 // cloak lane can pay: cloaked, a standard body sees it only at arm's length.
+
+// Interrupt useful local generation; leave batteries and distant sites to the campaign.
+fn energy_sabotage(u: View, world: View, me: View) -> Option<Option<Value>> {
+    if cycles_left()<3400.0 || !world.get("energy").truthy() || !u.get("hidden").truthy()
+        || !u.get("seenBy").is_empty() || u.get("stalled").truthy()
+        || me.get("bank").num_or(0.0)<150.0 || u.get("to").num_or(-1.0)>=0.0 {return None;}
+    let mut pick=None;let mut mw=2.0;
+    let sites=world.get("structures");
+    let start=(u.get("id").num_or(0.0)+world.get("seconds").num_or(0.0)/3.0) as usize;
+    for turn in 0..sites.len().min(24) {
+        if cycles_left()<3000.0 {break;}
+        let s=sites.at((start+turn)%sites.len());
+        let w=s.get("power");
+        if s.get("p").num_or(-2.0)!=u.get("at").num_or(-1.0) || s.get("state").str()!="ready"
+            || !realm::is_rival(world,me,s.get("owner").num_or(-1.0))
+            || w.get("disruptedFor").num_or(0.0)>0.0 || w.get("disruptionCooldown").num_or(0.0)>0.0
+            || !w.get("ports").iter().any(|p|p.get("kind").str()!="battery") {continue;}
+        let value=w.get("mw").num_or(0.0);
+        if value>=mw {mw=value;pick=Some(s);}
+    }
+    let s=pick?;
+    if let Some(o)=spy::sabotage_structure(u,world,me,s) {return Some(Some(o));}
+    (u.get("doing").str()=="sabotage" && u.get("sabotageStructure").num_or(-1.0)==s.get("id").num()).then_some(None)
+}
+
 fn ghost(units: View, world: View, me: View) {
     nullptr_ext::spies(units, world, me);
 }
@@ -1815,6 +1840,14 @@ mod nullptr_ext {
                 }
             }
             if !stay {
+                if let Some(mut hit)=energy_sabotage(u,world,me) {
+                    let want=abroad&&can_cloak&&cloaks>=1.0;
+                    if want {cloaks-=1.0;}
+                    if let Some(o)=&mut hit {o.set("cloak",want);}
+                    else if want!=cloaked {hit=Some(obj!{"id"=>u.get("id"),"cloak"=>want});}
+                    if let Some(o)=hit {order(o);}
+                    continue;
+                }
                 // its mark: the one it keeps in its notes while that capital still has a tech to copy, else the i-th of
                 // the list, best first; with nothing to copy anywhere, a post: a rival capital watched from six cells
                 // out, where fewer eyes are, reading its plan there (the i-th spy the i-th nearest)
