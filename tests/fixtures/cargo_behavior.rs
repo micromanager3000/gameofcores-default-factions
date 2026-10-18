@@ -88,3 +88,44 @@ fn a_funded_planner_retry_keeps_normal_reserves_and_working_recovery_keeps_miner
         }
     }
 }
+
+#[test]
+fn unpaid_capital_deliveries_get_upkeep_even_when_miners_keep_gather_orders(){
+    for ty in ["hauler","freighter"] {
+        let (mut world,mut me,mut units)=approach_case();
+        world.set("seconds",3);
+        let u=item(&mut units,0);
+        u.set("type",ty);u.set("at",1);u.set("to",0);u.set("stalled",true);
+        u.entry("rts").entry("cargo").entry("job").set("status","unpaid");
+        world.set("units",units);
+        me.entry("units").set("stalled",1);me.entry("units").entry("doing").set("gather",12);
+        me.entry("rts").entry("cpu").set("bank",1000);
+        let args=views(&[world,me]);
+        let out=common::govern(args[0],args[1],0.4,||panic!("blocked deliveries need recovery"));
+        assert_eq!(out.get("compute").get("cpu").get("upkeepOrder"),&arr!["hauler","freighter","miner"]);
+        assert!(out.get("disband").is_empty(),"loaded carriers must survive recovery");
+        assert_eq!(out.get("compute").get("types").get("miner").get("share").num(),0.0);
+    }
+}
+
+#[test]
+fn empty_or_remote_carriers_do_not_displace_working_miners(){
+    for case in ["empty","remote","paid","other-owner"] {
+        let (mut world,mut me,mut units)=approach_case();
+        world.set("seconds",3);
+        let u=item(&mut units,0);u.set("at",1);u.set("to",0);u.set("stalled",true);
+        u.entry("rts").entry("cargo").entry("job").set("status","unpaid");
+        match case {
+            "empty"=>u.entry("rts").entry("cargo").set("cycles",0),
+            "remote"=>u.entry("rts").entry("cargo").entry("job").entry("operation").entry("unload").set("p",1),
+            "paid"=>{u.set("stalled",false);u.entry("rts").entry("cargo").entry("job").set("status","approaching");},
+            _=>u.set("owner",7),
+        }
+        world.set("units",units);
+        me.entry("units").set("stalled",1);me.entry("units").entry("doing").set("gather",12);
+        me.entry("rts").entry("cpu").set("bank",1000);
+        let args=views(&[world,me]);
+        let out=common::govern(args[0],args[1],0.4,||panic!("the unpaid army needs recovery"));
+        assert_eq!(out.get("compute").get("cpu").get("upkeepOrder").at(0).str(),"miner","{case}");
+    }
+}

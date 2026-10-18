@@ -1,0 +1,15 @@
+{
+  "scope": "Public default house own observation; no player source or state. Unmodified 6-hour snapshot observation.",
+  "snapshot": "/Users/reddybot/code/gameofcores-work/gameofcores-gameplay/artifacts/balance-oct16/gameplay-depth-candidate3-67274b9/long-313.state.json",
+  "snapshotSha256": "1d1906f6d38c73ac9868a59303e3d6f6db7b8c3773fc2f073fe542642cf1de70",
+  "fixture": "atlantis-think-delivery-recovery.json",
+  "fixtureSha256": "2f15213c975cbedf016ac08cf1e2ce22a2b530d4fecee39024ed4df62229c1dc",
+  "engineRevision": "2249f9aa7e52c11a3b758c90b5988818bb42452e",
+  "factionRevision": "67274b9c64a564c090332c8b39d1ade813fba8ad",
+  "seed": 313,
+  "faction": 3,
+  "tick": 108000,
+  "rate": 64,
+  "recordedThinkAllowance": 9065,
+  "controlledContinuation": "/tmp/gameplay-depth-c3-long313-delivery-early/provenance.json"
+}

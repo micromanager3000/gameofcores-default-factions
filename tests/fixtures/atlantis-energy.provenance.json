@@ -1,0 +1,1537 @@
+{
+  "sourceRevision": "67274b9c64a564c090332c8b39d1ade813fba8ad",
+  "engineRevision": "2249f9aa7e52c11a3b758c90b5988818bb42452e",
+  "rate": 64,
+  "scope": "Authored public house own observations. No player source or state.",
+  "fixtures": [
+    {
+      "file": "atlantis-energy-101.json",
+      "snapshot": "/Users/reddybot/code/gameofcores-work/gameofcores-gameplay/artifacts/balance-oct16/gameplay-depth-candidate3-67274b9/short-101.state.json",
+      "snapshotSha256": "219ff4a6e5e3760911fafbc54e4257e33a0b6f6fc8955292bc1cf9098e79e721",
+      "fixtureSha256": "19bb11fa331bd7857296e8eaed65923f789f3ff0a96ebc7fcf30ada500593f52",
+      "seed": 101,
+      "tick": 18000,
+      "seconds": 3600,
+      "faction": 3,
+      "actualPreparedFuel": 31701,
+      "bank": 1316763.395842611,
+      "income": 51541.04308974123,
+      "powered": 0.6
+    },
+    {
+      "file": "atlantis-energy-107.json",
+      "snapshot": "/Users/reddybot/code/gameofcores-work/gameofcores-gameplay/artifacts/balance-oct16/gameplay-depth-candidate3-67274b9/short-107.state.json",
+      "snapshotSha256": "741234f5816c483fde7ae259f40a71673f254d8f6427d2d76e82e98e245798ac",
+      "fixtureSha256": "32c300aba21b02009a8177433a198384e3c63b1337fe08714db87ace84f9f169",
+      "seed": 107,
+      "tick": 18000,
+      "seconds": 3600,
+      "faction": 3,
+      "actualPreparedFuel": 31588,
+      "bank": 5852804.693346891,
+      "income": 40513.37244455742,
+      "powered": 0.6
+    },
+    {
+      "file": "atlantis-energy-317.json",
+      "snapshot": "/Users/reddybot/code/gameofcores-work/gameofcores-gameplay/artifacts/balance-oct16/gameplay-depth-candidate3-67274b9/short-317.state.json",
+      "snapshotSha256": "85aa2e35263b215f79a849af388d27a3fcb35dcac727e7361359d35337f7e766",
+      "fixtureSha256": "71ea49871b4f24de39fcf9c04252419817c1171cb6d427c554b62d2dce9c4463",
+      "seed": 317,
+      "tick": 18000,
+      "seconds": 3600,
+      "faction": 3,
+      "actualPreparedFuel": 31693,
+      "bank": 6959340.557202334,
+      "income": 50026.59424408546,
+      "powered": 0.333
+    }
+  ],
+  "meteredPhaseCounterfactual": "Only world.seconds +3 and world.tick +15 are changed for energy-phase tests. Actual scheduler continuations start from the unmodified complete snapshots; they do not shift time.",
+  "implementation": {
+    "baseRevision": "34406301c9b5484879b37f2dc9f56a991fb1c90e",
+    "scope": "One existing energy-phase full-think beat each minute, only a dim nonrecovering grid with no stalled units and bank at least twice (ordinary construction floor + income). The ordinary floor is max(4.5income,30seconds current upkeep), so this unsolicited turn preserves at least60seconds current upkeep plus2income, or11income. Copy standing CPU and leave type schedules, army orders and RAM intact. Normal energy apply unchanged; dedicated path skips already-funded existing plants and retains new construction deposits.",
+    "isolatedSourceSha256": "52a2d27dc2f091d0dde4b4293bb00bb4a0a64d88f125b2896d4dfb10646d16ff",
+    "isolatedWasmSha256": "896ec9dccddfda7a2cce78dd99f77d6af41295a6ef9a50c20d8d84ced575d588"
+  },
+  "metered": {
+    "rate": 64,
+    "toolchain": "1.97.0",
+    "sdkRlibSha256": "01a28345de07a60bce153e12dcdaa56e9b3048993e0bcc7daf9bd863e6c16309",
+    "calls": 45,
+    "failures": 0,
+    "budgets": [
+      149,
+      799,
+      800,
+      2000,
+      6000,
+      18000,
+      24000,
+      30000,
+      30999,
+      31000,
+      31200,
+      31588,
+      31693,
+      31701,
+      40000
+    ],
+    "counterfactual": "Safety sweep changes only published THINK limit and available THINK to tested fuel. Exact-budget calls retain original CPU fields, changing only phase clock as described above.",
+    "actualBudgetCalls": [
+      {
+        "seed": 101,
+        "fuel": 31701,
+        "used": 19287.40625,
+        "ok": true,
+        "orders": {
+          "policy": {
+            "extraction": 0.47,
+            "autonomy": "direct",
+            "integrate": "tolerate",
+            "invest": true
+          },
+          "ram": [
+            {
+              "write": 249,
+              "bytes": [
+                2,
+                0
+              ]
+            },
+            {
+              "write": 0,
+              "bytes": {
+                "$b": "eQB7Im1pbmVzIjpbWzUsMF0sWzIxLDBdLFs1LDBdXSwiYXR0YWNrIjoyNywic3RhZ2UiOjIxLCJuZWVkIjo0LA=="
+              },
+              "scope": "shared"
+            },
+            {
+              "write": 1,
+              "bytes": {
+                "$b": "ImhvbWUiOjksImZyZXNoIjozNjAwLCJ0aHJlYXQiOjAsImRlZmVuZCI6LTEsImFpckd1YXJkIjotMX0AAAAAAA=="
+              },
+              "scope": "shared"
+            }
+          ],
+          "compute": {
+            "types": {
+              "miner": {
+                "cycles": 4500,
+                "every": 2
+              },
+              "bulwark": {
+                "share": 6000,
+                "every": 4
+              },
+              "artillery": {
+                "share": 6000,
+                "every": 5
+              },
+              "piercer": {
+                "share": 0,
+                "every": 5
+              },
+              "medic": {
+                "share": 6000,
+                "every": 6
+              },
+              "interceptor": {
+                "share": 6000,
+                "every": 5
+              },
+              "aeronaut": {
+                "share": 7000,
+                "every": 3
+              },
+              "line": {
+                "share": 6000,
+                "every": 4
+              },
+              "scout": {
+                "share": 4000,
+                "every": 6
+              },
+              "hauler": {
+                "cycles": 10000,
+                "every": 2
+              },
+              "freighter": {
+                "cycles": 12000,
+                "every": 2
+              }
+            },
+            "cpu": {
+              "limits": {
+                "think": 32000,
+                "control": 32000,
+                "reflex": 14000,
+                "research": 0.2170493940211806,
+                "upkeep": 0.96,
+                "drive": 8000,
+                "armor": 0.12,
+                "cloak": 0.05,
+                "weapon": 0.14,
+                "abilities": 0.16,
+                "fabrication": 23640,
+                "gate": 0.03,
+                "duel": 0.25,
+                "challenge": 0.08,
+                "visuals": 0.02,
+                "influence": 0.10852689338230394
+              },
+              "reserve": {
+                "think": 0.25,
+                "control": 0.1,
+                "upkeep": 0.1,
+                "duel": 0.05
+              },
+              "upkeepOrder": [
+                "miner",
+                "hauler",
+                "freighter",
+                "artillery",
+                "bulwark",
+                "medic",
+                "interceptor",
+                "line",
+                "scout"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "seed": 107,
+        "fuel": 31588,
+        "used": 14129.21875,
+        "ok": true,
+        "orders": {
+          "compute": {
+            "cpu": {
+              "limits": {
+                "abilities": 0.16,
+                "armor": 0.12,
+                "challenge": 0.08,
+                "cloak": 0.05,
+                "control": 32000,
+                "drive": 8000,
+                "duel": 0.25,
+                "fabrication": 60484,
+                "gate": 0.03,
+                "reflex": 14000,
+                "research": 12562,
+                "think": 32000,
+                "upkeep": 0.96,
+                "visuals": 0.02,
+                "weapon": 0.14
+              },
+              "reserve": {
+                "control": 0.1,
+                "duel": 0.05,
+                "think": 0.25,
+                "upkeep": 0.1
+              },
+              "upkeepOrder": [
+                "miner",
+                "hauler",
+                "freighter",
+                "artillery",
+                "bulwark",
+                "medic",
+                "interceptor",
+                "line",
+                "scout"
+              ]
+            }
+          },
+          "structures": [
+            {
+              "key": "power-11-3603",
+              "p": 11,
+              "x": -0.8,
+              "y": 2.8,
+              "shell": {
+                "radius": 1.92,
+                "height": 2,
+                "integrity": 1
+              },
+              "ports": [
+                {
+                  "kind": "solar",
+                  "capacity": 4
+                }
+              ],
+              "appearance": {
+                "name": "Solar field",
+                "pieces": [
+                  {
+                    "kind": "platform",
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 2.6,
+                    "h": 0.12,
+                    "d": 2.2,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "panel",
+                    "x": 0.98,
+                    "y": 0,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7
+                  },
+                  {
+                    "kind": "panel",
+                    "x": 0.69,
+                    "y": 0.48,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 45
+                  },
+                  {
+                    "kind": "panel",
+                    "x": 0,
+                    "y": 0.68,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 90
+                  },
+                  {
+                    "kind": "panel",
+                    "x": -0.69,
+                    "y": 0.48,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 135
+                  },
+                  {
+                    "kind": "panel",
+                    "x": -0.98,
+                    "y": 0,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 180
+                  },
+                  {
+                    "kind": "accent",
+                    "x": 1,
+                    "y": 0.95,
+                    "z": 0.12,
+                    "w": 0.3,
+                    "h": 0.3,
+                    "d": 0.3,
+                    "tone": "faction"
+                  },
+                  {
+                    "kind": "drum",
+                    "x": -0.43520000000000003,
+                    "y": 0.82,
+                    "z": 0.12,
+                    "w": 0.32,
+                    "h": 0.7,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "drum",
+                    "x": 0.43520000000000003,
+                    "y": 0.82,
+                    "z": 0.12,
+                    "w": 0.32,
+                    "h": 0.7,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "hall",
+                    "x": 0,
+                    "y": 0.9672,
+                    "z": 0.88,
+                    "w": 1.5104,
+                    "h": 0.66,
+                    "d": 0.4968000000000001,
+                    "tone": "glass"
+                  },
+                  {
+                    "kind": "column",
+                    "x": -1.02,
+                    "y": -0.78,
+                    "z": 0.12,
+                    "w": 0.1,
+                    "h": 0.54,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "accent",
+                    "x": 1.02,
+                    "y": 0.82,
+                    "z": 0.2,
+                    "w": 0.34,
+                    "h": 0.12,
+                    "d": 0.22,
+                    "tone": "gold"
+                  }
+                ]
+              },
+              "budget": 536852.8
+            }
+          ]
+        }
+      },
+      {
+        "seed": 317,
+        "fuel": 31693,
+        "used": 20545.703125,
+        "ok": true,
+        "orders": {
+          "compute": {
+            "cpu": {
+              "limits": {
+                "abilities": 0.16,
+                "armor": 0.12,
+                "challenge": 0.08,
+                "cloak": 0.05,
+                "control": 32000,
+                "drive": 8000,
+                "duel": 0.25,
+                "fabrication": 60960,
+                "gate": 0.03,
+                "reflex": 14000,
+                "research": 24880,
+                "think": 32000,
+                "upkeep": 48086,
+                "visuals": 0.02,
+                "weapon": 0.14
+              },
+              "reserve": {
+                "control": 0.1,
+                "duel": 0.05,
+                "think": 0.25,
+                "upkeep": 0.1
+              },
+              "upkeepOrder": [
+                "miner",
+                "hauler",
+                "freighter",
+                "artillery",
+                "bulwark",
+                "medic",
+                "interceptor",
+                "line",
+                "scout"
+              ]
+            }
+          },
+          "structures": [
+            {
+              "key": "power-4-3603",
+              "p": 4,
+              "x": 2.5,
+              "y": 1.5,
+              "shell": {
+                "radius": 1.92,
+                "height": 2,
+                "integrity": 1
+              },
+              "ports": [
+                {
+                  "kind": "solar",
+                  "capacity": 4
+                }
+              ],
+              "appearance": {
+                "name": "Solar field",
+                "pieces": [
+                  {
+                    "kind": "platform",
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 2.6,
+                    "h": 0.12,
+                    "d": 2.2,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "panel",
+                    "x": 0.98,
+                    "y": 0,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7
+                  },
+                  {
+                    "kind": "panel",
+                    "x": 0.69,
+                    "y": 0.48,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 45
+                  },
+                  {
+                    "kind": "panel",
+                    "x": 0,
+                    "y": 0.68,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 90
+                  },
+                  {
+                    "kind": "panel",
+                    "x": -0.69,
+                    "y": 0.48,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 135
+                  },
+                  {
+                    "kind": "panel",
+                    "x": -0.98,
+                    "y": 0,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 180
+                  },
+                  {
+                    "kind": "accent",
+                    "x": 1,
+                    "y": 0.95,
+                    "z": 0.12,
+                    "w": 0.3,
+                    "h": 0.3,
+                    "d": 0.3,
+                    "tone": "faction"
+                  },
+                  {
+                    "kind": "drum",
+                    "x": -0.43520000000000003,
+                    "y": 0.82,
+                    "z": 0.12,
+                    "w": 0.32,
+                    "h": 0.7,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "drum",
+                    "x": 0.43520000000000003,
+                    "y": 0.82,
+                    "z": 0.12,
+                    "w": 0.32,
+                    "h": 0.7,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "hall",
+                    "x": 0,
+                    "y": 0.9672,
+                    "z": 0.88,
+                    "w": 1.5104,
+                    "h": 0.66,
+                    "d": 0.4968000000000001,
+                    "tone": "glass"
+                  },
+                  {
+                    "kind": "column",
+                    "x": -1.02,
+                    "y": -0.78,
+                    "z": 0.12,
+                    "w": 0.1,
+                    "h": 0.54,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "accent",
+                    "x": 1.02,
+                    "y": 0.82,
+                    "z": 0.2,
+                    "w": 0.34,
+                    "h": 0.12,
+                    "d": 0.22,
+                    "tone": "gold"
+                  }
+                ]
+              },
+              "budget": 543707.2
+            }
+          ]
+        }
+      }
+    ],
+    "seed101FirstEligibleExactControlValue": true,
+    "controlFuelUsed": 18860.078125,
+    "newFuelUsed": 19287.40625,
+    "resultsPath": "/tmp/goc-depth-infrastructure-conservative-meter.json",
+    "resultsSha256": "0e555d6eead6f507a28ed7897a0b519bc145e33e889930b679090e996d91e41a"
+  },
+  "continuations": {
+    "root": "/tmp/gameplay-depth-infrastructure-resume",
+    "binarySha256": "39f6a5189babf1fcee4f0ded0e870192f503359589746c5873d3b046aca17443",
+    "engineRevision": "2249f9aa7e52c11a3b758c90b5988818bb42452e",
+    "durationSeconds": 600,
+    "actualScheduler": true,
+    "scope": "Exact saved full world/RNG/CPU/units/RAM. Only Atlantis source replaced, in control and treatment. Seven other house sources remain saved C3 bytes. No clock, budget or economic fields changed. Final treatment differs from initial treatment only by skipping duplicate existing-plant funding. Controls reused unchanged. These paired runs precede the final doubled-reserve gate; all three looser-reserve treatment endpoints are retained as superseded evidence, not final-source campaign validation.",
+    "manifestPath": "/tmp/gameplay-depth-infrastructure-resume/manifest.json",
+    "finalResultsPath": "/tmp/gameplay-depth-infrastructure-resume/final-results.json",
+    "comparisonPath": "/tmp/gameplay-depth-infrastructure-resume/final-comparison.json",
+    "sampleMethod": "Same exact600s actual scheduler, no state/time/budget edits. Final treatment skips double-funding standing CPU. Power600 one-second rounded-stream samples, excluding initial; bounds cover share0.01 and draw0.1MW rounding. This is actual draw met, not generation or capacity.",
+    "initialVariant": {
+      "name": "superseded-fund-on-standing-policy",
+      "comparisonPath": "/tmp/gameplay-depth-infrastructure-resume/initial-comparison.json",
+      "results": [
+        {
+          "seed": 101,
+          "arm": "initial-fund-on-standing-policy",
+          "production": 23419158.1131891,
+          "deliveredCargo": 16327360.0,
+          "recruits": 9,
+          "units": 23,
+          "cores": 4,
+          "bank": 1259.3570586528053,
+          "stalled": 11,
+          "fabrication": 0,
+          "doing": {
+            "gather": 7,
+            "move": 2,
+            "idle": 5,
+            "fight": 9
+          },
+          "power": {
+            "samples": 600,
+            "metApproxMws": 1540.6,
+            "metLowerMws": 1509.19625,
+            "metUpperMws": 1574.70825,
+            "drawApproxMws": 1736,
+            "finalPowered": 1
+          }
+        },
+        {
+          "seed": 107,
+          "arm": "initial-fund-on-standing-policy",
+          "production": 24447036.20676619,
+          "deliveredCargo": 24845001.71375057,
+          "recruits": 9,
+          "units": 34,
+          "cores": 7,
+          "bank": 7782267.388304767,
+          "stalled": 0,
+          "fabrication": 23640,
+          "doing": {
+            "gather": 11,
+            "idle": 21,
+            "move": 2
+          },
+          "power": {
+            "samples": 600,
+            "metApproxMws": 2427.26,
+            "metLowerMws": 2388.109,
+            "metUpperMws": 2459.863,
+            "drawApproxMws": 2993,
+            "finalPowered": 0.6
+          }
+        },
+        {
+          "seed": 317,
+          "arm": "initial-fund-on-standing-policy",
+          "production": 39076227.244911164,
+          "deliveredCargo": 21030144.00000012,
+          "recruits": 0,
+          "units": 33,
+          "cores": 17,
+          "bank": 3126729.770776861,
+          "stalled": 0,
+          "fabrication": 23640,
+          "doing": {
+            "gather": 17,
+            "idle": 15,
+            "move": 1
+          },
+          "power": {
+            "samples": 600,
+            "metApproxMws": 3305.73,
+            "metLowerMws": 3259.6014999999998,
+            "metUpperMws": 3342.0712500000004,
+            "drawApproxMws": 5625,
+            "finalPowered": 1
+          }
+        }
+      ],
+      "limitation": "This first implementation added existing plant funding to standing limits a second time. It was corrected before final source; its favorable seed101 power/production result is not the final validation."
+    },
+    "limits": [
+      "These six matched ten-minute endpoints establish construction and delivered-to-draw power, not a win-rate effect.",
+      "Seed101 final treatment regresses delivery, bank and military survival despite completing its hydro plant. Seed107 met-power intervals overlap; two completed solar plants do not establish a delivered-power gain. Seed317 improves met power and production but delivers less cargo and ends with less bank.",
+      "One-second public power is rounded. MW\u00b7s estimates and bounds use powered share rounded to0.01 and draw rounded to0.1MW; they are not exact generation or plant capacity.",
+      "Seed101 final treatment captures a7-cycle THINK and391-cycle duel failure after its bankroll drains; the controlled infrastructure fuel sweep itself has no failures.",
+      "Doubled-reserve final gate now declines seed101 first eligible phase with exact control JSON value; seed107/317 construction outputs are unchanged on their captured views. All20 recorded minute-phase banks in those two prior traces exceed the new reserve, which establishes eligibility only, not identical future trajectories. Final combined continuations belong in separate post-commit artifacts."
+    ],
+    "correctedFundingButLooseReserveResults": [
+      {
+        "seed": 101,
+        "arm": "control",
+        "production": 19874813.105370253,
+        "deliveredCargo": 16537290.800915167,
+        "recruits": 10,
+        "units": 22,
+        "cores": 3,
+        "bank": 2872971.579258198,
+        "stalled": 0,
+        "fabrication": 23640,
+        "doing": {
+          "gather": 6,
+          "idle": 8,
+          "move": 2,
+          "fight": 6
+        },
+        "structures": {
+          "constructions": 0,
+          "completions": 0,
+          "constructionCost": 0.0,
+          "operationalCost": 171066.92000003823
+        },
+        "power": {
+          "samples": 600,
+          "metApproxMws": 1425.0,
+          "metLowerMws": 1396.29125,
+          "metUpperMws": 1456.86225,
+          "drawApproxMws": 1865,
+          "finalPowered": 1
+        },
+        "capturedErrors": []
+      },
+      {
+        "seed": 101,
+        "arm": "final",
+        "production": 17935141.48664078,
+        "deliveredCargo": 10648853.686427504,
+        "recruits": 7,
+        "units": 9,
+        "cores": 4,
+        "bank": 931.7072450559058,
+        "stalled": 0,
+        "fabrication": 0,
+        "doing": {
+          "gather": 7,
+          "idle": 1,
+          "move": 1
+        },
+        "structures": {
+          "constructions": 1,
+          "completions": 1,
+          "constructionCost": 251045.40564263763,
+          "operationalCost": 166299.58776022866
+        },
+        "power": {
+          "samples": 600,
+          "metApproxMws": 1229.6,
+          "metLowerMws": 1203.6535000000001,
+          "metUpperMws": 1262.51575,
+          "drawApproxMws": 1401,
+          "finalPowered": 1
+        },
+        "capturedErrors": [
+          {
+            "tick": 20737,
+            "function": "duel",
+            "fuel": 391
+          },
+          {
+            "tick": 20222,
+            "function": "think",
+            "fuel": 7
+          }
+        ]
+      },
+      {
+        "seed": 107,
+        "arm": "control",
+        "production": 26124217.12962711,
+        "deliveredCargo": 25349321.713750273,
+        "recruits": 6,
+        "units": 32,
+        "cores": 5,
+        "bank": 7635926.281159383,
+        "stalled": 0,
+        "fabrication": 23640,
+        "doing": {
+          "gather": 11,
+          "idle": 16,
+          "move": 5
+        },
+        "structures": {
+          "constructions": 0,
+          "completions": 0,
+          "constructionCost": 0,
+          "operationalCost": 0
+        },
+        "power": {
+          "samples": 600,
+          "metApproxMws": 2422.0,
+          "metLowerMws": 2382.88,
+          "metUpperMws": 2453.491,
+          "drawApproxMws": 2990,
+          "finalPowered": 1
+        },
+        "capturedErrors": []
+      },
+      {
+        "seed": 107,
+        "arm": "final",
+        "production": 24447036.20676619,
+        "deliveredCargo": 24845001.7137506,
+        "recruits": 9,
+        "units": 34,
+        "cores": 7,
+        "bank": 7783088.504300713,
+        "stalled": 0,
+        "fabrication": 23640,
+        "doing": {
+          "gather": 11,
+          "idle": 21,
+          "move": 2
+        },
+        "structures": {
+          "constructions": 2,
+          "completions": 2,
+          "constructionCost": 875433.6397750528,
+          "operationalCost": 277199.55216369417
+        },
+        "power": {
+          "samples": 600,
+          "metApproxMws": 2427.26,
+          "metLowerMws": 2388.109,
+          "metUpperMws": 2459.863,
+          "drawApproxMws": 2993,
+          "finalPowered": 0.6
+        },
+        "capturedErrors": []
+      },
+      {
+        "seed": 317,
+        "arm": "control",
+        "production": 25369138.114989042,
+        "deliveredCargo": 25272736.00000027,
+        "recruits": 0,
+        "units": 33,
+        "cores": 17,
+        "bank": 6654000.076292747,
+        "stalled": 0,
+        "fabrication": 23640,
+        "doing": {
+          "gather": 17,
+          "idle": 14,
+          "move": 2
+        },
+        "structures": {
+          "constructions": 0,
+          "completions": 0,
+          "constructionCost": 0,
+          "operationalCost": 189734.9601825932
+        },
+        "power": {
+          "samples": 600,
+          "metApproxMws": 1796.74,
+          "metLowerMws": 1758.3129999999996,
+          "metUpperMws": 1835.467,
+          "drawApproxMws": 5878,
+          "finalPowered": 0.3
+        },
+        "capturedErrors": []
+      },
+      {
+        "seed": 317,
+        "arm": "final",
+        "production": 39076227.244911164,
+        "deliveredCargo": 21030144.00000009,
+        "recruits": 0,
+        "units": 33,
+        "cores": 17,
+        "bank": 3127305.5272483816,
+        "stalled": 0,
+        "fabrication": 23640,
+        "doing": {
+          "gather": 17,
+          "idle": 15,
+          "move": 1
+        },
+        "structures": {
+          "constructions": 3,
+          "completions": 3,
+          "constructionCost": 1330291.6095429605,
+          "operationalCost": 588358.1271664432
+        },
+        "power": {
+          "samples": 600,
+          "metApproxMws": 3305.73,
+          "metLowerMws": 3259.6014999999998,
+          "metUpperMws": 3342.0712500000004,
+          "drawApproxMws": 5625,
+          "finalPowered": 1
+        },
+        "capturedErrors": []
+      }
+    ],
+    "combinedLooseReserveSeed101": {
+      "scope": "Same seed101 snapshot with corrected plant funding and the new shared delivery helper, before doubled-reserve admission.",
+      "sourceSha256": "901cfb6aa38e347e997935731274022df80e25fc72610840197e3d4217e71a99",
+      "inputSha256": "5bb9b520ed2717b7afde40afe5c7c2abfc29afa812167674ed140c18717cefab",
+      "finalSha256": "a32e0e940df82d807cdaf2dcbf601a3888f82066fe89094c5cc2165640c528da",
+      "result": {
+        "production": 21781437.517158598,
+        "delivery": 14184000.0,
+        "recruits": 9,
+        "units": 26,
+        "byType": {
+          "miner": 10,
+          "hauler": 3,
+          "line": 4,
+          "bulwark": 5,
+          "piercer": 2,
+          "interceptor": 2
+        },
+        "bank": 1452.976066745324,
+        "income": 24050.27633800063,
+        "stalled": 14,
+        "cores": 5,
+        "fab": 0,
+        "upkeepOrder": [
+          "hauler",
+          "freighter",
+          "miner"
+        ],
+        "doing": {
+          "gather": 8,
+          "idle": 5,
+          "move": 2,
+          "fight": 11
+        },
+        "power": 1
+      }
+    }
+  },
+  "checks": {
+    "behavior": "85 passed including reserve boundary and existing-plant policy preservation: /tmp/goc-depth-infrastructure-behavior-conservative.log",
+    "strategies": "79 passed: /tmp/goc-depth-infrastructure-strategies-final.log",
+    "source": "5 JavaScript checks and cargo tests: /tmp/goc-depth-infrastructure-sourcechecks-conservative.log"
+  },
+  "supersededMetered": {
+    "rate": 64,
+    "toolchain": "1.97.0",
+    "sdkRlibSha256": "01a28345de07a60bce153e12dcdaa56e9b3048993e0bcc7daf9bd863e6c16309",
+    "wideCalls": 141,
+    "failures": 0,
+    "budgets": [
+      149,
+      799,
+      800,
+      2000,
+      6000,
+      18000,
+      18500,
+      19000,
+      19500,
+      20000,
+      20500,
+      21000,
+      21500,
+      22000,
+      22500,
+      23000,
+      23500,
+      24000,
+      24500,
+      25000,
+      25500,
+      26000,
+      26500,
+      27000,
+      27500,
+      28000,
+      28500,
+      29000,
+      29500,
+      30000,
+      30500,
+      30999,
+      31000,
+      31001,
+      31200,
+      31400,
+      31500,
+      31588,
+      31693,
+      31701,
+      32000,
+      32500,
+      33000,
+      33500,
+      34000,
+      40000
+    ],
+    "counterfactual": "Wide safety sweep changes only published THINK limit and available THINK to the tested fuel. Separate exact-budget calls retain all original CPU fields, changing only the phase clock as described above.",
+    "actualBudgetPhaseCalls": [
+      {
+        "seed": 101,
+        "fuel": 31701,
+        "used": 19760.15625,
+        "ok": true,
+        "orders": {
+          "compute": {
+            "cpu": {
+              "limits": {
+                "abilities": 0.16,
+                "armor": 0.12,
+                "challenge": 0.08,
+                "cloak": 0.05,
+                "control": 32000,
+                "drive": 8000,
+                "duel": 0.25,
+                "fabrication": 47560,
+                "gate": 0.03,
+                "influence": 0.1105471121489489,
+                "reflex": 14000,
+                "research": 0.22109868155294687,
+                "think": 32000,
+                "upkeep": 0.96,
+                "visuals": 0.02,
+                "weapon": 0.14
+              },
+              "reserve": {
+                "control": 0.1,
+                "duel": 0.05,
+                "think": 0.25,
+                "upkeep": 0.1
+              },
+              "upkeepOrder": [
+                "miner",
+                "hauler",
+                "freighter",
+                "artillery",
+                "bulwark",
+                "medic",
+                "interceptor",
+                "line",
+                "scout"
+              ]
+            }
+          },
+          "structures": [
+            {
+              "key": "power-2-3603",
+              "p": 2,
+              "x": 2.4,
+              "y": 0,
+              "shell": {
+                "radius": 1.3619999999999999,
+                "height": 2,
+                "integrity": 1
+              },
+              "ports": [
+                {
+                  "kind": "hydro",
+                  "capacity": 0.9
+                }
+              ],
+              "appearance": {
+                "name": "Dam",
+                "pieces": [
+                  {
+                    "kind": "platform",
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 2.6,
+                    "h": 0.12,
+                    "d": 2.2,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "dam",
+                    "x": 0,
+                    "y": 0.2,
+                    "z": 0.12,
+                    "w": 2.4,
+                    "h": 1.4,
+                    "d": 0.6,
+                    "tone": "stone"
+                  },
+                  {
+                    "kind": "hall",
+                    "x": 0,
+                    "y": -0.6,
+                    "z": 0.12,
+                    "w": 1.2,
+                    "h": 0.6,
+                    "d": 0.6,
+                    "tone": "faction"
+                  },
+                  {
+                    "kind": "light",
+                    "x": 0.9,
+                    "y": -0.8,
+                    "z": 0.12,
+                    "w": 0.14,
+                    "h": 0.7,
+                    "tone": "gold"
+                  },
+                  {
+                    "kind": "drum",
+                    "x": -0.45560000000000006,
+                    "y": 0.66,
+                    "z": 0.72,
+                    "w": 0.335,
+                    "h": 0.7,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "drum",
+                    "x": 0.45560000000000006,
+                    "y": 0.66,
+                    "z": 0.72,
+                    "w": 0.335,
+                    "h": 0.7,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "hall",
+                    "x": 0,
+                    "y": 0.7752,
+                    "z": 1.48,
+                    "w": 1.5812,
+                    "h": 0.66,
+                    "d": 0.38880000000000003,
+                    "tone": "glass"
+                  },
+                  {
+                    "kind": "column",
+                    "x": -0.82,
+                    "y": -0.22,
+                    "z": 0.12,
+                    "w": 0.14,
+                    "h": 0.92,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "column",
+                    "x": 0.82,
+                    "y": -0.22,
+                    "z": 0.12,
+                    "w": 0.14,
+                    "h": 0.92,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "accent",
+                    "x": 0,
+                    "y": -0.32,
+                    "z": 0.38,
+                    "w": 1.44,
+                    "h": 0.1,
+                    "d": 0.16,
+                    "tone": "faction"
+                  }
+                ]
+              },
+              "budget": 350746.84
+            }
+          ]
+        }
+      },
+      {
+        "seed": 107,
+        "fuel": 31588,
+        "used": 14133.296875,
+        "ok": true,
+        "orders": {
+          "compute": {
+            "cpu": {
+              "limits": {
+                "abilities": 0.16,
+                "armor": 0.12,
+                "challenge": 0.08,
+                "cloak": 0.05,
+                "control": 32000,
+                "drive": 8000,
+                "duel": 0.25,
+                "fabrication": 60484,
+                "gate": 0.03,
+                "reflex": 14000,
+                "research": 12562,
+                "think": 32000,
+                "upkeep": 0.96,
+                "visuals": 0.02,
+                "weapon": 0.14
+              },
+              "reserve": {
+                "control": 0.1,
+                "duel": 0.05,
+                "think": 0.25,
+                "upkeep": 0.1
+              },
+              "upkeepOrder": [
+                "miner",
+                "hauler",
+                "freighter",
+                "artillery",
+                "bulwark",
+                "medic",
+                "interceptor",
+                "line",
+                "scout"
+              ]
+            }
+          },
+          "structures": [
+            {
+              "key": "power-11-3603",
+              "p": 11,
+              "x": -0.8,
+              "y": 2.8,
+              "shell": {
+                "radius": 1.92,
+                "height": 2,
+                "integrity": 1
+              },
+              "ports": [
+                {
+                  "kind": "solar",
+                  "capacity": 4
+                }
+              ],
+              "appearance": {
+                "name": "Solar field",
+                "pieces": [
+                  {
+                    "kind": "platform",
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 2.6,
+                    "h": 0.12,
+                    "d": 2.2,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "panel",
+                    "x": 0.98,
+                    "y": 0,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7
+                  },
+                  {
+                    "kind": "panel",
+                    "x": 0.69,
+                    "y": 0.48,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 45
+                  },
+                  {
+                    "kind": "panel",
+                    "x": 0,
+                    "y": 0.68,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 90
+                  },
+                  {
+                    "kind": "panel",
+                    "x": -0.69,
+                    "y": 0.48,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 135
+                  },
+                  {
+                    "kind": "panel",
+                    "x": -0.98,
+                    "y": 0,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 180
+                  },
+                  {
+                    "kind": "accent",
+                    "x": 1,
+                    "y": 0.95,
+                    "z": 0.12,
+                    "w": 0.3,
+                    "h": 0.3,
+                    "d": 0.3,
+                    "tone": "faction"
+                  },
+                  {
+                    "kind": "drum",
+                    "x": -0.43520000000000003,
+                    "y": 0.82,
+                    "z": 0.12,
+                    "w": 0.32,
+                    "h": 0.7,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "drum",
+                    "x": 0.43520000000000003,
+                    "y": 0.82,
+                    "z": 0.12,
+                    "w": 0.32,
+                    "h": 0.7,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "hall",
+                    "x": 0,
+                    "y": 0.9672,
+                    "z": 0.88,
+                    "w": 1.5104,
+                    "h": 0.66,
+                    "d": 0.4968000000000001,
+                    "tone": "glass"
+                  },
+                  {
+                    "kind": "column",
+                    "x": -1.02,
+                    "y": -0.78,
+                    "z": 0.12,
+                    "w": 0.1,
+                    "h": 0.54,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "accent",
+                    "x": 1.02,
+                    "y": 0.82,
+                    "z": 0.2,
+                    "w": 0.34,
+                    "h": 0.12,
+                    "d": 0.22,
+                    "tone": "gold"
+                  }
+                ]
+              },
+              "budget": 536852.8
+            }
+          ]
+        }
+      },
+      {
+        "seed": 317,
+        "fuel": 31693,
+        "used": 20549.78125,
+        "ok": true,
+        "orders": {
+          "compute": {
+            "cpu": {
+              "limits": {
+                "abilities": 0.16,
+                "armor": 0.12,
+                "challenge": 0.08,
+                "cloak": 0.05,
+                "control": 32000,
+                "drive": 8000,
+                "duel": 0.25,
+                "fabrication": 60960,
+                "gate": 0.03,
+                "reflex": 14000,
+                "research": 24880,
+                "think": 32000,
+                "upkeep": 48086,
+                "visuals": 0.02,
+                "weapon": 0.14
+              },
+              "reserve": {
+                "control": 0.1,
+                "duel": 0.05,
+                "think": 0.25,
+                "upkeep": 0.1
+              },
+              "upkeepOrder": [
+                "miner",
+                "hauler",
+                "freighter",
+                "artillery",
+                "bulwark",
+                "medic",
+                "interceptor",
+                "line",
+                "scout"
+              ]
+            }
+          },
+          "structures": [
+            {
+              "key": "power-4-3603",
+              "p": 4,
+              "x": 2.5,
+              "y": 1.5,
+              "shell": {
+                "radius": 1.92,
+                "height": 2,
+                "integrity": 1
+              },
+              "ports": [
+                {
+                  "kind": "solar",
+                  "capacity": 4
+                }
+              ],
+              "appearance": {
+                "name": "Solar field",
+                "pieces": [
+                  {
+                    "kind": "platform",
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 2.6,
+                    "h": 0.12,
+                    "d": 2.2,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "panel",
+                    "x": 0.98,
+                    "y": 0,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7
+                  },
+                  {
+                    "kind": "panel",
+                    "x": 0.69,
+                    "y": 0.48,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 45
+                  },
+                  {
+                    "kind": "panel",
+                    "x": 0,
+                    "y": 0.68,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 90
+                  },
+                  {
+                    "kind": "panel",
+                    "x": -0.69,
+                    "y": 0.48,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 135
+                  },
+                  {
+                    "kind": "panel",
+                    "x": -0.98,
+                    "y": 0,
+                    "z": 0.12,
+                    "w": 0.52,
+                    "h": 0.12,
+                    "d": 0.7,
+                    "rot": 180
+                  },
+                  {
+                    "kind": "accent",
+                    "x": 1,
+                    "y": 0.95,
+                    "z": 0.12,
+                    "w": 0.3,
+                    "h": 0.3,
+                    "d": 0.3,
+                    "tone": "faction"
+                  },
+                  {
+                    "kind": "drum",
+                    "x": -0.43520000000000003,
+                    "y": 0.82,
+                    "z": 0.12,
+                    "w": 0.32,
+                    "h": 0.7,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "drum",
+                    "x": 0.43520000000000003,
+                    "y": 0.82,
+                    "z": 0.12,
+                    "w": 0.32,
+                    "h": 0.7,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "hall",
+                    "x": 0,
+                    "y": 0.9672,
+                    "z": 0.88,
+                    "w": 1.5104,
+                    "h": 0.66,
+                    "d": 0.4968000000000001,
+                    "tone": "glass"
+                  },
+                  {
+                    "kind": "column",
+                    "x": -1.02,
+                    "y": -0.78,
+                    "z": 0.12,
+                    "w": 0.1,
+                    "h": 0.54,
+                    "tone": "metal"
+                  },
+                  {
+                    "kind": "accent",
+                    "x": 1.02,
+                    "y": 0.82,
+                    "z": 0.2,
+                    "w": 0.34,
+                    "h": 0.12,
+                    "d": 0.22,
+                    "tone": "gold"
+                  }
+                ]
+              },
+              "budget": 543707.2
+            }
+          ]
+        }
+      }
+    ],
+    "resultsPath": "/tmp/goc-depth-infrastructure-final-meter.json",
+    "resultsSha256": "bf5450e5cfa6df109416175cbfb0a5b2243b0498a4ed94e81a552efcfaf7a791",
+    "lowAdmission": "Some 31.2\u201331.5k turns pass screening but the existing 30k build guard then declines construction. This bounded once-per-minute no-order case leaves standing policy intact."
+  }
+}

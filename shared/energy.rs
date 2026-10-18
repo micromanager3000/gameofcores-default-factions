@@ -105,14 +105,40 @@ pub fn prize(world: View, me: View, q: View) -> f64 {
 /// One plant the planner could order next.
 struct Pick { p: View, kind: &'static str, cap: f64, cost: f64, score: f64 }
 
+/// Once a minute, a dim grid with twice the ordinary construction reserve gets its planning runway.
+pub fn infrastructure_turn(world: View, me: View) -> Option<Value> {
+    if world.get("seconds").num_or(0.0) % 60.0 != 3.0 || cycles_left()<31000.0
+        || !world.get("energy").truthy() || !me.path("rts.cpu").truthy()
+        || me.path("energy.powered").num_or(1.0)>=0.92 || me.path("rts.cpu.limits.fabrication").num_or(0.0)<=0.0
+        || construction_funding(world,me).map_or(true,|floor| me.path("rts.cpu.bank").num_or(0.0)
+            <2.0*(floor+me.path("rts.cpu.income").num_or(0.0)))
+        || mem::get(me.get("ramCapital"),244).get("r").truthy() { return None; }
+    let cpu=me.path("rts.cpu");
+    let mut orders=obj!{"compute"=>obj!{"cpu"=>obj!{"limits"=>cpu.get("limits"),
+        "reserve"=>cpu.get("reserve"),"upkeepOrder"=>cpu.get("upkeepOrder")}}};
+    phase(&mut orders,world,me);
+    Some(orders)
+}
+
+fn construction_funding(world: View, me: View) -> Option<f64> {
+    let income=me.path("rts.cpu.income").num_or(0.0);
+    let gap=if world.get("logistics").truthy(){me.path("rts.cpu.last.upkeep").num_or(0.0)*30.0}else{0.0};
+    let floor=(income*if me.path("energy.powered").num_or(1.0)<0.92 {4.5}else{5.0}).max(gap);
+    if me.path("units.stalled").num_or(0.0)>0.0 || me.path("rts.cpu.bank").num_or(0.0)<floor+income {None}else{Some(floor)}
+}
+
 /// Stagger grid planning between building passes. Trade at most once per direction per minute.
 pub fn apply(orders: &mut Value, world: View, me: View) {
     let e = me.get("energy");
     if !e.truthy() || !world.get("energy").truthy() || cycles_left() < 7000.0 { return; }
+    fund(orders, me);
+    phase(orders,world,me);
+}
+
+fn phase(orders: &mut Value, world: View, me: View) {
     let now = world.get("seconds").num_or(0.0);
     let seat = me.get("seat").num_or(9.0).max(0.0) as usize;
     let d = doctrine(seat);
-    fund(orders, me);
     if now % 6.0 != 3.0 { return; }
     if cycles_left() > 30000.0 { build(orders, world, me, &d, now); }
     if now % 12.0 == 9.0 && cycles_left() > 10000.0 { settings(orders, world, me, &d); }
@@ -167,11 +193,7 @@ fn build(orders: &mut Value, world: View, me: View, d: &Doctrine, now: f64) {
     let id = me.get("id");
     let income = me.path("rts.cpu.income").num_or(0.0);
     let bank = me.path("rts.cpu.bank").num_or(0.0);
-    // Keep over four seconds of income, plus enough upkeep to bridge cargo deliveries.
-    let short = e.get("powered").num_or(1.0) < 0.92;
-    let gap = if world.get("logistics").truthy() { me.path("rts.cpu.last.upkeep").num_or(0.0) * 30.0 } else { 0.0 };
-    let floor = (income * if short { 4.5 } else { 5.0 }).max(gap);
-    if me.path("units.stalled").num_or(0.0) > 0.0 || bank < floor + income { return; }
+    let Some(floor)=construction_funding(world,me) else {return};
     let sites = me.path("rts.structures");
     let mine: Vec<View> = sites.iter().filter(|s| same(s.get("owner"), id) && s.get("state").str() != "ruin").collect();
     // two plants at a time at most, and the second only while the grid is well short

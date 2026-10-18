@@ -658,16 +658,43 @@ use super::{air, theme};
                 && w.get("until").num_or(0.0)>(now+travel)*5.0
         }).max_by(|a,b|a.get("cycles").num().min(hold).total_cmp(&b.get("cycles").num().min(hold)))
     }
+    fn delivery_bridge(world:View,me:View,tail:f64)->bool {
+        let income=me.path("rts.cpu.income").num_or(20000.0);
+        world.get("logistics").truthy() && me.path("units.stalled").num_or(0.0)>0.0
+            && me.path("rts.cpu.bank").num_or(0.0)<income*2.0
+            && world.get("units").iter().take_while(|_|cycles_left()>tail).any(|u| {
+                if u.get("owner").num()!=me.get("id").num() || logistics::cargo(u)<=0.0 {return false;}
+                let ty=u.get("type").str();let cap=me.get("capital").num();
+                let home=ty=="hauler" && u.get("at").num()==cap && u.get("to").num_or(-1.0)<0.0;
+                let job=u.path("rts.cargo.job");
+                // A standing gather order can hide a full hold. Pay blocked deliveries before producing more cargo.
+                let returning=matches!(ty,"hauler"|"freighter") && (home || job.path("operation.unload.p").num_or(-1.0)==cap)
+                    && (u.get("stalled").truthy() || job.get("status").str()=="unpaid");
+                returning || (home && me.path("units.doing.gather").num_or(0.0)==0.0)
+            })
+    }
+    // A short recovery cannot inspect the whole economy before rescuing a payable capital delivery.
+    fn delivery_recovery(world:View,me:View)->Option<Value> {
+        if cycles_left()<6000.0 || !delivery_bridge(world,me,3500.0) {return None;}
+        let mut out=recovery_policy(me);
+        let cpu=out.entry("compute").entry("cpu");
+        cpu.set("upkeepOrder",vec!["hauler","freighter","miner"]);
+        for (lane,floor) in [("think",14000.0),("control",22000.0),("drive",8000.0)] {
+            let old=cpu.get("limits").get(lane).num_or(0.0);
+            cpu.entry("limits").set(lane,old.max(floor));
+        }
+        let types=out.entry("compute").entry("types");
+        types.set("miner",obj!{"share"=>0,"every"=>2});
+        types.set("hauler",obj!{"cycles"=>10000,"every"=>2});
+        types.set("freighter",obj!{"cycles"=>12000,"every"=>2});
+        Some(out)
+    }
     fn logistics_budget(world:View,me:View,share:f64,mut out:Value)->Value{
         if !world.get("logistics").truthy(){return out;}
         if cycles_left()<3500.0{return out;}
         let income=me.path("rts.cpu.income").num_or(20000.0);
         let recovering=out.get("memo").str()=="Recovering production";
-        let bridge=recovering && me.path("units.stalled").num_or(0.0)>0.0
-            && me.path("rts.cpu.bank").num_or(0.0)<income*2.0 && me.path("units.doing.gather").num_or(0.0)==0.0
-            && world.get("units").iter().take_while(|_|cycles_left()>5000.0).any(|u|
-            u.get("owner").num()==me.get("id").num() && u.get("type").str()=="hauler"
-            && u.get("at").num()==me.get("capital").num() && u.get("to").num_or(-1.0)<0.0 && logistics::cargo(u)>0.0);
+        let bridge=recovering && delivery_bridge(world,me,5000.0);
         for (ty,cycles) in [("miner",4500),("hauler",10000),("freighter",12000)]{out.entry("compute").entry("types").set(ty,obj!{"cycles"=>cycles,"every"=>2});}
         if bridge {out.entry("compute").entry("types").set("miner",obj!{"share"=>0,"every"=>2});}
         let cpu=out.entry("compute").entry("cpu");
@@ -675,8 +702,8 @@ use super::{air, theme};
             let old=cpu.get("limits").get(lane).num_or(0.0);let old=if old<=1.0{old*income}else{old};
             cpu.entry("limits").set(lane,old.max(floor));
         }
-        let mut priority=vec![Value::from("miner"),Value::from("hauler"),Value::from("freighter")];
-        if bridge {priority.swap(0,1);}
+        let mut priority=if bridge {vec![Value::from("hauler"),Value::from("freighter"),Value::from("miner")]}
+            else {vec![Value::from("miner"),Value::from("hauler"),Value::from("freighter")]};
         for ty in cpu.get("upkeepOrder").items(){if !priority.contains(ty){priority.push(ty.clone());}}
         cpu.set("upkeepOrder",priority);
         let old=cpu.get("limits").get("upkeep").num_or(1.0);let old=if old<=1.0{old}else{old/income.max(1.0)};
@@ -1739,10 +1766,12 @@ use super::{air, theme};
                     "armor"=>0.05,"weapon"=>0.08,"abilities"=>0,"cloak"=>0,"gate"=>0},
                 "reserve"=>obj!{},"upkeepOrder"=>vec!["miner"]}}};
         }
+        if let Some(orders)=super::energy::infrastructure_turn(world,me) {return orders;}
         if let Some(orders) = classic_bootstrap(world, me) { return orders; }
         if resting(world, me) {
             return Value::obj();
         }
+        if let Some(orders)=delivery_recovery(world,me) {return orders;}
         let mut orders = govern_units(world, me, share, strategy);
         if orders.get("memo").str() == "Recovering production" {
             // Fund safe landings during recovery.
