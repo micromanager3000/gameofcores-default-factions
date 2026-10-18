@@ -1,16 +1,6 @@
-// The Quiet Fleet: Zheng He's treasure fleet as a CPU RTS faction, the naval power of the founders.
-// It mines and sways on land as the Ghosts of the Cache did (porters, marines, lantern guards, Jinyiwei), and makes
-// the sea its game: Sea traversal comes second, and the Longjiang yard lays down three kinds of junk.
-// - warjunks (hull + armor, range 1): the battle fleet. It sails where the fight is (a rival fleet, a coast the
-//   army is landing on or defending) and fires broadsides across the beam.
-// - pickets (hull + armor, range 1, vision 2): relay junks that keep station on the crossings to land overseas, so
-//   the capital's orders reach the marines there, and rake whatever rows or sails through the strait.
-// - corsairs (hull + dash, speed 4, range 1): raiders that hunt rival ships, relay ships above all, and take the
-//   code pages of what they sink as prizes. think reads each prize for the rival's plan and acts on it.
-// Marines (runners) cross to coastal land overseas once a picket holds the crossing (common::can_hold with ships).
-//
-// Built on the SDK in the gameofcores crate (docs part sdk), with the strategy the founders share in the `common`
-// module at the end: targets, spawning room, cycles and research, deals and pacts, scouting and the puzzle solver.
+// The Quiet Fleet mines and sways on land, then carries its marines overseas.
+// Warjunks fight, pickets hold crossings, and corsairs hunt ships and prizes.
+// Shared founding strategy lives in `common`.
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
@@ -18,7 +8,7 @@ use shared::common::{hauler, freighter, escort};
 
 program!(think, hauler, freighter, escort, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, warjunk, picket, corsair, carrier, reflex, research, duel, challenge, look, build3d, live3d);
 
-// The bodies: points in hp, speed, strength, carry and vision, and for some in range and wings.
+// Unit bodies use ten build points across combat, carry and vision stats.
 fn miner_body() -> Value {
     obj! { "hp" => 2, "speed" => 2, "strength" => 0, "carry" => 5, "vision" => 1 }
 }
@@ -40,8 +30,7 @@ fn scout_body() -> Value {
 fn spire_body() -> Value {
     obj! { "hp" => 1, "speed" => 1, "strength" => 2, "carry" => 0, "vision" => 2, "range" => 2 }
 }
-// Kites, once Flight allows wings: fliers that ground units can't hit without anti-air, sent at the rivals' miners.
-// With Air weapons they shoot.
+// Flight unlocks kites; Air weapons let them attack rival miners.
 fn kite_body() -> Value {
     obj! { "hp" => 2, "speed" => 3, "strength" => 2, "carry" => 0, "vision" => 0, "wings" => 1 }
 }
@@ -49,8 +38,7 @@ fn kite_shot_body() -> Value {
     obj! { "hp" => 2, "speed" => 2, "strength" => 1, "carry" => 0, "vision" => 0, "wings" => 1, "range" => 1 }
 }
 
-// The junks: every build is 10 points, and range costs 2 a step. Each carries the hull and one more module.
-// Warjunks carry a small hold for recovered cargo. Pickets hold crossings; corsairs carry more loot.
+// Each junk spends ten build points on a hull and one module; range costs two per step.
 fn warjunk_body() -> Value {
     obj! { "hp" => 3, "speed" => 2, "strength" => 2, "carry" => 0, "vision" => 1, "range" => 1 }
 }
@@ -65,7 +53,7 @@ fn corsair_body(cargo: bool) -> Value {
     if cargo { return obj! { "hp"=>2,"speed"=>2,"strength"=>2,"carry"=>1,"vision"=>1,"range"=>1 }; }
     obj! { "hp" => 2, "speed" => 4, "strength" => 2, "carry" => 0, "vision" => 0, "range" => 1 }
 }
-// One deck ship carries two kites across open water, with armor when researched.
+// One carrier transports two kites and gains armor when researched.
 fn carrier_body() -> Value {
     obj! { "hp" => 3, "speed" => 2, "strength" => 1, "carry" => 2, "vision" => 1 }
 }
@@ -78,7 +66,7 @@ const TECHS: [&str; 21] = [
     "subseaCable", "gate",
 ];
 
-// ---- JavaScript's arithmetic, where this program follows it ----
+// ---- JavaScript arithmetic compatibility ----
 
 /// `Math.max(a, b)`: NaN when either is.
 fn max(a: f64, b: f64) -> f64 {
@@ -175,8 +163,7 @@ fn short(me: View, cycles: f64, lane: f64) -> bool {
 
 // ---- Clocks ----
 
-// Trade and sway run on timers with a random gap, so no two worlds repeat: each fires `base` seconds after the last,
-// give or take 60%. The next second of each lives in capital RAM page 224, written only when one fires.
+// Trade and sway timers vary by 60%; their next due second is stored in RAM page 224.
 const CLOCK: u32 = 224;
 
 struct Clock {
@@ -243,10 +230,8 @@ fn fleet_hold(world: View, me: View) -> impl Fn(View) -> bool {
     }
 }
 
-// The frontier province to press: cores, a rival's land and its units there count for it, a capital against, and land
-// the army couldn't hold on to (over the water with no junk of ours on station: common::can_hold) is marked down. A
-// landing the fleet already covers counts a little more: the marines go where the junks are. `bonus` adds points to
-// provinces the prizes point at (their owner's home, left empty by its own attack).
+// Prefer cores, rival land and prize targets; discount capitals and land we can't hold.
+// A covered landing gets a small bonus because the marines can reach it.
 fn frontline(world: View, me: View, bonus: &[f64]) -> Option<View> {
     let me_id = me.get("id").num();
     let hold = fleet_hold(world, me);
@@ -288,10 +273,7 @@ struct Threats {
     rowing: Vec<(f64, f64)>,
 }
 
-// This information is bounded by normal faction vision.  It is composition
-// guidance, not target selection: targets remain reflex-local under fog.
-// One pass, about 50 cycles a unit in sight: rivals' fliers, shooters and all, and their miners at work by province
-// (where the kites go).
+// Bounded by faction vision; this guides composition, while reflex selects targets.
 fn seen_threats(world: View, me: View, since: f64) -> Threats {
     let me_id = me.get("id").num();
     let mut t = Threats::default();
@@ -443,9 +425,7 @@ fn payable(mut orders: Value, me: View) -> Value {
     orders
 }
 
-// The spawns the bank can still pay once think is over. The game charges fabrication after think and its RAM writes,
-// under the new CPU policy: what think spent and the other lanes' reserves come off the bank first. A spawn it can't
-// pay is only an error, so it waits a second. start: cycles_left() when think began.
+// Fabrication follows think and RAM billing, after other lane reserves.
 fn affordable(mut orders: Value, me: View, start: f64) -> Value {
     orders = payable(orders, me);
     let c = me.get("rts").get("cpu");
@@ -498,12 +478,8 @@ fn affordable(mut orders: Value, me: View, start: f64) -> Value {
     orders
 }
 
-// One route search in think instead of one per unit type each second: the plan carries a field toward where the army
-// goes (the province to defend, else the attack), cut to the steps from our land and the free or allied land next to
-// it (where a unit stepping out stands), and path::to routes along it. None when path::home already leads there from
-// all our land; it can't from an exclave or land over the sea. The last plan's field to the same place serves for 10 s.
-// A search costs up to about 300 cycles a province, so it runs only when think can pay for it and still have `after`
-// cycles to finish; until then the last field to the same place serves, however old.
+// Think shares one costly route field across unit types. Reuse it until the
+// destination changes; skip a search unless its cost and `after` runway fit.
 fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     if to.is_nan() || to < 0.0 {
         return None;
@@ -562,12 +538,8 @@ fn cpu_policy(me: View, offer: f64, under_attack: bool) -> Value {
     // Keep a planner/reflex runway rather than reserving the whole balance and
     // waiting forever for a research call that cannot start yet.
     let research_cap = max(0.0, capacity - 18000.0);
-    // Build toward the next real research offer while quiet. A threat releases
-    // that protection, making the same shared bank available to movement,
-    // shooting, cloak and scans instead of granting a separate research pool.
-    // An offer past what the bank can hold reserves nothing, and the reserve
-    // stays small next to the bank: holding the whole offer starved think and
-    // the miners whose income research needs.
+    // Reserve a modest research runway while quiet; threats release it for combat.
+    // Never hold a full offer that would starve planning or the miners funding it.
     let offered = offer != 0.0 && !offer.is_nan();
     let research = if under_attack || !offered || offer > research_cap {
         0.0
@@ -838,17 +810,12 @@ fn strategy(world: View, me: View) -> Value {
     let memo = format!("Quiet Fleet: {} junks, {} broadsides, {} prizes; {doing}", text(junks), text(broadsides), text(prizes));
     orders.set("memo", memo.chars().take(90).collect::<String>());
     let _ = naval.fleet;
-    // Before its first API composition is legal, research gets a clear runway.
-    // Once cloak+ranged Shades are legal, reserve enough unit time to rebuild a
-    // combat bank for fabrication and actual tactical reflexes.
+    // Fund research early; later reserve combat cycles for fabrication and reflexes.
     let available_control = if available.truthy() { available.get("control").num() * 0.8 } else { f64::INFINITY };
     let types = common::calls(
         world,
-        // Standing orders persist.  Fewer strategic controller calls leave their
-        // unused allocation in the combat bank for paid movement and abilities;
-        // reflex remains the fast local combat path.
-        // Absolute call budgets keep one route search viable. Fractions looked
-        // generous but became sub-3600 calls as more types woke together.
+        // Standing orders persist; local reflexes keep the fast combat path.
+        // Absolute budgets leave room for route search as more types wake.
         &[
             ("miner", 6000.0, 6.0),
             ("runner", 5000.0, 4.0),
@@ -877,19 +844,15 @@ fn strategy(world: View, me: View) -> Value {
         };
         let tech = if studying.is_empty() { View::undefined() } else { world.get("techs").get(&studying) };
         let offer = if tech.truthy() { tech.get("offer").num() } else { 0.0 };
-        // A real contact is a battle too, even when it is beyond our owned rim.
-        // Release the growing research reservation then so a Shade strike can pay
-        // for its movement, cloak and shots from the one shared bank.
+        // Any visible contact releases the research reserve for combat actions.
         let mut policy = cpu_policy(me, offer, threatened || enemy.total >= 2.0);
         common::fit_cpu(&mut policy, me);
         orders.entry("compute").set("cpu", policy);
     }
     let pact_leader = realm::leader(world).map(|l| l.get("id").num());
     let now = world.get("seconds").or(0.0).floor();
-    // A short second keeps what's decided so far (the plan, spawns and the CPU policy): the diplomats, spies and priests
-    // wait a second rather than run think out of cycles and lose it all. So does the second after a think that ran out
-    // of its limit: orders that run out save nothing, the limit and the trade timers included, so the same costly step
-    // would fail again every second.
+    // Keep accepted orders on a short or exhausted second; CPU limits and
+    // trade timers need a completed think to persist.
     let limits = me.get("rts").get("cpu").get("limits");
     let limit = if limits.truthy() { limits.get("think").or(0.0) } else { 0.0 };
     let ran_out = limit > 1.0 && me.get("compute").get("used").get("think").or(0.0) >= limit * 0.97;
@@ -1005,10 +968,8 @@ fn intrigue(orders: &mut Value, world: View, me: View, clock: &mut Clock, now: f
     }
 }
 
-// Mercenaries: with 700◆ or more and a fight on (rivals in our land, or four or more in sight), four soldiers for five
-// minutes from the faction with the most units in sight that isn't the leader and holds less than a fifth of the world
-// (allies count double, with a little chance in close calls), paid twice what common::worth prices it at so it says yes. One hire
-// at a time, every 3 minutes or so.
+// During a fight, hire four soldiers for five minutes, paying twice their value.
+// Choose a non-leader with fewer than a fifth of the world; allow one hire at a time.
 fn mercenaries(orders: &mut Value, world: View, me: View, clock: &mut Clock, now: f64, fight: bool) {
     if !fight
         || me.get("bank").num() < 700.0

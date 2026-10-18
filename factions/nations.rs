@@ -1,18 +1,4 @@
-// Compute of Nations: the market. Its capital is Kirkcaldy, and it plays the game as Adam Smith's shopkeepers would:
-// by the division of labour and the market rather than by its army alone.
-//
-// - It sells passage through its land to every neighbour. A faction that holds passage through a land doesn't make
-//   war on it (the house programs leave a host's land off their targets, and an attack would end the deal in public),
-//   so the neighbours pay to keep the peace while the market goes on.
-// - It buys techs from whoever researched them, at the price the house programs think fair, and researches only what
-//   nobody sells. It sells and leases its own techs to those that lack them.
-// - It posts tolls on its border, leases mines in and out, hires soldiers when it has to fight and hires its spare
-//   militia out when it doesn't, buys free land's favour with bribes, subsidises its pact partner's wars, and once it
-//   is rich it buys provinces outright.
-// - Its army is the Ghosts' (cloak-and-dash shades, scan sentries, spires and kites), paid for by the trade.
-//
-// Built on the SDK in the gameofcores crate (docs part sdk), with the strategy the founders share in the `common`
-// module at the end: targets, spawning room, cycles and research, deals and pacts, scouting and the puzzle solver.
+// Compute of Nations funds its army through trade, then invests in land.
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
@@ -51,8 +37,7 @@ fn kite_shot_body() -> Value {
     obj! { "hp" => 2, "speed" => 2, "strength" => 1, "carry" => 0, "vision" => 0, "wings" => 1, "range" => 1 }
 }
 
-// What the faction wants, in order: researched when nobody sells it, bought when somebody does. Compute boost comes
-// after defensive capabilities; faith is left to the priests.
+// Research what nobody sells; buy what another faction holds.
 const TECHS: [&str; 24] = [
     "extraction", "seaTraversal", "turbines", "armor", "ranged", "transmission", "repair", "influence", "capture",
     "dash", "cloak", "antiAir", "scan", "pierce", "artillery", "storage", "drilling", "fission", "computeBoost",
@@ -156,9 +141,7 @@ fn short(me: View, cycles: f64, lane: f64) -> bool {
 
 // ---- Clocks ----
 
-// The market runs on timers with a random gap, so no two worlds repeat: each fires `base` seconds after the last,
-// give or take 60%. The next second of each lives in capital RAM from page 224 (up to CLOCK_PAGES pages, before the
-// court's record at 232), written only when one fires.
+// Market timers use a random ±60% gap. Their next times live in capital RAM page 224.
 const CLOCK: u32 = 224;
 const CLOCK_PAGES: u32 = 6;
 
@@ -235,10 +218,7 @@ struct Threats {
     miners: Vec<(f64, f64)>,
 }
 
-// This information is bounded by normal faction vision.  It is composition
-// guidance, not target selection: targets remain reflex-local under fog.
-// One pass, about 50 cycles a unit in sight: rivals' fliers, shooters and all, and their miners at work by province
-// (where the kites go).
+// Visible enemy composition and miners; targets remain reflex-local under fog.
 fn seen_threats(world: View, me: View) -> Threats {
     let me_id = me.get("id").num();
     let mut t = Threats::default();
@@ -314,8 +294,7 @@ fn byte_len(b: &Value) -> f64 {
     }
 }
 
-// Spawns the ◆ left can pay. Deals we accept that ask us for ◆, deals we send that give ◆ (held as they're sent), and
-// bribes are paid before spawns, and a spawn the bank can't pay is only refused, so it waits a second.
+// Remove spawns the bank cannot fund after accepted deals, sends, and bribes.
 fn payable(mut orders: Value, me: View) -> Value {
     let spawn = orders.get("spawn");
     if !spawn.truthy() || spawn.is_empty() {
@@ -355,9 +334,7 @@ fn payable(mut orders: Value, me: View) -> Value {
     orders
 }
 
-// The spawns the bank can still pay once think is over. The game charges fabrication after think and its RAM writes,
-// under the new CPU policy: what think spent and the other lanes' reserves come off the bank first. A spawn it can't
-// pay is only an error, so it waits a second. start: cycles_left() when think began.
+// Keep spawns payable after think and RAM writes, which draw on the shared bank first.
 fn affordable(mut orders: Value, me: View, start: f64) -> Value {
     orders = payable(orders, me);
     let c = me.get("rts").get("cpu");
@@ -409,12 +386,8 @@ fn affordable(mut orders: Value, me: View, start: f64) -> Value {
     orders
 }
 
-// One route search in think instead of one per unit type each second: the plan carries a field toward where the army
-// goes (the province to defend, else the attack), cut to the steps from our land and the free or allied land next to
-// it (where a unit stepping out stands), and path::to routes along it. None when path::home already leads there from
-// all our land; it can't from an exclave or land over the sea. The last plan's field to the same place serves for 10 s.
-// A search costs up to about 300 cycles a province, so it runs only when think can pay for it and still have `after`
-// cycles to finish; until then the last field to the same place serves, however old.
+// Share one costly route field across unit types; reuse it until the destination
+// changes, and skip searches unless their cost and `after` runway fit.
 fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     if to.is_nan() || to < 0.0 {
         return None;
@@ -473,20 +446,15 @@ fn cpu_policy(me: View, offer: f64, under_attack: bool) -> Value {
     // Keep a planner/reflex runway rather than reserving the whole balance and
     // waiting forever for a research call that cannot start yet.
     let research_cap = max(0.0, capacity - 18000.0);
-    // Build toward the next real research offer while quiet. A threat releases
-    // that protection, making the same shared bank available to movement,
-    // shooting, cloak and scans instead of granting a separate research pool.
-    // An offer past what the bank can hold reserves nothing, and the reserve
-    // stays small next to the bank: holding the whole offer starved think and
-    // the miners whose income research needs.
+    // Save toward affordable research while quiet; threats release the shared bank to combat.
+    // Oversized offers reserve nothing, so research cannot starve planning or miners.
     let offered = offer != 0.0 && !offer.is_nan();
     let research = if under_attack || !offered || offer > research_cap {
         0.0
     } else {
         min(min(offer, income * 0.6 + c.get("bank").or(0.0) * 0.18), old + max(2500.0, income * 0.18))
     };
-    // The eight-founder house observes a wider planning graph than the four-seat lab.
-    // Grow its chosen spending limit with army size; unused room stays in the shared bank.
+    // Scale the think limit with army size; unused room stays in the shared bank.
     let think = round(min(
         max(64000.0, income * 0.5),
         max(max(24000.0 + me.get("units").get("total").or(0.0) * 200.0, income * 0.4), me.get("compute").get("thinkPeak").or(0.0) * 1.5),
@@ -547,8 +515,7 @@ fn planner_admission(me: View, remaining: f64) -> PlannerAdmission {
     PlannerAdmission::Raise(obj! {"compute"=>obj! {"cpu"=>policy}})
 }
 
-// A local land frontier needs no unit census, route field, or trade graph. Rotate the bounded province window so
-// a large realm still reviews each district, keeping the capital first and leaving the tail enough cycles to publish.
+// Rotate a bounded frontier window, keeping the capital first and time to publish.
 fn lean_plan(world: View, me: View) -> (Value, f64) {
     let by = realm::index(world);
     let ours = me.get("id").num();
@@ -634,10 +601,8 @@ fn strategy(world: View, me: View) -> Value {
         PlannerAdmission::Raise(orders) => return orders,
         PlannerAdmission::Lean => false,
     } } else { true };
-    // A full think costs 13,000 to 35,000 cycles as the world fills: under 20,000, keep standing orders rather than run
-    // out halfway (the census below and the market at the end also wait for a fuller second). With under 20 units
-    // the world is young and think cheap, and 15,000 will do: on the floor's income, with this program's code paid
-    // for in RAM, a second rarely holds 20,000, and a think that never runs never sends a miner out.
+    // Keep standing orders when the full census and market won't fit. Young
+    // realms use a lower runway so miners can still be recruited.
     let available = me.get("rts").get("cpu").get("available");
     let full = if full_plan && me.get("units").get("total").or(0.0) >= 20.0 { 20000.0 } else { 15000.0 };
     if rts(me) && (cycles_left() < full || (available.truthy() && available.get("think").num() < 5000.0)) {
@@ -680,8 +645,7 @@ fn strategy(world: View, me: View) -> Value {
     if full_plan { common::share(&mut orders, &plan, world, me); }
     else { plan::share(&mut orders, &plan, me); }
 
-    // The techs another faction holds, which the market buys rather than researches. While one is for sale the spawns
-    // leave its price in the bank, except under attack and in the first four minutes, when units win land.
+    // Save for sold techs, except under attack or during the first four minutes.
     let sold = if full_plan { market::sold(world, me) } else { Vec::new() };
     let now = world.get("seconds").or(0.0).floor();
     let at = if full_plan { mem::get(me.get("ramCapital"), CLOCK) } else { Value::obj() };
@@ -729,17 +693,12 @@ fn strategy(world: View, me: View) -> Value {
     let name = target.map_or_else(|| "the frontier".to_string(), |t| t.get("name").str().to_string());
     // the army's line, for a second the market doesn't run (when it does, it says what it's doing instead)
     orders.set("memo", format!("Kirkcaldy's guard: {} shades and {} sentries, marching on {name}", text(shades), text(sentries)));
-    // Before its first API composition is legal, research gets a clear runway.
-    // Once cloak+ranged Shades are legal, reserve enough unit time to rebuild a
-    // combat bank for fabrication and actual tactical reflexes.
+    // Fund research early; later reserve combat cycles for fabrication and reflexes.
     let available_control = if available.truthy() { available.get("control").num() * 0.8 } else { f64::INFINITY };
     let types = common::calls(
         world,
-        // Standing orders persist.  Fewer strategic controller calls leave their
-        // unused allocation in the combat bank for paid movement and abilities;
-        // reflex remains the fast local combat path.
-        // Absolute call budgets keep one route search viable. Fractions looked
-        // generous but became sub-3600 calls as more types woke together.
+        // Standing orders persist; local reflexes keep the fast combat path.
+        // Absolute budgets leave room for route search as more types wake.
         &[
             ("miner", 6000.0, 6.0),
             ("runner", 5000.0, 4.0),
@@ -771,31 +730,24 @@ fn strategy(world: View, me: View) -> Value {
         };
         let tech = if studying.is_empty() { View::undefined() } else { world.get("techs").get(&studying) };
         let offer = if tech.truthy() { tech.get("offer").num() } else { 0.0 };
-        // A real contact is a battle too, even when it is beyond our owned rim.
-        // Release the growing research reservation then so a Shade strike can pay
-        // for its movement, cloak and shots from the one shared bank.
+        // Any visible contact releases the research reserve for combat actions.
         let mut policy = cpu_policy(me, offer, threatened || enemy.total >= 2.0);
         common::fit_cpu(&mut policy, me);
         orders.entry("compute").set("cpu", policy);
     }
     if !full_plan { return affordable(orders, me, start); }
     let pact_leader = realm::leader(world).map(|l| l.get("id").num());
-    // A short second keeps what's decided so far (the plan, spawns and the CPU policy): the diplomats and the market
-    // wait a second rather than run think out of cycles and lose it all. So does the second after a think that ran out
-    // of its limit: orders that run out save nothing, the limit and the market's timers included, so the same costly
-    // step would fail again every second.
+    // Keep accepted orders on a short or exhausted second; CPU limits and
+    // market timers need a completed think to persist.
     let limits = me.get("rts").get("cpu").get("limits");
     let limit = if limits.truthy() { limits.get("think").or(0.0) } else { 0.0 };
     let ran_out = limit > 1.0 && me.get("compute").get("used").get("think").or(0.0) >= limit * 0.97;
     if cycles_left() < 6000.0 || (rts(me) && ran_out) {
         return affordable(orders, me, start);
     }
-    // The faction's diplomats: court the two biggest factions that aren't leading and are in no pact (a faction belongs
-    // to one), each at most once per 2 minutes or so (common::court backs off). The market subsidises a partner's wars.
+    // Court the two largest non-leaders outside pacts; partners' wars subsidise the market.
     let no_pacts = me.get("pacts").is_empty();
-    // (not while a pact proposal waits in the inbox: answer may sign it this second, and a second pact is refused)
-    // Nor within 10 s of our last proposal: a partner that signs it this second would put us in a pact before our next
-    // proposal lands.
+    // Avoid duplicates while one awaits an answer or within 10 s of the last proposal.
     if no_pacts && !me.get("inbox").iter().any(|m| m.get("pact").truthy()) && clock.at.get("ct").num_or(-1.0) <= now {
         for c in common::partners(world, me).iter().take(2) {
             let id = c.get("id").num();
@@ -806,7 +758,7 @@ fn strategy(world: View, me: View) -> Value {
             }
         }
     }
-    // the market looks over the whole border, and every unit in sight when it hires: about 10 cycles a unit in sight
+    // Market hiring scans visible units (about 10 cycles each).
     let seen = 10.0 * world.get("units").len() as f64;
     if !rts(me) || cycles_left() > 9000.0 + seen {
         let mood = market::Mood { threatened, fight: threatened || enemy.total >= 4.0, shade_ready, target: target_id, army: name };
@@ -823,10 +775,7 @@ fn strategy(world: View, me: View) -> Value {
 }
 
 // ---- The market ----
-//
-// Everything the faction trades, each on its own timer (see Clock), so a second pays for one or two of them at most.
-// Every price is what the house programs' rule thinks fair (common::worth, common::price), a little in the other side's
-// favour, so they say yes.
+// Timed trades use prices from common::worth and common::price.
 mod market {
     use super::*;
 
@@ -2001,10 +1950,7 @@ fn dodge(u: View) -> Option<Value> {
     None
 }
 
-// Fight while withdrawing: the shot starts its windup and the same order moves
-// the unit out of melee or a marked artillery circle.  Focus is chosen from
-// fog-visible nearby units, never from global information.
-// Target selection, facing and support are faction code; the engine only prices and validates.
+// Start a shot while moving out of melee or marked artillery range; focus uses visible nearby units.
 fn pierce_mode(u: View, target: Option<View>) -> f64 {
     let Some(t) = target else { return 0.0 };
     let tr = t.get("rts");
@@ -2099,10 +2045,7 @@ fn terrain_step(u: View, x: f64, y: f64) -> Option<Value> {
 }
 
 fn reflex(units: View, near: View) -> Value {
-    // The snapshot is taken before this callback is billed.  Divide its actual
-    // lane allowances locally so an affordable engagement gets every contacted
-    // unit, while a low bank naturally commits the first useful reactions
-    // instead of a permanently privileged unit-index slice.
+    // Divide the pre-billed lane snapshot locally: affordable engagements reach all contacted units.
     let n = units.len();
     let b = if n > 0 { units.at(0).get("rts").get("budget") } else { View::undefined() };
     let level = if n > 0 { common::price_level(units.at(0)) } else { 1.0 };
