@@ -195,6 +195,21 @@ fn fleet_lean_rebuild_requires_paid_unstalled_crew() {
 }
 
 #[test]
+fn fleet_lean_rebuild_only_replaces_a_hard_cap_that_cannot_fund_the_planner() {
+    let world = Value::parse(r#"{"provinces":[],"units":[]}"#);
+    let capped = Value::parse(r#"{"units":{"total":6,"stalled":0},"compute":{"thinkPeak":32000},
+        "rts":{"cpu":{"income":12130,"bank":3145458,"spendCap":15163}}}"#);
+    let funded = Value::parse(r#"{"units":{"total":6,"stalled":0},"compute":{"thinkPeak":32000},
+        "rts":{"cpu":{"income":12130,"bank":3145458,"spendCap":60000}}}"#);
+    let args = views(&[world, capped]);
+    assert!(super::rich_rebuild_is_capped(args[0], args[1]),
+        "the C8 cap cannot carry planner work plus its protected return tail");
+    let args = views(&[args[0].value(), funded]);
+    assert!(!super::rich_rebuild_is_capped(args[0], args[1]),
+        "once the cap can fund the planner, retain the normal planner/retry path");
+}
+
+#[test]
 fn fleet_uses_lean_plan_when_the_full_estimate_exceeds_the_spend_cap() {
     let mut world = Value::parse(r#"{"seconds":6,"provinces":[],"units":[]}"#);
     let mut provinces = Value::arr();

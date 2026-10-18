@@ -693,6 +693,14 @@ fn rich_rebuild_ready(me: View) -> bool {
         && cpu.get("bank").num_or(0.0)>=cpu.get("income").num_or(0.0)*2.0
 }
 
+// This is about the per-second hard cap, not merely the callback's temporary
+// allowance. The lean planner estimate cannot admit Fleet's full naval scan:
+// its own measured floor is what protects a funded normal retry.
+fn rich_rebuild_is_capped(world: View, me: View) -> bool {
+    if !rich_rebuild_ready(me) { return false; }
+    affordable_plan_limit(me, full_think_need(world, me)).is_none()
+}
+
 fn retirement_ready(world: View, me: View, remaining: f64) -> bool {
     if !world.get("logistics").truthy() || me.path("units.byType.corsair").num_or(0.0) <= 0.0 || remaining < 5000.0 { return false; }
     let bytes = me.get("ramCapital").key(0.0).get("bytes");
@@ -706,8 +714,7 @@ fn think(world: View, me: View) -> Value {
     if cycles_left()<800.0 {return obj!{};}
     // A rich, paid crew can use a capped second to maintain its active study
     // and fabrication policy even when that cap is too small for the planner.
-    if rich_rebuild_ready(me)
-        && cycles_left()>=6000.0 && cycles_left()<13000.0 {
+    if cycles_left()>=6000.0 && rich_rebuild_is_capped(world, me) {
         return lean_rebuild(world, me);
     }
     let mut hunting=None;
@@ -742,7 +749,7 @@ fn strategy(world: View, me: View, hunting: &mut Option<bool>) -> Value {
     if rts(me) {
         let allowance = if available.truthy() { available.get("think").num_or(0.0) } else { cycles_left() };
         if !plan_fuel_ready(allowance, cycles_left(), need) {
-            return if rich_rebuild_ready(me) { lean_rebuild(world, me) } else { recovery_for_plan(world, me, need) };
+            return if rich_rebuild_is_capped(world, me) { lean_rebuild(world, me) } else { recovery_for_plan(world, me, need) };
         }
     }
     let me_id = me.get("id").num();
