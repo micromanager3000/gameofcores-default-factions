@@ -1187,6 +1187,12 @@ fn prey(world: View, me: View, n: &[(f64, f64)]) -> f64 {
 
 // Kites defend, raid prey for ◆, or join the target attack.
 fn kite(units: View, world: View, me: View) {
+    // A starved callback cannot afford recovery's deck search.  Landing one hot
+    // wing is still useful, but leave the rest on their standing orders.
+    if cycles_left() < 1200.0 {
+        land_hot(units);
+        return;
+    }
     if common::air_recovery(units,me) { return; }
     if !me.path("rts.air.decks").is_empty() {
         common::fly(units, world, me);
@@ -1238,7 +1244,7 @@ fn kite(units: View, world: View, me: View) {
 fn land_hot(units: View) {
     for u in units.iter() {
         // Stop low-fuel calls before they run out.
-        if cycles_left() < 150.0 {
+        if cycles_left() < 500.0 {
             break;
         }
         let a = u.path("rts.air");
