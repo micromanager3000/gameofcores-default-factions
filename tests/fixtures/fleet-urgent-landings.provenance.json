@@ -1,0 +1,161 @@
+{
+  "purpose": "Preserve urgent landings in short Fleet callbacks without admitting cold deck planning that cannot finish.",
+  "baseFactionRevision": "39c6effff855c26159dac10386b2741622e46f08",
+  "fixtures": {
+    "tests/fixtures/fleet-kite-low.json": {
+      "sha256": "fee6b30a983411816748dec6bd16e2a8287a92a89a827ef0a840e43785750fde"
+    },
+    "tests/fixtures/fleet-kite-c8-day101.json": {
+      "sha256": "a34141af6082cd738cda78bb3060b9aeedcfc72c169b489d9b881a4d6be724c1"
+    },
+    "tests/fixtures/fleet-kite-deck-cold.json": {
+      "sha256": "7eb3d81da46d0f2f81d1c8f384894847c7d6036e5abc8e6df52e49bacf7a4105"
+    },
+    "tests/fixtures/fleet-kite-land-cold.json": {
+      "sha256": "53405ec91f38026b011231a12e8668540e24ec5fe1f1ce2799d213ea466fb0c1"
+    }
+  },
+  "captureProvenance": "fleet-callback-c8-day101.provenance.json",
+  "regression": {
+    "oldFixtureAt1394": "Final 39c returned safely with zero orders; unchanged engine assertion requires three urgent landings.",
+    "coldDeckBoundary": "Final 39c exhausted at 3510 and 3600; 3700 and 4000 finished without orders. The first landing-only repair retained this gap.",
+    "beforeWasmSha256": "4751d271a63a0b2437dc013e94f77d31fab716da8334d886076c04a81f9bf8c2",
+    "beforeEvidence": [
+      "/tmp/gameplay-depth-fleet-urgent-before.json",
+      "/tmp/gameplay-depth-fleet-urgent-before-boundary.json",
+      "/tmp/gameplay-depth-fleet-urgent-first-sweep.json"
+    ]
+  },
+  "validation": {
+    "toolchain": "1.97.0",
+    "instructionsPerCycle": 64,
+    "coresSha256": "8bb9e5acd6f20950c72d2aa6c5aee498413b35e8842b64994795fa5169b89465",
+    "compileCommand": "RUSTUP_TOOLCHAIN=1.97.0 CARGO_TARGET_DIR=/Users/reddybot/code/gameofcores-work/gameofcores-gameplay/artifacts/gameplay-2026-10-18/candidate3-sdk /tmp/c4-day101-sdk/release/cores compile /tmp/fleet-urgent-fixed.rs /tmp/fleet-urgent-fixed.wasm",
+    "exportSha256": "5e1d8b1c6b689fcb1ea4d2cda3366e5574ad7bb3ab84e90ff219864adb9b35bb",
+    "exportBytes": 515117,
+    "wasmSha256": "2a1cbfe20a7efede2dc3c0c480fd3868679d3911751e02738d63fd6f4126c55d",
+    "calls": 324,
+    "failures": 0,
+    "elapsedSeconds": 121.45123791694641,
+    "sweepEvidence": "/tmp/gameplay-depth-fleet-urgent-sweep.json",
+    "sweepLog": "/tmp/gameplay-depth-fleet-urgent-sweep.log",
+    "strategyTests": 22,
+    "sourceChecks": 5,
+    "selectedResults": [
+      {
+        "fixture": "fleet-kite-low.json",
+        "budget": 1394,
+        "ok": true,
+        "used": 285.140625,
+        "orders": [
+          {
+            "id": 1196,
+            "land": true
+          },
+          {
+            "id": 1241,
+            "land": true
+          },
+          {
+            "id": 1242,
+            "land": true
+          }
+        ]
+      },
+      {
+        "fixture": "fleet-kite-low.json",
+        "budget": 2400,
+        "ok": true,
+        "used": 285.140625,
+        "orders": [
+          {
+            "id": 1196,
+            "land": true
+          },
+          {
+            "id": 1241,
+            "land": true
+          },
+          {
+            "id": 1242,
+            "land": true
+          }
+        ]
+      },
+      {
+        "fixture": "fleet-kite-c8-day101.json",
+        "budget": 3115,
+        "ok": true,
+        "used": 78.859375,
+        "orders": []
+      },
+      {
+        "fixture": "fleet-kite-c8-day101.json",
+        "budget": 3500,
+        "ok": true,
+        "used": 78.859375,
+        "orders": []
+      },
+      {
+        "fixture": "fleet-kite-c8-day101.json",
+        "budget": 3510,
+        "ok": true,
+        "used": 205.484375,
+        "orders": []
+      },
+      {
+        "fixture": "fleet-kite-c8-day101.json",
+        "budget": 3600,
+        "ok": true,
+        "used": 205.484375,
+        "orders": []
+      },
+      {
+        "fixture": "fleet-kite-c8-day101.json",
+        "budget": 4000,
+        "ok": true,
+        "used": 205.484375,
+        "orders": []
+      },
+      {
+        "fixture": "fleet-kite-c8-day101.json",
+        "budget": 6000,
+        "ok": true,
+        "used": 4494.359375,
+        "orders": [
+          {
+            "id": 1876,
+            "do": "move",
+            "target": 18,
+            "via": [
+              18
+            ],
+            "alert": 6,
+            "power": {
+              "drive": 600,
+              "weapon": 0
+            }
+          },
+          {
+            "id": 2051,
+            "do": "fight",
+            "target": 18,
+            "via": [
+              18
+            ],
+            "alert": 6,
+            "power": {
+              "drive": 600,
+              "weapon": 420
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "limits": [
+    "3500 and 4000 are safety cases, not funded launch claims. The captured 6000 callback emits two useful flight orders.",
+    "The urgent loop retains the existing bounded scan reserve; very short callbacks can land only part of a large wing. The unchanged 1394 through 2400 fixture retains all three urgent landings.",
+    "No shared flight helper, engine allowance, policy, or campaign behavior changed."
+  ]
+}

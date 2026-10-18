@@ -94,6 +94,8 @@ fn capped_templar_executes_a_faithful_local_plan_and_keeps_its_standing_sermons(
     assert_eq!(plan.get("mines").len(),2);
     for key in ["field","front","convoy"] {assert!(plan.get(key).is_undef(),"lean planning omits {key}");}
     assert_eq!(orders.get("spawn").at(0).get("type").str(),"bulwark");
+    assert!(orders.get("compute").get("cpu").get("limits").get("fabrication").num()>0.0);
+    assert!(orders.get("compute").get("types").get("bulwark").get("share").num()>0.0);
     assert_eq!(orders.get("research").str(),"turbines");
     assert!(orders.get("compute").get("cpu").get("limits").get("influence").num()>=3100.0,"the standing faith and sermons remain funded");
     for key in ["preach","propaganda","faith","send","accept"] {assert!(orders.get(key).is_undef(),"the lean turn preserves standing faith orders without recomputing {key}");}
@@ -111,4 +113,46 @@ fn lean_defense_keeps_the_threatened_capital_ahead_of_a_larger_remote_invasion()
             "one invader at the capital outranks two elsewhere; without a capital threat the remote invasion is defended");
         assert_eq!(plan.get("threat").num(),if capital_threat>0 {1.0} else {2.0});
     }
+}
+
+// Metered fixtures: templar-think-endpoint.json is the candidate1 seed101 t3600
+// public own observation. templar-think-naval.json is an authored counterfactual
+// of that endpoint, changing only cpu income=48216.707, spendCap=60270,
+// limits.think=53880, available.think=53775 and spent.think=0. These match the
+// recorded t3271 resource window; its original observation was not captured.
+fn naval_target_case(waters: usize, remaining: f64, land_border: bool) -> bool {
+    let mut sea = Value::arr();
+    for id in 0..waters {
+        sea.push(obj! {"id"=>id,"adj"=>if id == 0 {arr![1]} else if id == 1 {arr![0]} else {arr![]},
+            "coast"=>if id == 0 {arr![0]} else if id == 1 {arr![1]} else {arr![]} });
+    }
+    let world = obj! {"waters"=>sea,"provinces"=>arr![
+        obj! {"id"=>0,"owner"=>2},
+        obj! {"id"=>1,"owner"=>-1,"adj"=>if land_border {arr![0]} else {arr![]},
+            "routes"=>obj! {"sea"=>arr![0],"air"=>arr![],"pass"=>arr![]}}],
+        "units"=>arr![obj! {"owner"=>2,"rts"=>obj! {"sea"=>obj! {"ship"=>true,"water"=>0}}}]};
+    let args = views(&[world,obj! {"id"=>2,"rts"=>obj! {"cpu"=>obj! {"income"=>40000}}}]);
+    super::target_hold(args[0],args[1])(realm::index(args[0]).get(1.0),remaining)
+}
+
+#[test]
+fn a_funded_naval_target_can_use_its_ship_on_station() {
+    assert!(naval_target_case(2,20000.0,false));
+    assert!(naval_target_case(84,50000.0,false));
+}
+
+#[test]
+fn a_short_naval_rank_preserves_land_without_assuming_a_crossing_is_held() {
+    assert!(!naval_target_case(84,20000.0,false));
+    assert!(naval_target_case(84,20000.0,true));
+}
+
+#[test]
+fn logistics_miner_keeps_a_bounded_cargo_retry_below_the_c4_full_assignment_runway() {
+    assert!(super::common::LOGISTICS_MINER_FULL_RUNWAY > 4324.0,
+        "the captured loaded-miner callback must not enter full local assignment");
+    assert!(super::common::LOGISTICS_MINER_FULL_RUNWAY <= 5000.0,
+        "the measured funded full assignment remains available at five thousand cycles");
+    assert!(super::common::LOGISTICS_MINER_FALLBACK_RUNWAY < 4500.0,
+        "the recovery miner allocation can still reach its one local gather fallback");
 }

@@ -1,0 +1,9 @@
+{
+  "capture": "C4 day-101, error-19-faction-1-gun.json",
+  "source": "Arjuna's Halting Problem at candidate4 3328f71",
+  "tick": 16909,
+  "function": "gun",
+  "budget": 2317,
+  "rate": 64,
+  "purpose": "A single attacked artillery callback entered route planning and exhausted its 2,317-cycle allocation. The 2,500-cycle entry guard retains its standing fire order."
+}

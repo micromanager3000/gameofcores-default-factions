@@ -296,6 +296,7 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
 }
 
 fn think(world: View, me: View) -> Value {
+    if cycles_left()<800.0 {return obj!{};}
     if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
         return emergency_recovery_policy(me);
     }
@@ -357,6 +358,13 @@ fn recovery_policy(me: View) -> Value {
 fn share_phase(orders: &mut Value, plan: &Value, world: View, me: View, remaining: f64) {
     if !me.path("rts.cpu").truthy() || remaining >= 9000.0 {
         common::share(orders, plan, world, me);
+    }
+}
+
+// A field cannot be published when the later plan share is already out of reach.
+fn road_phase(plan: &mut Value, world: View, me: View, target: f64, remaining: f64) {
+    if !me.path("rts.cpu").truthy() || remaining>=9000.0 {
+        if let Some(field)=road(world,me,target,16000.0) {plan.set("field",field);}
     }
 }
 
@@ -429,9 +437,8 @@ fn strategy(world: View, me: View) -> Value {
     }
     // the rest of think (spawns, budget, trade and diplomacy) is budgeted at up to 16,000 cycles after the search
     let defend = vn(plan.get("defend"));
-    if let Some(field) = road(world, me, if defend >= 0.0 { defend } else { vn(plan.get("attack")) }, 16000.0) {
-        plan.set("field", field);
-    }
+    let field_target=if defend>=0.0 {defend}else{vn(plan.get("attack"))};
+    road_phase(&mut plan,world,me,field_target,cycles_left());
     let cpu = rts_cpu(me);
     // Fabrication has its own lane. Think reduces the shared bank once.
     let available = if cpu.truthy() { cpu.get("available") } else { cpu };
@@ -1409,9 +1416,16 @@ struct ControlBudget {
 
 const CONTROL_MIN_NEXT: f64 = 2400.0;
 const CONTROL_ADMISSION_MARGIN: f64 = 1800.0;
+// A gun's route can cold-read its carried plan, carry that plan forward, find a path and submit an order. The measured
+// worst normal route finishes below this with enough return room; a half-funded callback leaves its standing fire order.
+const GUN_ROUTE_RUNWAY: f64 = 3900.0;
 
 fn control_has_runway(available: f64, next: f64, read: f64) -> bool {
     available >= next.max(CONTROL_MIN_NEXT) + read + CONTROL_ADMISSION_MARGIN
+}
+
+fn gun_has_route_runway(available: f64) -> bool {
+    available >= GUN_ROUTE_RUNWAY
 }
 
 impl ControlBudget {
@@ -1509,12 +1523,28 @@ fn lancer(units: View, world: View, me: View) {
 }
 
 fn gun(units: View, world: View, me: View) {
+    if cycles_left()<800.0 {return;}
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
-        if rts && cycles_left() < 2200.0 {
-            break;
-        }
+        if rts && cycles_left()<800.0 {break;}
+        // Keep this before the plan read: the admission covers its cold decoding cost too. A gun can still cheaply
+        // deploy, pack, or retain a standing target after the read when there is not enough fuel to find a new route.
+        let can_route = !rts || gun_has_route_runway(cycles_left());
         let u = turn(units, i, world);
+        // Finish an accepted local fire order without decoding a new strategic plan.
+        if !can_route && is_str(u.get("doing"),"fight") && n(u.get("to"))<0.0
+            && n(u.get("at"))==n(u.get("target"))
+            && !u.path("rts.deployed").truthy() && !u.path("rts.deploying").truthy() {
+            order(obj!{"id"=>u.get("id"),"deploy"=>true,"alert"=>8});
+            continue;
+        }
+        if rts {
+            let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
+            let read=if bytes.is_bytes() && bytes.len()>=2 {
+                let b=bytes.bytes();2.0*f64::from(u16::from_le_bytes([b[0],b[1]]))
+            }else{0.0};
+            if cycles_left()<1800.0+read {break;}
+        }
         let p = plan::of(me, u);
         let defend = Value::Num(common::defends(&p, u));
         let target = if vn(&defend) >= 0.0 { &defend } else { p.get("attack") };
@@ -1532,6 +1562,7 @@ fn gun(units: View, world: View, me: View) {
         let stage = p.get("stage");
         let under_pressure = is_str(u.get("why"), "attacked") && set_up;
         if under_pressure && vn(stage) >= 0.0 && !same_v(u.get("at"), stage) {
+            if !can_route { break; }
             match orders::to(u, "move", vn(stage), world, me, ()) {
                 Some(mut retreat) => {
                     retreat.set("deploy", false);
@@ -1542,10 +1573,10 @@ fn gun(units: View, world: View, me: View) {
             }
             continue;
         }
-        let o = carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me);
         if set_up {
             if !same_v(u.get("at"), target) || n(u.get("to")) >= 0.0 {
-                match o {
+                if !can_route { break; }
+                match carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me) {
                     Some(mut o) => {
                         o.set("deploy", false);
                         o.set("alert", 8);
@@ -1560,9 +1591,12 @@ fn gun(units: View, world: View, me: View) {
         // first leg has not started.
         if same_v(u.get("at"), target) && n(u.get("to")) < 0.0 {
             order(obj! { "id" => u.get("id"), "deploy" => true, "alert" => 8 });
-        } else if let Some(mut o) = o {
-            o.set("alert", 8);
-            order(o);
+        } else {
+            if !can_route { break; }
+            if let Some(mut o) = carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me) {
+                o.set("alert", 8);
+                order(o);
+            }
         }
     }
 }
@@ -1571,6 +1605,9 @@ fn gun(units: View, world: View, me: View) {
 // and raids the province when nothing it can hit is left. A flier can't capture, mine, persuade or study. Abroad, with
 // only the core of the plan to go on, a flier keeps the hunt it's on.
 fn wing(units: View, world: View, me: View) {
+    // A zero fabrication lane is recovery. Resolve it before decoding the shared plan so a low-fuel callback can
+    // preserve an aloft wing (or its standing grounded order) without entering the route planner.
+    if common::air_recovery(units, me) { return; }
     // a flier a minute up comes down on your nearest land before anything else, even short of cycles: its burn climbs
     // the longer it flies, and an unpaid one crashes
     for u in units.iter() {
@@ -1579,10 +1616,14 @@ fn wing(units: View, world: View, me: View) {
             order(obj! { "id" => u.get("id"), "land" => true });
         }
     }
-    if me.get("rts").truthy() && cycles_left() < 2200.0 {
+    // A cold plan and its first route need more than the legacy 2,200-cycle floor. Keep the standing sortie until a
+    // funded turn can finish it; recovery above already handles zero-fabrication calls.
+    if me.get("rts").truthy() && cycles_left() < 2500.0 {
         return;
     }
     let pl = plan::for_units(me, units, world);
+    // The loop below cannot issue an order with less runway; skip its map index too.
+    if me.get("rts").truthy() && cycles_left() < 2500.0 { return; }
     let by_id = realm::index(world);
     let hunt = pl.get("hunt");
     let abroad = hunt.is_undef();
@@ -1612,7 +1653,7 @@ fn wing(units: View, world: View, me: View) {
     let verb = if q.truthy() && n(owner) >= 0.0 && !same(owner, me.get("id")) && !allies.has_num(n(owner)) && foes == 0 { "raid" } else { "fight" };
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
-        if rts && cycles_left() < 2200.0 {
+        if rts && cycles_left() < 2500.0 {
             break;
         }
         let u = turn(units, i, world);

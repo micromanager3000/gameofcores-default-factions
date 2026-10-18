@@ -1,0 +1,10 @@
+{
+  "source": "C8 day-101 captured Fleet unit callbacks",
+  "engine": "2d9 frozen C8 simulator",
+  "rate": 64,
+  "captures": {
+    "picket": {"path": "day-101.errors/error-23-faction-4-picket.json", "fuel": 2591},
+    "kite": {"path": "day-101.errors/error-24-faction-4-kite.json", "fuel": 3115}
+  },
+  "purpose": "preserve standing naval and air orders when scaled unit-control fuel cannot pay their route scans"
+}

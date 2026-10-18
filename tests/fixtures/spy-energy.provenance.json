@@ -1,0 +1,163 @@
+{
+  "purpose": "Validate bounded local energy-site targeting by public default ghosts and shades, at their existing control requests.",
+  "baseFactionRevision": "f23425e5ea845ce9a5d5db8a5a24c306ccacb2fd",
+  "sdkRevision": "4cbec77a207af7ddb494938662014ec8b72a8cf0",
+  "sdkSpySha256": "8e37b896897d345395506efcc161be137c75fe33dc7ef84cfd9561462dda5d87",
+  "fixtures": {
+    "spy-energy-local.json": {
+      "sha256": "26429b66eaf5083b26bbf2bb27ab421f9901abdc0356c613daed59251415bfd7",
+      "origin": "Authored hidden ground ghost, visible ready 2 MW wind generator, exact site point (-4,3)."
+    },
+    "shade-energy-local.json": {
+      "sha256": "c6ac34aaab8eeb6f7ce065b364e758522e3e355ec83f49b794abe145638cab5c",
+      "origin": "Authored active-cloak shade with the same local opportunity."
+    },
+    "nations-shade-c8-421.json": {
+      "sha256": "ee8994d8dd84ec0cf0bb127237b36cac4c91f7a1c80fb98d9d15721d9f762eba",
+      "origin": "Unchanged actual public-default five-shade callback captured in C8 long421; original allowance 3201."
+    },
+    "nations-shade-energy-authored-opportunity.json": {
+      "sha256": "3f1035372490dd82f2daa4012b57f34a3f4c1407c37b3117f780c7f6cb577f3f",
+      "origin": "Authored opportunity over that actual callback. Only unit995 rts.cloaked becomes true, new own hidden/seenBy fields become true/[], and world.structures gains a ready 2 MW wind site90001 at its existing hostile province25, point(-4,3). This is not an observed built site."
+    }
+  },
+  "policy": {
+    "ghost": "Keep escape, lying low and decisive capital sabotage or theft first. Scan at most24 known sites, rotating over callbacks. Keep existing cloak-lane affordability.",
+    "shade": "Before a cold military plan, consider at most8 stationary shades that are idle or already attacking their current province. Submit at most one local strike; retain other standing orders and remote military destinations.",
+    "target": "Actual generation at least2 MW, ready hostile site, generating port, no current disruption/cooldown, hidden paid unit and at least150 \u25c6 in default policy. Batteries alone do not qualify.",
+    "sdk": "Uses discovered site id/p/x/y, safe-conduct checks and an optional bounded route. Duplicate pending sabotageStructure yields no replacement order. No control allocation increase."
+  },
+  "validation": {
+    "toolchain": "1.97.0",
+    "instructionsPerCycle": 64,
+    "coresSha256": "8bb9e5acd6f20950c72d2aa6c5aee498413b35e8842b64994795fa5169b89465",
+    "sdkRlibSha256": "b6b4c2722609995781917773237eb12610b9b5c7df1fa390b655c7bd5aae950c",
+    "modules": {
+      "nullptr": {
+        "sourceSha256": "562e55c79ca9c34c1f69a0d120a1d653a684934d19bd0c79cd724f5b5112eb09",
+        "wasmSha256": "ababa088b22efa2a439804026facbd386eb0f25796d218bdfc009df951aaf491"
+      },
+      "nations": {
+        "sourceSha256": "0b761510889d01f8cecc6682a24d74d6484dae1d64b80a70409253e36cc91767",
+        "wasmSha256": "f3b5484033efcb2f93bdeff0c21ee9a875811ace23b2b4690f9a2f5f281c15bc"
+      }
+    },
+    "sourceBytes": {
+      "default": 429425,
+      "kublai": 509541,
+      "arjuna": 503845,
+      "templar": 501676,
+      "atlantis": 495884,
+      "fleet": 515117,
+      "manifesto": 465641,
+      "nullptr": 512435,
+      "nations": 517338
+    },
+    "calls": 474,
+    "failures": 0,
+    "elapsedSeconds": 169.96118092536926,
+    "meterEvidence": "/tmp/gameplay-depth-energy-spy-sweep.json",
+    "meterLog": "/tmp/gameplay-depth-energy-spy-live-sweep.log",
+    "sourceStrategyTests": {
+      "nations": 25,
+      "nullptr": 13
+    },
+    "sdkTests": 12,
+    "copyTests": 3,
+    "sourceChecks": 5,
+    "selectedResults": [
+      {
+        "fixture": "spy-energy-local",
+        "budget": 5000,
+        "ok": true,
+        "used": 1092.859375,
+        "orders": [
+          {
+            "id": 10,
+            "do": "sabotage",
+            "target": 1,
+            "structure": 91,
+            "at": {
+              "x": -4,
+              "y": 3
+            },
+            "cloak": true
+          }
+        ]
+      },
+      {
+        "fixture": "shade-energy-local",
+        "budget": 7000,
+        "ok": true,
+        "used": 874.515625,
+        "orders": [
+          {
+            "id": 10,
+            "do": "sabotage",
+            "target": 1,
+            "structure": 91,
+            "at": {
+              "x": -4,
+              "y": 3
+            },
+            "cloak": true
+          }
+        ]
+      },
+      {
+        "fixture": "nations-shade-c8-421",
+        "budget": 3201,
+        "ok": true,
+        "used": 441.59375,
+        "orders": []
+      },
+      {
+        "fixture": "nations-shade-energy-authored-opportunity",
+        "budget": 7000,
+        "ok": true,
+        "used": 1492.71875,
+        "orders": [
+          {
+            "id": 995,
+            "do": "sabotage",
+            "target": 25,
+            "structure": 90001,
+            "at": {
+              "x": -4,
+              "y": 3
+            },
+            "cloak": true
+          }
+        ]
+      },
+      {
+        "fixture": "nations-shade-energy-authored-opportunity",
+        "budget": 16000,
+        "ok": true,
+        "used": 1492.71875,
+        "orders": [
+          {
+            "id": 995,
+            "do": "sabotage",
+            "target": 25,
+            "structure": 90001,
+            "at": {
+              "x": -4,
+              "y": 3
+            },
+            "cloak": true
+          }
+        ]
+      }
+    ]
+  },
+  "rejectedVariant": {
+    "evidence": "/tmp/gameplay-depth-energy-spy-conservative-sweep.json",
+    "finding": "The first 7000-remaining admission was safe in330 calls but could not produce strikes at scheduled ghost5000/shade7000 allowances. The final path uses bounded local work before optional cold military planning."
+  },
+  "limits": [
+    "Metered callbacks prove safe order production, not a successful in-world strike or a campaign benefit. Engine strike tests validate cost, visibility, radius, cooldown and power effects separately.",
+    "Real capture opportunity fields and site geometry are explicitly authored. The original real capture remains unchanged and is tested separately.",
+    "Source fixtures are public default programs. No player source or private player state is included."
+  ]
+}

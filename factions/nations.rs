@@ -28,8 +28,6 @@ fn scout_body() -> Value {
 fn spire_body() -> Value {
     obj! { "hp" => 1, "speed" => 1, "strength" => 2, "carry" => 0, "vision" => 2, "range" => 2 }
 }
-// Kites, once Flight allows wings: fliers that ground units can't hit without anti-air, sent at the rivals' miners.
-// With Air weapons they shoot.
 fn kite_body() -> Value {
     obj! { "hp" => 2, "speed" => 3, "strength" => 2, "carry" => 0, "vision" => 0, "wings" => 1 }
 }
@@ -181,10 +179,20 @@ fn rival_in(q: View, me: View) -> f64 {
     n
 }
 
+// Sea-station ranking waits until its searches and the remaining planner can fit.
+fn rank_hold(world: View, me: View) -> impl Fn(View, f64) -> bool {
+    let land = common::can_hold(world, me, false);
+    let naval = common::can_hold(world, me, true);
+    let work = 300.0 * world.get("waters").len() as f64;
+    let cpu = rts(me);
+    move |q, left| land(q) || ((!cpu || left > 18000.0 + work
+        * (q.path("routes.sea").len() + q.path("routes.air").len()).max(1) as f64) && naval(q))
+}
+
 // Trade funds a campaign through valuable land. Existing leases keep their protection.
 fn frontline(world: View, me: View) -> Vec<View> {
     let me_id = me.get("id").num();
-    let hold = common::can_hold(world, me, true);
+    let hold = rank_hold(world, me);
     let campaign = mem::get(me.get("ramCapital"), 0).get("campaign").num_or(-1.0);
     let fighters = common::fighters(me);
     let by_id = realm::index(world);
@@ -203,7 +211,7 @@ fn frontline(world: View, me: View) -> Vec<View> {
             + if capital { 12.0 } else if q.get("capital").truthy() { -5.0 } else { 0.0 }
             + if approach { 5.0 } else { 0.0 }
             + if enemy && owner == campaign { 4.0 } else { 0.0 }
-            - if hold(q) { 0.0 } else { common::OVER_WATER }
+            - if hold(q, cycles_left()) { 0.0 } else { common::OVER_WATER }
     });
     common::rally(world, me, ranked)
 }
@@ -479,7 +487,16 @@ fn conserve(world: View, me: View) -> Value {
 }
 
 fn think(world: View, me: View) -> Value {
-    common::govern(world, me, 0.4, || strategy(world, me))
+    if cycles_left()<800.0 {return obj!{};}
+    common::govern(world, me, 0.4, || {
+        let mut orders = strategy(world, me);
+        // A recruit needs a complete upkeep review before the governor and ABI tail.
+        if rts(me) && !orders.get("spawn").is_empty()
+            && cycles_left() < 4000.0 + 220.0 * world.get("units").len() as f64 {
+            orders.set("spawn", Value::arr());
+        }
+        orders
+    })
 }
 
 enum PlannerAdmission { Full, Raise(Value), Lean }
@@ -590,8 +607,7 @@ fn lean_research(orders: &mut Value, world: View, me: View) {
 }
 
 fn strategy(world: View, me: View) -> Value {
-    // (from 3,000 cycles the short path below still sets the CPU policy: a think that sets none keeps a limit that may
-    // be too small for it every second after)
+    // Short calls still set a CPU policy so the next call can recover.
     if rts(me) && cycles_left() < 3000.0 {
         return common::recovery(world, me);
     }
@@ -697,8 +713,7 @@ fn strategy(world: View, me: View) -> Value {
     let available_control = if available.truthy() { available.get("control").num() * 0.8 } else { f64::INFINITY };
     let types = common::calls(
         world,
-        // Standing orders persist; local reflexes keep the fast combat path.
-        // Absolute budgets leave room for route search as more types wake.
+        // Standing orders persist; each controller keeps route room.
         &[
             ("miner", 6000.0, 6.0),
             ("runner", 5000.0, 4.0),
@@ -714,7 +729,7 @@ fn strategy(world: View, me: View) -> Value {
         available_control,
         me.get("units").get("byType"),
     );
-    // research what nobody sells first; what somebody holds, the market buys (market::research_order)
+    // Research what nobody sells; buy the rest.
     if full_plan {
         let research = market::research_order(&sold);
         common::budget(&mut orders, world, me, &common::Budget { research: 0.12, code: 0.10, techs: &research, types: Some(&types) });
@@ -730,7 +745,7 @@ fn strategy(world: View, me: View) -> Value {
         };
         let tech = if studying.is_empty() { View::undefined() } else { world.get("techs").get(&studying) };
         let offer = if tech.truthy() { tech.get("offer").num() } else { 0.0 };
-        // Any visible contact releases the research reserve for combat actions.
+        // Contacts release research reserves for combat.
         let mut policy = cpu_policy(me, offer, threatened || enemy.total >= 2.0);
         common::fit_cpu(&mut policy, me);
         orders.entry("compute").set("cpu", policy);
@@ -745,7 +760,7 @@ fn strategy(world: View, me: View) -> Value {
     if cycles_left() < 6000.0 || (rts(me) && ran_out) {
         return affordable(orders, me, start);
     }
-    // Court the two largest non-leaders outside pacts; partners' wars subsidise the market.
+    // Court large non-leaders outside pacts.
     let no_pacts = me.get("pacts").is_empty();
     // Avoid duplicates while one awaits an answer or within 10 s of the last proposal.
     if no_pacts && !me.get("inbox").iter().any(|m| m.get("pact").truthy()) && clock.at.get("ct").num_or(-1.0) <= now {
@@ -758,9 +773,9 @@ fn strategy(world: View, me: View) -> Value {
             }
         }
     }
-    // Market hiring scans visible units (about 10 cycles each).
+    // Reserve the governor and ABI tail before optional market searches.
     let seen = 10.0 * world.get("units").len() as f64;
-    if !rts(me) || cycles_left() > 9000.0 + seen {
+    if !rts(me) || cycles_left() > 30000.0 + seen {
         let mood = market::Mood { threatened, fight: threatened || enemy.total >= 4.0, shade_ready, target: target_id, army: name };
         market::run(&mut orders, world, me, &mut clock, now, &mood, &sold);
     }
@@ -807,7 +822,7 @@ mod market {
         out
     }
 
-    /// The wanted techs some other faction standing holds (one pass over each faction's list).
+    /// Wanted techs held by another living faction.
     pub fn sold(world: View, me: View) -> Vec<&'static str> {
         let me_id = me.get("id").num();
         let mut out: Vec<&'static str> = Vec::new();
@@ -988,7 +1003,7 @@ mod market {
         if due(clock, "pa", 12.0, now) {
             doing = passage(orders, world, me, clock, now).or(doing);
         }
-        // a tech is bought as soon as the purse holds its price (the spawns save for it), one every 12 to 20 seconds
+        // Buy an affordable tech every 12–20 seconds.
         if clock.at.get("bt").num_or(-1.0) <= now {
             let mut p = purse(orders, me, true);
             if let Some(d) = buy_tech(orders, world, me, &mut p, clock, now, sold) {
@@ -1016,7 +1031,7 @@ mod market {
             propaganda(orders, world, me);
         }
         if due(clock, "mi", 70.0, now) && !mood.threatened {
-            // (a lease is paid by the second: it needs the first second's ◆, and a few more, not a unit's price)
+            // A lease needs cash for its first payments.
             let mut p = purse(orders, me, true);
             doing = lease_in(orders, world, me, &mut p, mood.target).or(doing);
         }
@@ -1673,12 +1688,30 @@ fn carry_order(o: Option<Value>, u: View, pl: &std::rc::Rc<Value>, me: View) -> 
     Some(o)
 }
 
-// Under 2,500 cycles a call can't pay for the plan lookup and an order: its units keep their orders a second longer.
+fn infantry_plan(units: View, me: View) -> Option<std::rc::Rc<Value>> {
+    if !rts(me) {return Some(plan::for_units(me,units,View::undefined()));}
+    let mut core=None;
+    for u in units.iter() {
+        let home=plan::here(me,u);
+        if !home&&core.is_some(){continue;}
+        let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
+        let read=if plan::known(me,u).is_none()&&bytes.is_bytes()&&bytes.len()>=2 {
+            let b=bytes.bytes();4.0*f64::from(u16::from_le_bytes([b[0],b[1]]))
+        }else{0.0};
+        if cycles_left()<read+2200.0{return None;}
+        let pl=plan::of(me,u);
+        if home&&(!pl.get("attack").is_undef()||pl.get("mines").truthy()||!pl.get("raid").is_undef()){return Some(pl);}
+        if !home&&!pl.get("attack").is_undef(){core=Some(pl);}
+    }
+    Some(core.unwrap_or_else(||std::rc::Rc::new(Value::obj())))
+}
+
+// Cold plans must leave room for an order; standing orders survive a deferred lookup.
 fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
-    if short(me, 2500.0, 1200.0) {
+    if short(me, 3000.0, 1200.0) {
         return Value::arr();
     }
-    let pl = plan::for_units(me, units, View::undefined());
+    let Some(pl)=infantry_plan(units,me) else {return Value::arr();};
     for turn in 0..units.len() {
         if rts(me) && cycles_left() < 2200.0 {
             break;
@@ -1718,7 +1751,45 @@ fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
     Value::Undef
 }
 
+
+// Interrupt useful local generation; leave batteries and distant sites to the campaign.
+fn energy_sabotage(u: View, world: View, me: View) -> Option<Option<Value>> {
+    if cycles_left()<2800.0 || !world.get("energy").truthy() || !u.get("hidden").truthy()
+        || !u.get("seenBy").is_empty() || u.get("stalled").truthy()
+        || me.get("bank").num_or(0.0)<150.0 || u.get("to").num_or(-1.0)>=0.0 {return None;}
+    let mut pick=None;let mut mw=2.0;
+    let sites=world.get("structures");
+    let start=(u.get("id").num_or(0.0)+world.get("seconds").num_or(0.0)/3.0) as usize;
+    for turn in 0..sites.len().min(24) {
+        if cycles_left()<2500.0 {break;}
+        let s=sites.at((start+turn)%sites.len());
+        let w=s.get("power");
+        if s.get("p").num_or(-2.0)!=u.get("at").num_or(-1.0) || s.get("state").str()!="ready"
+            || !realm::is_rival(world,me,s.get("owner").num_or(-1.0))
+            || w.get("disruptedFor").num_or(0.0)>0.0 || w.get("disruptionCooldown").num_or(0.0)>0.0
+            || !w.get("ports").iter().any(|p|p.get("kind").str()!="battery") {continue;}
+        let value=w.get("mw").num_or(0.0);
+        if value>=mw {mw=value;pick=Some(s);}
+    }
+    let s=pick?;
+    if let Some(o)=spy::sabotage_structure(u,world,me,s) {return Some(Some(o));}
+    (u.get("doing").str()=="sabotage" && u.get("sabotageStructure").num_or(-1.0)==s.get("id").num()).then_some(None)
+}
+
 fn shade(units: View, world: View, me: View) {
+    // A scaled shade batch needs room to decode its plan before infantry can retain each standing order.
+    if short(me, 3000.0, 1200.0) { return; }
+    if world.get("energy").truthy() && cycles_left()>4500.0 {
+        for u in units.iter().take(8) {
+            if cycles_left()<4000.0 {break;}
+            let doing=u.get("doing").str();
+            if doing!="idle" && !(matches!(doing,"capture"|"fight"|"sabotage") && u.get("target").num_or(-1.0)==u.get("at").num_or(-2.0)) {continue;}
+            if let Some(hit)=energy_sabotage(u,world,me) {
+                if let Some(mut hit)=hit {hit.set("cloak",true);order(hit);}
+                return;
+            }
+        }
+    }
     infantry(units, world, me, true);
 }
 

@@ -1,0 +1,11 @@
+{
+  "source": "C7 holdout diagnostic",
+  "capturedError": "/Users/reddybot/code/gameofcores-work/gameofcores-gameplay/artifacts/balance-oct16/gameplay-depth-holdout-final-7a5ad21/holdout-long-419.errors/error-19-faction-7-shade.json",
+  "function": "shade",
+  "fuel": 2586,
+  "tick": 81783,
+  "faction": 7,
+  "engine": "82ecc9ba99b7494e948e7c77ff543ffd3a694586",
+  "factions": "7a5ad215f43d5afd6e1d560e201b96e0efa3f235",
+  "note": "Nations shade callback error from C7 holdout long seed 419, tick 81783."
+}

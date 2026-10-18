@@ -1,0 +1,35 @@
+{
+  "fixture": "nations-lancer-low-budget.json",
+  "fixtureSha256": "bd0f370ac2bb11360044386b98af2ba8a779252223310499f510f9f5047b7438",
+  "origin": {
+    "capture": "/Users/reddybot/code/gameofcores-work/gameofcores-gameplay/artifacts/balance-oct16/gameplay-depth-holdout-final-af6732e/holdout-long-401.errors/error-23-faction-7-lancer.json",
+    "faction": 7,
+    "function": "lancer",
+    "tick": 93708,
+    "fuel": 2562,
+    "rate": 64,
+    "observed": "ran out of cycles"
+  },
+  "privacy": "Public unit callback arguments only. The captured program source is intentionally excluded.",
+  "repair": "Nations infantry admission waits for 3000 cycles before decoding its local plan. Lancer, runner and needle share this infantry path; shade retains its existing stricter 3000-cycle wrapper.",
+  "meter": {
+    "compiler": "Rust 1.97.0 guest SDK",
+    "module": "C8 captured Nations source, compiled with engine target/release/cores",
+    "rate": 64,
+    "before": {
+      "2500": "safe empty return using 46.734375 cycles",
+      "2561": "exhausted",
+      "2562": "exhausted (captured C8 budget)",
+      "2727": "exhausted",
+      "2728": "completed using 2727.796875 cycles"
+    },
+    "afterExpected": "At 2200\u20133001 the new admission returns an empty result using 46.734375 cycles and does not replace standing orders. The plan path resumes by 3500.",
+    "funded": {
+      "5000": "completed using 3512.890625 and emitted the unit RAM/order preservation update",
+      "6000": "same useful preservation update",
+      "twoLancers@5000": "completed using 3935.703125 with one bounded update",
+      "twoLancers@7000": "completed using 4637.546875 with two updates"
+    }
+  },
+  "scope": "No controller allocation, shared policy, or combat balance changes."
+}

@@ -560,6 +560,7 @@ fn affordable(mut orders: Value, me: View, start: f64) -> Value {
 }
 
 fn think(world: View, me: View) -> Value {
+    if cycles_left()<800.0 {return obj!{};}
     common::govern(world, me, 0.4, || strategy(world, me))
 }
 
@@ -844,13 +845,38 @@ fn miner(units: View, world: View, me: View) {
     }
 }
 
+// Select the SDK's first local plan, or carried core, only after its cold RAM read fits.
+fn line_plan(units: View, world: View, me: View) -> Option<std::rc::Rc<Value>> {
+    if !rts(me) { return Some(plan::for_units(me, units, world)); }
+    let mut core = None;
+    for u in units.iter() {
+        let home = plan::here(me, u);
+        if !home && core.is_some() { continue; }
+        if rts(me) {
+            let page = me.get("ramProvince").key(u.get("at").num()).key(0.0);
+            let bytes = page.get("bytes");
+            let read = if plan::known(me, u).is_none() && bytes.is_bytes() && bytes.len() >= 2 {
+                let b = bytes.bytes();
+                4.0 * f64::from(u16::from_le_bytes([b[0], b[1]]))
+            } else { 0.0 };
+            if cycles_left() < read + 2200.0 { return None; }
+        }
+        let p = plan::of(me, u);
+        if home && (!p.get("attack").is_undef() || p.get("mines").truthy() || !p.get("raid").is_undef()) {
+            return Some(plan::check(p, world));
+        }
+        if !home && !p.get("attack").is_undef() { core = Some(p); }
+    }
+    Some(core.map_or_else(|| std::rc::Rc::new(Value::obj()), |p| plan::check(p, world)))
+}
+
 // The Red Army: those the plan sends to defend (common::defends) fight there, the rest capture the attack.
 fn line(units: View, world: View, me: View) {
     // a call short of the plan lookup and an order keeps its units' standing orders a second longer
     if rts(me) && cycles_left() < 2200.0 {
         return;
     }
-    let p = plan::for_units(me, units, world);
+    let Some(p) = line_plan(units, world, me) else { return; };
     let attack = num(p.get("attack"));
     for turn in 0..units.len() {
         if rts(me) && cycles_left() < 2200.0 {
@@ -900,7 +926,7 @@ fn spark(units: View, world: View, me: View) {
     if rts(me) && cycles_left() < 2200.0 {
         return;
     }
-    let p = plan::for_units(me, units, world);
+    let Some(p) = line_plan(units, world, me) else { return; };
     let sway = p.get("sway");
     // (a plan without marks, from a unit that carried it abroad, says nothing: they keep their orders)
     if sway.is_undef() {
@@ -909,7 +935,7 @@ fn spark(units: View, world: View, me: View) {
     let marks: Vec<f64> = sway.items().iter().map(num).collect();
     let home = if num(p.get("home")).is_nan() { me.get("capital").num() } else { num(p.get("home")) };
     for turn in 0..units.len() {
-        if rts(me) && cycles_left() < 2200.0 {
+        if rts(me) && !orders::room(world) {
             break;
         }
         let u = nth(units, turn, world);

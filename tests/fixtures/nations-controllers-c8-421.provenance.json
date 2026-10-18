@@ -1,0 +1,109 @@
+{
+  "source": "C8 production-budget holdout long421, public authored default Nations callbacks",
+  "engineRevision": "2d9b8f14a6017c0e6dbcbd8b20b9d70e18895e95",
+  "factionRevision": "af6732e35601512f709509fbb1740a5fb99aa28e",
+  "repairBaseRevision": "e626901c3aa55001bab0666d7fd5605ab6992cbe",
+  "captures": [
+    {
+      "fixture": "nations-miner-c8-421.json",
+      "sha256": "59de25a63da0037ebaef1a757a72d86f281cac575c7842ee6dac0be679193eaf",
+      "capturedError": "/Users/reddybot/code/gameofcores-work/gameofcores-gameplay/artifacts/balance-oct16/gameplay-depth-holdout-final-af6732e/holdout-long-421.errors/error-23-faction-7-miner.json",
+      "captureSha256": "2297e2e4e6c6e21d121ba1cfd191fe0638483ff92555001c036202e50cb9a3e5",
+      "function": "miner",
+      "fuel": 5424,
+      "tick": 83483,
+      "seconds": 16696,
+      "units": 17,
+      "faction": 7,
+      "sourceSha256": "6f67ce5cb4d9685ecdfe63762634a2721bac83ca24e49b03cabfe633935b433f",
+      "modifications": "None; exact captured args, including their existing RAM and standing orders."
+    },
+    {
+      "fixture": "nations-shade-c8-421.json",
+      "sha256": "ee8994d8dd84ec0cf0bb127237b36cac4c91f7a1c80fb98d9d15721d9f762eba",
+      "capturedError": "/Users/reddybot/code/gameofcores-work/gameofcores-gameplay/artifacts/balance-oct16/gameplay-depth-holdout-final-af6732e/holdout-long-421.errors/error-24-faction-7-shade.json",
+      "captureSha256": "d20e62e2f9e5dd102972b1590f3c06760d0e869c0d0e5fea55e47ff01c0c0cce",
+      "function": "shade",
+      "fuel": 3201,
+      "tick": 84498,
+      "seconds": 16899,
+      "units": 5,
+      "faction": 7,
+      "sourceSha256": "6f67ce5cb4d9685ecdfe63762634a2721bac83ca24e49b03cabfe633935b433f",
+      "modifications": "None; exact captured args, including their existing RAM and standing orders."
+    }
+  ],
+  "diagnosis": {
+    "miner": "The full multi-body cargo scan admitted an optional cold plan-routed gather with insufficient return runway. Omitting only that gather made 5424 safe in 2079.92 cycles. The existing one-action fallback is preserved unchanged.",
+    "shade": "The 3000 entry floor admitted a 709-byte cold local plan after an abroad unit. Read admission now accounts for encoded size before decoding and retains standing orders when it cannot fit."
+  },
+  "validation": {
+    "instructionsPerCycle": 64,
+    "guestToolchain": "1.97.0",
+    "sdkRlibSha256": "01a28345de07a60bce153e12dcdaa56e9b3048993e0bcc7daf9bd863e6c16309",
+    "fixedModuleSha256": "2fbc8c5ed06b17426f51af3fb6d3db119957346a1b0497f729697326f7e0d226",
+    "exportSha256": "abdd348f9f39bf308002cc5afec78e4fcebd1be085aaca0055e7c313afa884d0",
+    "meteredCalls": 436,
+    "fuelFailures": 0,
+    "rawResults": "/tmp/c8-421-fixed-sweep.json",
+    "runner": "/tmp/c8-421-sweep.py",
+    "log": "/tmp/gameplay-depth-421-sweep.log",
+    "coverage": "Actual callbacks from 227 through 12000, dense miner 5000\u201310000 by 50, shade 2800\u201310000 by 100; remote fallback 3500\u20135100 by 25 plus existing loaded/local fixtures.",
+    "usefulChecks": [
+      {
+        "case": "Exact miner",
+        "fuel": 5424,
+        "used": 2389.609375,
+        "order": "Miner 1052 gathers local province 4 slot 0; existing gather jobs are preserved."
+      },
+      {
+        "case": "Exact miner",
+        "fuel": 6000,
+        "used": 2389.609375,
+        "order": "The scheduled 6000 budget remains productive at the same visible local mine."
+      },
+      {
+        "case": "Exact miner",
+        "fuel": 10000,
+        "used": 8528.765625,
+        "order": "Miner 1052 gathers planned province 8 slot 0 via 12,8."
+      },
+      {
+        "case": "Existing remote fallback fixture",
+        "fuel": 4590,
+        "used": 3865.71875,
+        "order": "Miner 1410 gathers province 18 slot 1 via 18."
+      },
+      {
+        "case": "Exact shade",
+        "fuel": 3201,
+        "used": 424.046875,
+        "order": "No orders; the five correct standing capture/picket jobs remain."
+      },
+      {
+        "case": "Authored paid idle guard countercase",
+        "modifications": "Only actual shade 1007 doing becomes idle and target becomes \u22121; no coin, body, ownership, plan or CPU edits.",
+        "fuel": 8000,
+        "used": 5721.875,
+        "order": "Shade 1007 fights at picket 4 with cloak enabled."
+      },
+      {
+        "case": "C8 day307 exact lancer at 2680 cycles",
+        "fuel": 2680,
+        "used": 46.734375,
+        "order": "Existing 3000 lancer guard safely keeps standing work."
+      }
+    ],
+    "nativeTests": {
+      "nationsStrategies": 19,
+      "sharedBehavior": 94,
+      "sourceChecks": 5
+    },
+    "sourceCeilingBytes": 524288
+  },
+  "limits": [
+    "The safety sweep covers captured and stated counterfactual views, not every future world.",
+    "No controller ceiling, engine budget, cargo policy, army allocation or standing order was raised or reset.",
+    "The optional full-path read may defer remote assignment; a visible affordable local slot remains useful while a larger call can route the planned remote slot."
+  ]
+}

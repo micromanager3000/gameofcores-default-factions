@@ -1,0 +1,6 @@
+{
+  "derivedFrom": "templar-miner-logistics-low.json",
+  "mutation": "Clears the captured loaded miner's stale depot-full job while retaining one cargo load and idle state.",
+  "rate": 64,
+  "purpose": "At the low-budget fallback, the miner emits a local unload transfer rather than merely returning an empty callback."
+}

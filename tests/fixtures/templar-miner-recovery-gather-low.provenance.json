@@ -1,0 +1,9 @@
+{
+  "source": "derived C4 candidate4 Templar miner callback",
+  "parentFixture": "templar-miner-cargo-retry-low.json",
+  "derivation": "cleared local cargo load and job and marked the observed miner callbacks idle; preserves the captured 45-province logistics observation to exercise the recovery-gather fallback.",
+  "purpose": "below the 5000-cycle full assignment runway, a no-transfer miner callback may assign exactly one idle, empty miner to gather without replacing a cargo job.",
+  "rate": 64,
+  "meterReport": "/tmp/native-regression-source-meter-2026-10-18.json",
+  "meteredResult": "Rust 1.97 guest Wasm at rate 64: 3000\u20135000 cycles emitted one gather using 822.84375 cycles; 2000 and 2601 returned cleanly without an order."
+}

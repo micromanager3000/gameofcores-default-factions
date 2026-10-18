@@ -1,0 +1,149 @@
+{
+  "purpose": "Keep capture objectives consistent with incoming contract safe conduct.",
+  "baseFactionRevision": "fae85c61331e430f2ae30943d5dbd98c44b48017",
+  "evidence": {
+    "batch": "artifacts/balance-oct16/gameplay-depth-duels-final-da74206",
+    "game": "depth-arjuna-manifesto-seed229-swap0",
+    "seconds": 14400,
+    "faction": 0,
+    "targetProvince": 13,
+    "ownCapturersInTarget": 6,
+    "rivalGuardsInTarget": 0,
+    "unitStalls": 0,
+    "rtsIncome": 62673.12772526805,
+    "rtsBank": 651942.8596699603,
+    "contract": {
+      "id": 62,
+      "from": 1,
+      "to": 0,
+      "mineProvince": 13,
+      "slots": [
+        0,
+        1
+      ],
+      "endsIn": 201,
+      "graceIn": 231
+    },
+    "scope": "One of 30 surviving C6 endpoint observations selected an incoming mine-lease target. Five observations held incoming mine leases. Baseline endpoints lack saved own observations, so contract prevalence cannot be compared."
+  },
+  "baselineComparison": {
+    "factionRevision": "9abe662723ee38ebdaf3038b096b0e58bd269b02",
+    "frozenSource": "artifacts/gameplay-2026-10-18/gameplay-depth-duels-baseline-programs-9abe662/arjuna.rs",
+    "sourceLocations": {
+      "frontier": 2908,
+      "fairSiegeCheck": 4452
+    },
+    "finding": "The baseline also omits leased provinces from frontier filtering and checks only an already-started siege before accepting a mine lease. This is a latent shared bug. Its presence in one C6 endpoint does not establish the cause of zero candidate-6 Crowns versus five baseline Crowns."
+  },
+  "engineContract": {
+    "safeConduct": "crates/engine/src/trade.rs:751,798: mine leases protect every lessee unit in that province, including capture units and the leave grace.",
+    "capture": "crates/engine/src/units.rs:3758: covered capturers cannot advance a siege.",
+    "observation": "crates/engine/src/trade.rs:1037: contracts publish their normalized mines, ended state and graceIn."
+  },
+  "repair": [
+    "Exclude incoming leased provinces and incoming passage hosts while their contract grace remains. Outgoing rights do not protect our own force.",
+    "Decline incoming mine leases or passage when they would cover the saved attack, a standing capture order or an active siege. Normal productive leases remain eligible.",
+    "Check encoded plan length before reading capital RAM. Decline the optional protective deal when the read plus 5,000 cycles does not fit; bound the unit-intent scan with a reserve of 4,000 cycles."
+  ],
+  "limitations": [
+    "If every target is protected and a house later clears both saved and standing capture intent, this repair does not persist a campaign intent across that change. The authored renewal test proves refusal while intent exists, then eligibility after unrenewed grace. It does not prove a complete all-protected campaign recovery.",
+    "Contract grace filtering is conservative for mixed-duration contracts: it uses published whole-contract graceIn.",
+    "No engine safe-conduct rule, Crown threshold, world budget or army share changed. No long simulation was run for this repair."
+  ],
+  "tests": {
+    "behavior": {
+      "command": "RUSTUP_TOOLCHAIN=1.99.0 CARGO_BUILD_JOBS=2 node tools/test-behavior.mjs ../gameofcores-gameplay",
+      "passed": 91,
+      "failed": 0,
+      "log": "/tmp/goc-depth-trade-intent-behavior-final.log"
+    },
+    "sourceChecks": {
+      "command": "RUSTUP_TOOLCHAIN=1.99.0 CARGO_BUILD_JOBS=2 npm test",
+      "passed": 5,
+      "failed": 0,
+      "log": "/tmp/goc-depth-trade-intent-source-checks.log"
+    },
+    "authoredCases": [
+      "Incoming leases and ended positive grace exclude a target; expired grace restores it.",
+      "Incoming and outgoing passage differ; passage broken by its guest has no grace.",
+      "Saved capture intent declines an incoming lease or passage before any siege begins.",
+      "Ordinary productive leases and outgoing rights remain acceptable.",
+      "Standing capture intent still declines renewal when a current lease hides the frontier objective."
+    ]
+  },
+  "metering": {
+    "instructionsPerCycle": 64,
+    "toolchain": "1.97.0",
+    "temporaryProbe": "A temporary exported wrapper calls common::fair directly; it is not part of the faction program.",
+    "exactOffer": "/tmp/goc-depth-trade-intent-exact-offer.json",
+    "exactOfferSha256": "cc6b8f0df55549bfbf08ddf402521d11b08c645c4fd5b559a938504c047607b5",
+    "authoredCountercase": "The no-capture variant removes the saved attack and own capture orders from the same public observation. It tests productive lease acceptance, not a game outcome.",
+    "sourceSha256": "0e3082e9c271e8d6ec5f072583a9456219333ace7aef401ab37a13413daefee7",
+    "probeWasmSha256": "46e212bbf585bdb97bc557c7cc30d1c3891e10c079ccc46aab3d3c8f3f6dfe89",
+    "results": "/tmp/goc-depth-trade-intent-meter.json",
+    "calls": 10,
+    "failures": 0,
+    "outcomes": [
+      {
+        "case": "before",
+        "budget": 20000,
+        "accepted": true,
+        "used": 612.140625
+      },
+      {
+        "case": "after",
+        "budget": 3000,
+        "accepted": false,
+        "used": 269.546875
+      },
+      {
+        "case": "after",
+        "budget": 5000,
+        "accepted": false,
+        "used": 269.546875
+      },
+      {
+        "case": "after",
+        "budget": 6000,
+        "accepted": false,
+        "used": 269.546875
+      },
+      {
+        "case": "after",
+        "budget": 8000,
+        "accepted": false,
+        "used": 1591.53125
+      },
+      {
+        "case": "after",
+        "budget": 12000,
+        "accepted": false,
+        "used": 1591.53125
+      },
+      {
+        "case": "after",
+        "budget": 20000,
+        "accepted": false,
+        "used": 1591.53125
+      },
+      {
+        "case": "authored_no_capture",
+        "budget": 6000,
+        "accepted": true,
+        "used": 866.609375
+      },
+      {
+        "case": "authored_no_capture",
+        "budget": 10000,
+        "accepted": true,
+        "used": 866.609375
+      },
+      {
+        "case": "authored_no_capture",
+        "budget": 20000,
+        "accepted": true,
+        "used": 866.609375
+      }
+    ]
+  }
+}

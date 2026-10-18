@@ -370,6 +370,44 @@ fn think_recovery(me: View) -> Value {
         "memo" => "Recovering production" };
 }
 
+/// A cargo economy can have a large bank while its last recovery policy still gives fabrication nothing.  Put one
+/// screen back on the field before asking the expensive planner to re-enter: the workers keep their routes, and the
+/// screen gives the carried plan somebody who can claim its target.
+fn productive_reentry(me: View) -> bool {
+    if !me.path("rts.cpu").truthy() || !mem::get(me.get("ramCapital"), 244).get("r").truthy() {
+        return false;
+    }
+    if me.path("units.stalled").num_or(0.0) > 0.0 || me.path("units.queued").num_or(0.0) > 0.0 {
+        return false;
+    }
+    let have = me.path("units.byType");
+    let workers = have.get("miner").num_or(0.0) + have.get("hauler").num_or(0.0) + have.get("freighter").num_or(0.0);
+    let armed = me.path("units.total").num_or(0.0) - workers - have.get("escort").num_or(0.0);
+    let income = me.path("rts.cpu.income").num_or(0.0);
+    workers >= 8.0 && armed < 4.0 && me.path("units.total").num_or(0.0) < me.path("units.cap").num_or(0.0)
+        && income > 0.0 && me.path("rts.cpu.bank").num_or(0.0) >= income * 3.0
+}
+
+fn think_reentry(me: View) -> Value {
+    let mut orders = think_recovery(me);
+    let modules = mods(me, "screen");
+    let fabrication = common::fabrication(me, modules.len() as f64) + 200.0;
+    {
+        let cpu = orders.entry("compute").entry("cpu");
+        cpu.entry("limits").set("fabrication", fabrication);
+        let control = cpu.get("limits").get("control").num_or(0.0).max(22000.0);
+        cpu.entry("limits").set("control", control);
+        cpu.set("upkeepOrder", vec!["miner", "hauler", "freighter", "screen"]);
+    }
+    let types = orders.entry("compute").entry("types");
+    types.set("hauler", obj! { "cycles"=>10000, "every"=>2 });
+    types.set("freighter", obj! { "cycles"=>12000, "every"=>2 });
+    types.set("screen", obj! { "cycles"=>6000, "every"=>1 });
+    orders.set("spawn", vec![obj! { "type"=>"screen", "build"=>build(SCREEN), "modules"=>modules }]);
+    orders.set("memo", "Address Zero: rearming a screen for the carried front.");
+    orders
+}
+
 // Output serialization runs after think returns; RAM writes are paid from what it leaves.
 fn think_return_cost(orders: &Value) -> f64 {
     let began = cycles_left();
@@ -400,10 +438,13 @@ fn think_room(orders: &Value, work: f64) -> bool {
 }
 
 fn think(world: View, me: View) -> Value {
+    if cycles_left()<800.0 {return obj!{};}
     if !me.path("rts.cpu").truthy() {
         return common::govern(world, me, 0.4, || strategy(world, me));
     }
-    if cycles_left() < 3000.0 { return think_emergency(); }
+    if cycles_left() < 3900.0 { return think_emergency(); }
+    // Do not let a profitable cargo crew remain worker-only while a full planner waits for a rare high-burst second.
+    if productive_reentry(me) { return think_reentry(me); }
     if world.get("logistics").truthy() && me.path("units.total").num_or(0.0) < 4.0
         && me.path("rts.cpu.income").num_or(0.0) < 30000.0 {
         return common::govern(world, me, 0.4, || strategy(world, me));
@@ -429,6 +470,23 @@ fn think(world: View, me: View) -> Value {
     orders
 }
 
+// A sea station compares shore-pair routes. Keep that optional ranking pass behind the
+// remaining allowance; land and pass targets need no naval search.
+fn rank_hold(world: View, me: View) -> impl Fn(View, f64) -> bool {
+    let land = common::can_hold(world, me, false);
+    let naval = common::can_hold(world, me, true);
+    let water_work = 300.0 * world.get("waters").len() as f64;
+    let rts = me.path("rts.cpu").truthy();
+    move |q, remaining| land(q) || ((!rts || remaining > 18000.0 + water_work
+        * (q.path("routes.sea").len() + q.path("routes.air").len()).max(1) as f64) && naval(q))
+}
+
+fn prefer_supported(rim: Vec<View>, rts: bool, supported: &[f64]) -> Vec<View> {
+    if rts && !supported.is_empty() {
+        rim.into_iter().filter(|q| supported.contains(&q.get("id").num())).collect()
+    } else { rim }
+}
+
 fn strategy(world: View, me: View) -> Value {
     let rts = me.get("rts");
     if rts.truthy() && cycles_left() < 3000.0 {
@@ -448,12 +506,11 @@ fn strategy(world: View, me: View) -> Value {
     let by_id = realm::index(world);
     let fighters = common::fighters(me);
     let rim = common::frontier(world, me);
-    // the best land first, marked down where the army couldn't hold on to it (common::can_hold)
-    let hold = common::can_hold(world, me, true);
     // Keep reachable fronts ahead of unsupported sea crossings even when survey rejects a well-defended town.
-    // Without this filter, a cheaper overseas capital can leave the ground army waiting at home indefinitely.
-    let supported: Vec<View> = rim.iter().copied().filter(|q| hold(*q)).collect();
-    let rim = if rts.truthy() && !supported.is_empty() { supported } else { rim };
+    // Classify each crossing once: rank_hold leaves expensive sea checks out of short callbacks.
+    let hold = rank_hold(world, me);
+    let supported: Vec<f64> = rim.iter().filter(|q| hold(**q, cycles_left())).map(|q| q.get("id").num()).collect();
+    let rim = prefer_supported(rim, rts.truthy(), &supported);
     let ranked = realm::rank(world, me, rim, |w, m, q| {
         let owner = q.get("owner").num_or(-1.0);
         let rival = realm::is_rival(w, m, owner);
@@ -469,7 +526,7 @@ fn strategy(world: View, me: View) -> Value {
             + if approach { 5.0 } else { 0.0 }
             + if rival && infiltrated { 7.0 } else { 0.0 }
             + if rival && owner == campaign { 4.0 } else { 0.0 }
-            - if hold(q) { 0.0 } else { common::OVER_WATER }
+            - if supported.contains(&q.get("id").num()) { 0.0 } else { common::OVER_WATER }
     });
     let ranked = common::rally(world, me, ranked);
     // Survey scans provinces for mines and defense, and may scan visible fighters for a picket.
@@ -588,7 +645,8 @@ fn strategy(world: View, me: View) -> Value {
         orders.set("rent", 0);
     }
     orders.entry("compute").set("cpu", policy);
-    if rts.truthy() && !think_room(&orders, 3000.0) { return orders; }
+    // Recruitment review, cargo governance and ABI serialization still run after strategy.
+    if rts.truthy() && !think_room(&orders, 12000.0) { return orders; }
     // the ledger: techs stolen so far, counted when a tech a spy was copying arrives (page 225)
     let ledger = mem::get(me.get("ramCapital"), LEDGER);
     let mut stolen = vor0(&ledger.get("stolen"));
@@ -620,7 +678,7 @@ fn strategy(world: View, me: View) -> Value {
     orders.set("memo", nullptr_ext::memo(world, me, &spies, stolen, sab, skirms, screens));
     // A short second keeps what's decided so far (the plan, spawns and the CPU policy): trade and diplomacy wait a
     // second rather than run think out of cycles and lose it all.
-    let diplomacy = 3000.0 + 500.0 * world.get("factions").len() as f64;
+    let diplomacy = 18000.0 + 500.0 * world.get("factions").len() as f64;
     if (rts.truthy() && !think_room(&orders, diplomacy)) || cycles_left() < 5000.0 {
         return orders;
     }
@@ -976,6 +1034,8 @@ fn lancer(units: View, world: View, me: View) {
 }
 
 fn gun(units: View, world: View, me: View) {
+    // Route planning can exhaust a low scaled callback before a single gun reaches its loop guard.
+    if me.get("rts").truthy() && cycles_left() < 2500.0 { return; }
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
         if rts && cycles_left() < 2200.0 {
@@ -1040,17 +1100,16 @@ fn gun(units: View, world: View, me: View) {
 fn wing(units: View, world: View, me: View) {
     // a flier a minute up comes down on your nearest land before anything else, even short of cycles: its burn climbs
     // the longer it flies, and an unpaid one crashes
-    for u in units.iter() {
+    for u in units.iter().take_while(|_| cycles_left() > 400.0) {
         let a = u.path("rts.air");
         if a.truthy() && a.get("aloft").truthy() && n(a.get("heat")) >= 60.0 && !is_str(u.get("doing"), "move") {
             order(obj! { "id" => u.get("id"), "land" => true });
         }
     }
-    if me.get("rts").truthy() && cycles_left() < 2200.0 {
+    if me.get("rts").truthy() && cycles_left() < 2600.0 {
         return;
     }
     let pl = plan::for_units(me, units, world);
-    let by_id = realm::index(world);
     let hunt = pl.get("hunt");
     let abroad = hunt.is_undef();
     let goal = if !abroad && vn(hunt) >= 0.0 {
@@ -1066,7 +1125,7 @@ fn wing(units: View, world: View, me: View) {
     let g = vn(goal);
     let me_id = n(me.get("id"));
     let allies = me.get("allies");
-    let q = by_id.get(g);
+    let q = world.get("provinces").iter().find(|p| n(p.get("id")) == g).unwrap_or(View::undefined());
     let foes = if q.truthy() && q.get("units").truthy() {
         q.get("units").keys().filter(|f| {
             let f = js_key_num(f);
@@ -1079,7 +1138,7 @@ fn wing(units: View, world: View, me: View) {
     let verb = if q.truthy() && n(owner) >= 0.0 && !same(owner, me.get("id")) && !allies.has_num(n(owner)) && foes == 0 { "raid" } else { "fight" };
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
-        if rts && cycles_left() < 2200.0 {
+        if rts && cycles_left() < 1800.0 {
             break;
         }
         let u = turn(units, i, world);
@@ -1108,6 +1167,31 @@ fn wing(units: View, world: View, me: View) {
 // it sabotages instead, draining the cycles the capital parries with. Caught, it runs for the quietest neighbouring
 // province and lies low for 40 s before it goes back to work. Inside a rival's walls a stealth-1 spy cloaks when the
 // cloak lane can pay: cloaked, a standard body sees it only at arm's length.
+
+// Interrupt useful local generation; leave batteries and distant sites to the campaign.
+fn energy_sabotage(u: View, world: View, me: View) -> Option<Option<Value>> {
+    if cycles_left()<3400.0 || !world.get("energy").truthy() || !u.get("hidden").truthy()
+        || !u.get("seenBy").is_empty() || u.get("stalled").truthy()
+        || me.get("bank").num_or(0.0)<150.0 || u.get("to").num_or(-1.0)>=0.0 {return None;}
+    let mut pick=None;let mut mw=2.0;
+    let sites=world.get("structures");
+    let start=(u.get("id").num_or(0.0)+world.get("seconds").num_or(0.0)/3.0) as usize;
+    for turn in 0..sites.len().min(24) {
+        if cycles_left()<3000.0 {break;}
+        let s=sites.at((start+turn)%sites.len());
+        let w=s.get("power");
+        if s.get("p").num_or(-2.0)!=u.get("at").num_or(-1.0) || s.get("state").str()!="ready"
+            || !realm::is_rival(world,me,s.get("owner").num_or(-1.0))
+            || w.get("disruptedFor").num_or(0.0)>0.0 || w.get("disruptionCooldown").num_or(0.0)>0.0
+            || !w.get("ports").iter().any(|p|p.get("kind").str()!="battery") {continue;}
+        let value=w.get("mw").num_or(0.0);
+        if value>=mw {mw=value;pick=Some(s);}
+    }
+    let s=pick?;
+    if let Some(o)=spy::sabotage_structure(u,world,me,s) {return Some(Some(o));}
+    (u.get("doing").str()=="sabotage" && u.get("sabotageStructure").num_or(-1.0)==s.get("id").num()).then_some(None)
+}
+
 fn ghost(units: View, world: View, me: View) {
     nullptr_ext::spies(units, world, me);
 }
@@ -1756,6 +1840,14 @@ mod nullptr_ext {
                 }
             }
             if !stay {
+                if let Some(mut hit)=energy_sabotage(u,world,me) {
+                    let want=abroad&&can_cloak&&cloaks>=1.0;
+                    if want {cloaks-=1.0;}
+                    if let Some(o)=&mut hit {o.set("cloak",want);}
+                    else if want!=cloaked {hit=Some(obj!{"id"=>u.get("id"),"cloak"=>want});}
+                    if let Some(o)=hit {order(o);}
+                    continue;
+                }
                 // its mark: the one it keeps in its notes while that capital still has a tech to copy, else the i-th of
                 // the list, best first; with nothing to copy anywhere, a post: a rival capital watched from six cells
                 // out, where fewer eyes are, reading its plan there (the i-th spy the i-th nearest)

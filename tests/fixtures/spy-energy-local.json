@@ -1,0 +1,109 @@
+[
+  [
+    {
+      "id": 10,
+      "owner": 1,
+      "type": "ghost",
+      "at": 1,
+      "to": -1,
+      "doing": "idle",
+      "target": -1,
+      "hidden": true,
+      "seenBy": [],
+      "build": {
+        "stealth": 1
+      },
+      "rts": {
+        "cloaked": false,
+        "modules": [
+          "cloak"
+        ]
+      }
+    }
+  ],
+  {
+    "energy": true,
+    "seconds": 100,
+    "factions": [
+      null,
+      {
+        "id": 1,
+        "alive": true,
+        "capital": 0
+      },
+      {
+        "id": 2,
+        "alive": true,
+        "capital": 2
+      }
+    ],
+    "provinces": [
+      {
+        "id": 0,
+        "owner": 1,
+        "x": 0,
+        "y": 0,
+        "adj": [
+          1
+        ]
+      },
+      {
+        "id": 1,
+        "owner": 2,
+        "x": 1,
+        "y": 0,
+        "adj": [
+          0,
+          2
+        ]
+      },
+      {
+        "id": 2,
+        "owner": 2,
+        "x": 2,
+        "y": 0,
+        "adj": [
+          1
+        ]
+      }
+    ],
+    "structures": [
+      {
+        "id": 91,
+        "p": 1,
+        "owner": 2,
+        "x": -4,
+        "y": 3,
+        "radius": 1,
+        "hp": 100,
+        "state": "ready",
+        "power": {
+          "mw": 2,
+          "ports": [
+            {
+              "kind": "wind",
+              "capacity": 3
+            }
+          ],
+          "disruptedFor": 0,
+          "disruptionCooldown": 0
+        }
+      }
+    ]
+  },
+  {
+    "id": 1,
+    "capital": 0,
+    "bank": 1000,
+    "costs": {
+      "unit": 100
+    },
+    "allies": [],
+    "contracts": [],
+    "techs": {},
+    "rts": {
+      "cpu": {}
+    },
+    "ramCapital": {}
+  }
+]

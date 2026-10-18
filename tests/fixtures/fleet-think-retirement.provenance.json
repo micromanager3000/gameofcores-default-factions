@@ -1,0 +1,173 @@
+{
+  "fixture": "fleet-think-retirement.json",
+  "origin": {
+    "game": "depth-kublai-fleet-seed229-swap0",
+    "sourceRevision": "7a5ad21",
+    "seconds": 14400,
+    "state": "gameofcores-gameplay/artifacts/balance-oct16/gameplay-depth-duels-final-7a5ad21/depth-kublai-fleet-seed229-swap0.state.json",
+    "observation": "faction1 Fleet own THINK [world,me]"
+  },
+  "authoredChanges": [
+    "Clone Fleet own warjunk16 as empty paid corsair999999 on the same water62; adjust body to a cargo corsair and own unit counts.",
+    "Raise only coin bank to1000 to remove the independent coin-price block. Existing RTS bank, income, recovery RAM, geography, enemy contacts and wrecks remain as observed."
+  ],
+  "mechanism": {
+    "previous": "Postamble read nv.rw from the old capital plan after govern/strategy returned. A recovery plan has no nv, so a freshly useful corsair could be retired even when this callback published hunting waters.",
+    "repaired": "Carry an optional current-callback hunting decision from the fresh naval planner. Only Some(false) admits retirement; recovery, resting and cached-plan paths defer cleanup. naval.raid equals the fresh rw.len(), not a recruitment deficit.",
+    "guards": "Existing cargo, cargo-job, hired, target, salvage and retirement runway checks remain."
+  },
+  "countercases": {
+    "freshNoHunt": "Set all rival faction alive=false and all non-Fleet provinces owner=-1. A full callback publishes no hunting waters and still retires the empty corsair.",
+    "resting": "Change only world seconds/tick to14401/72005; no fresh naval decision, no retirement.",
+    "loadedNoHunt": "Fresh-no-hunt variant with corsair cargo.cycles128000; loaded cargo survives retirement.",
+    "recovery": "Base fixture at40000 cycles returns recovery and preserves the corsair."
+  },
+  "meter": {
+    "toolchain": "1.97.0",
+    "instructionsPerCycle": 64,
+    "module": "/tmp/goc-depth-fleet-retirement-fixed.wasm",
+    "sourceSha256": "8d8257b8368b6cce60db7b0d3a27b4bfbec1cbc132847545530dc381efff07eb",
+    "wasmSha256": "90de6f3e2ed69e33421f98f89b61f2b74dfc31bdeaa757fd91a44cef626c8751",
+    "results": "/tmp/goc-depth-fleet-retirement-fixed-sweep.json",
+    "budgets": [
+      500,
+      800,
+      1500,
+      3000,
+      5000,
+      6000,
+      10000,
+      20000,
+      30000,
+      40000,
+      48000,
+      49000,
+      50000,
+      51000,
+      52000,
+      53000,
+      55000,
+      60000,
+      65000,
+      66490,
+      70000,
+      75000
+    ],
+    "calls": 88,
+    "errors": 0,
+    "beforeExact": {
+      "fuel": 66490,
+      "used": 45350.40625,
+      "disband": [
+        999999
+      ],
+      "newHuntingWaters": [
+        65,
+        62,
+        50
+      ]
+    },
+    "afterExact": [
+      {
+        "case": "fresh_hunt",
+        "budget": 40000,
+        "ok": true,
+        "used": 11951.625,
+        "disband": [],
+        "memo": "Recovering production",
+        "fab": 0
+      },
+      {
+        "case": "fresh_hunt",
+        "budget": 66490,
+        "ok": true,
+        "used": 44818.609375,
+        "disband": [],
+        "memo": "Quiet Fleet: 3 junks, 0 broadsides, 0 prizes; scouting a landing at Shardmere; target Xana",
+        "fab": 29806
+      },
+      {
+        "case": "fresh_no_hunt",
+        "budget": 40000,
+        "ok": true,
+        "used": 11918.8125,
+        "disband": [],
+        "memo": "Recovering production",
+        "fab": 0
+      },
+      {
+        "case": "fresh_no_hunt",
+        "budget": 66490,
+        "ok": true,
+        "used": 43763.28125,
+        "disband": [
+          999999
+        ],
+        "memo": "Quiet Fleet: 3 junks, 0 broadsides, 0 prizes; scouting a landing at Shardmere; target Xana",
+        "fab": 29806
+      },
+      {
+        "case": "fresh_no_hunt",
+        "budget": 75000,
+        "ok": true,
+        "used": 43763.28125,
+        "disband": [
+          999999
+        ],
+        "memo": "Quiet Fleet: 3 junks, 0 broadsides, 0 prizes; scouting a landing at Shardmere; target Xana",
+        "fab": 29806
+      },
+      {
+        "case": "resting",
+        "budget": 40000,
+        "ok": true,
+        "used": 192.078125,
+        "disband": [],
+        "memo": null,
+        "fab": null
+      },
+      {
+        "case": "resting",
+        "budget": 66490,
+        "ok": true,
+        "used": 192.078125,
+        "disband": [],
+        "memo": null,
+        "fab": null
+      },
+      {
+        "case": "loaded_no_hunt",
+        "budget": 40000,
+        "ok": true,
+        "used": 11918.8125,
+        "disband": [],
+        "memo": "Recovering production",
+        "fab": 0
+      },
+      {
+        "case": "loaded_no_hunt",
+        "budget": 66490,
+        "ok": true,
+        "used": 43303.1875,
+        "disband": [],
+        "memo": "Quiet Fleet: 3 junks, 0 broadsides, 0 prizes; scouting a landing at Shardmere; target Xana",
+        "fab": 29806
+      }
+    ]
+  },
+  "observedChurn": {
+    "note": "One development duel establishes costly disbanding, not the cause of all outcome changes.",
+    "shipBorn": 627,
+    "shipRemoved": 625,
+    "shipFell": 0,
+    "FleetCorsairsFielded": 625,
+    "allHouseDisbanded": 629,
+    "prizes": 0,
+    "salvagedCycles": 0
+  },
+  "validation": {
+    "strategyFixtureLog": "/tmp/goc-depth-fleet-retirement-strategies.log",
+    "strategyPassed": 18,
+    "nativeCases": "Use fixture unchanged for fresh hunt; apply the described no-hunt, resting and loaded countercases. Assert retained999999 for hunting/recovery/resting/loaded, retired999999 for funded fresh no-hunt."
+  }
+}

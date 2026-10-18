@@ -1,0 +1,24 @@
+{
+  "source": "Public default faction programs; no player source or private player state.",
+  "simulatorRevision": "10e5b5e262ccbe116cbbe6e50495569887342b5c",
+  "factionRevision": "2078d11f88e62018936c1ee58b390832b7a52391",
+  "seed": 101,
+  "rules": "CPU RTS, structures, energy; 4166667 world cycles per simulated second",
+  "fixtures": [
+    {
+      "file": "nullptr-wing-low.json",
+      "tick": 65299,
+      "faction": 6,
+      "function": "wing",
+      "allowanceCycles": 2336
+    },
+    {
+      "file": "fleet-kite-low.json",
+      "tick": 49021,
+      "faction": 4,
+      "function": "kite",
+      "allowanceCycles": 2214
+    }
+  ],
+  "capture": "Exact callback arguments, including the fourth local unit view argument. Original failures were retained in the private local simulation archive."
+}

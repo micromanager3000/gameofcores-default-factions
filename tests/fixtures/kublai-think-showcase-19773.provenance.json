@@ -1,0 +1,423 @@
+{
+  "purpose": "Avoid decoding a road field whose updated plan cannot be published during a short Kublai THINK.",
+  "baseFactionRevision": "41ded2f268dce2f39490d9b711f8a1c07a469d78",
+  "fixture": {
+    "path": "kublai-think-showcase-19773.json",
+    "sha256": "62bf2a3e633dbcedf1cda72ae3d69364695b0037323aab62bc7919aa007d38be",
+    "origin": "Exact public-default Kublai THINK view captured by temporary TestHost instrumentation in the unchanged showcase regression. No input fields changed.",
+    "test": "tests::fights::the_showcase_program_runs_clean_and_fields_its_army",
+    "seed": 7,
+    "faction": 2,
+    "tick": 2208,
+    "viewSeconds": 441,
+    "reportedErrorSeconds": 442,
+    "fuel": 19773,
+    "limit": 19893.047535607668,
+    "income": 29281.45006417781
+  },
+  "diagnosis": {
+    "originalWasmSha256": "53d68f5282993429924802a4762b20497a566132fa687e416ed2a1d5430cce1a",
+    "stampedGuestSha256": "53d68f5282993429924802a4762b20497a566132fa687e416ed2a1d5430cce1a",
+    "originalAt19773": "Ran out of cycles, reproduced directly at64 instructions/cycle. The independently compiled unchanged source has the same Wasm hash as the stamped guest.",
+    "phaseEvidence": "The instrumented call reached road() with5274 cycles and left3797 after its cold capital-plan field read. share_phase already skips publication below9000, so this field cannot affect that response. After the remaining CPU policy and wrappers, serialization exhausted the allowance.",
+    "instrumentedSource": "/tmp/kublai-showcase-core-phases.rs",
+    "fullSuiteLog": "/tmp/gameplay-depth-sabotage-capture-full.log",
+    "limits": "Three isolated exact showcase reruns passed; two full two-thread suites failed at the same tick and allowance. The capture makes the failure independently reproducible; this record does not attribute that contextual difference to a particular engine mechanism."
+  },
+  "change": "The road phase uses the existing9000-cycle plan-publication admission before reading RAM. Unpublished short turns retain their standing plan, controllers and normal CPU/fabrication policy. Classic and funded field reuse remain available. No global allowance or full-planning floor changes.",
+  "validation": {
+    "toolchain": "1.97.0",
+    "instructionsPerCycle": 64,
+    "sourceSha256": "9eb9e985ec214f2d43b58e985f58f0eea8a980e81d6951233fe04cb17c5a6520",
+    "sourceBytes": 509845,
+    "wasmSha256": "bb1112c078417fa9bde0a0520f1c880f3970db792e0366e90a39900f9c372593",
+    "sdkRlibSha256": "b6b4c2722609995781917773237eb12610b9b5c7df1fa390b655c7bd5aae950c",
+    "calls": 163,
+    "failures": 0,
+    "elapsedSeconds": 56.138928174972534,
+    "budgets": "Exact capture18000\u201324000 by50,19772/19773/19774,30k/40k; prior short18\u201324k by500 plus19911/40k; prior freight32\u201342k by500 plus36850.",
+    "fixtureTests": 11,
+    "sourceChecks": 5,
+    "meterEvidence": "/tmp/gameplay-depth-sabotage-kublai-sweep.json",
+    "meterLog": "/tmp/gameplay-depth-sabotage-kublai-sweep.log",
+    "strategyLog": "/tmp/gameplay-depth-sabotage-kublai-strategies.log",
+    "sourceCheckLog": "/tmp/gameplay-depth-sabotage-kublai-sourcechecks.log",
+    "actual19773WritesPlanPage0": false,
+    "selectedResults": [
+      {
+        "fixture": "showcase",
+        "budget": 19773,
+        "ok": true,
+        "used": 18574.109375,
+        "memo": "Xanadu: pact with Compute of Nations \u00b7 horde of 8 rides on New Atlantis \u00b7 0 treaties \u00b7 5 lances / 3 guards \u00b7 bank 147367",
+        "cpu": {
+          "limits": {
+            "think": 37800,
+            "control": 42000,
+            "reflex": 0.2,
+            "research": 0.26,
+            "upkeep": 0.48,
+            "drive": 0.11,
+            "armor": 0.12,
+            "cloak": 0.05,
+            "weapon": 0.16,
+            "abilities": 0.1,
+            "fabrication": 30680.000000000004,
+            "gate": 0.03,
+            "duel": 0.25,
+            "challenge": 0.05,
+            "visuals": 0.02
+          },
+          "reserve": {
+            "think": 3000,
+            "reflex": 2600,
+            "research": 0,
+            "duel": 3000
+          },
+          "upkeepOrder": [
+            "miner",
+            "screen",
+            "repairer",
+            "skirm",
+            "sentry",
+            "gun",
+            "runner",
+            "wing",
+            "ghost"
+          ]
+        },
+        "types": {
+          "miner": {
+            "share": 5000,
+            "every": 1
+          },
+          "wing": {
+            "share": 4200,
+            "every": 2
+          },
+          "screen": {
+            "share": 6000,
+            "every": 1
+          },
+          "runner": {
+            "share": 6000,
+            "every": 1
+          },
+          "skirm": {
+            "share": 6000,
+            "every": 1
+          },
+          "lancer": {
+            "share": 6000,
+            "every": 2
+          },
+          "sentry": {
+            "share": 6000,
+            "every": 1
+          },
+          "gun": {
+            "share": 6000,
+            "every": 1
+          },
+          "repairer": {
+            "share": 5000,
+            "every": 1
+          },
+          "ghost": {
+            "share": 4200,
+            "every": 1
+          }
+        }
+      },
+      {
+        "fixture": "showcase",
+        "budget": 40000,
+        "ok": true,
+        "used": 36857.671875,
+        "memo": "Xanadu: pact with Compute of Nations \u00b7 horde of 8 rides on New Atlantis \u00b7 0 treaties \u00b7 5 lances / 3 guards \u00b7 bank 147367",
+        "cpu": {
+          "limits": {
+            "think": 37800,
+            "control": 42000,
+            "reflex": 0.2,
+            "research": 0.0639741698857845,
+            "upkeep": 0.8,
+            "drive": 8000,
+            "armor": 0.12,
+            "cloak": 0.05,
+            "weapon": 0.16,
+            "abilities": 0.1,
+            "fabrication": 30680.000000000004,
+            "gate": 0.03,
+            "duel": 0.25,
+            "challenge": 0.05,
+            "visuals": 0.02,
+            "influence": 0.03690817493410644
+          },
+          "reserve": {
+            "think": 0.25,
+            "control": 0.1,
+            "upkeep": 0.1,
+            "duel": 0.05
+          },
+          "upkeepOrder": [
+            "miner",
+            "hauler",
+            "freighter",
+            "screen",
+            "repairer",
+            "skirm",
+            "sentry",
+            "gun",
+            "runner",
+            "wing",
+            "ghost"
+          ]
+        },
+        "types": {
+          "miner": {
+            "cycles": 6000,
+            "every": 2
+          },
+          "wing": {
+            "share": 4200,
+            "every": 2
+          },
+          "screen": {
+            "share": 6000,
+            "every": 1
+          },
+          "runner": {
+            "share": 6000,
+            "every": 1
+          },
+          "skirm": {
+            "share": 6000,
+            "every": 1
+          },
+          "lancer": {
+            "share": 6000,
+            "every": 2
+          },
+          "sentry": {
+            "share": 6000,
+            "every": 1
+          },
+          "gun": {
+            "share": 6000,
+            "every": 1
+          },
+          "repairer": {
+            "share": 5000,
+            "every": 1
+          },
+          "ghost": {
+            "share": 4200,
+            "every": 1
+          },
+          "hauler": {
+            "cycles": 10000,
+            "every": 2
+          },
+          "freighter": {
+            "cycles": 12000,
+            "every": 2
+          }
+        }
+      },
+      {
+        "fixture": "prior-short",
+        "budget": 19911,
+        "ok": true,
+        "used": 18372.375,
+        "memo": "Xanadu: pact with Compute of Nations \u00b7 horde of 8 rides on New Atlantis \u00b7 0 treaties \u00b7 5 lances / 3 guards \u00b7 bank 288863",
+        "cpu": {
+          "limits": {
+            "think": 38000,
+            "control": 42000,
+            "reflex": 0.2,
+            "research": 0.04972631040428915,
+            "upkeep": 0.8,
+            "drive": 8000,
+            "armor": 0.12,
+            "cloak": 0.05,
+            "weapon": 0.16,
+            "abilities": 0.1,
+            "fabrication": 30680.000000000004,
+            "gate": 0.03,
+            "duel": 0.25,
+            "challenge": 0.05,
+            "visuals": 0.02,
+            "influence": 0.028688256002474505
+          },
+          "reserve": {
+            "think": 0.25,
+            "control": 0.1,
+            "upkeep": 0.1,
+            "duel": 0.05
+          },
+          "upkeepOrder": [
+            "miner",
+            "hauler",
+            "freighter",
+            "screen",
+            "repairer",
+            "skirm",
+            "sentry",
+            "gun",
+            "runner",
+            "wing",
+            "ghost"
+          ]
+        },
+        "types": {
+          "miner": {
+            "cycles": 6000,
+            "every": 2
+          },
+          "wing": {
+            "share": 4200,
+            "every": 2
+          },
+          "screen": {
+            "share": 6000,
+            "every": 1
+          },
+          "runner": {
+            "share": 6000,
+            "every": 1
+          },
+          "skirm": {
+            "share": 6000,
+            "every": 1
+          },
+          "lancer": {
+            "share": 6000,
+            "every": 2
+          },
+          "sentry": {
+            "share": 6000,
+            "every": 1
+          },
+          "gun": {
+            "share": 6000,
+            "every": 1
+          },
+          "repairer": {
+            "share": 5000,
+            "every": 1
+          },
+          "ghost": {
+            "share": 4200,
+            "every": 1
+          },
+          "hauler": {
+            "cycles": 10000,
+            "every": 2
+          },
+          "freighter": {
+            "cycles": 12000,
+            "every": 2
+          }
+        }
+      },
+      {
+        "fixture": "prior-freight",
+        "budget": 36850,
+        "ok": true,
+        "used": 32684.109375,
+        "memo": "Xanadu: pact with Compute of Nations \u00b7 horde of 5 rides on New Atlantis \u00b7 0 treaties \u00b7 1 lances / 4 guards \u00b7 bank 778849",
+        "cpu": {
+          "limits": {
+            "think": 37441.11013702742,
+            "control": 42000,
+            "reflex": 0.2,
+            "research": 0.16798632763980223,
+            "upkeep": 0.8,
+            "drive": 8000,
+            "armor": 0.12,
+            "cloak": 0.05,
+            "weapon": 0.16,
+            "abilities": 0.1,
+            "fabrication": 30680.000000000004,
+            "gate": 0.03,
+            "duel": 0.25,
+            "challenge": 0.05,
+            "visuals": 0.02,
+            "influence": 0.09691518902296281
+          },
+          "reserve": {
+            "think": 0.25,
+            "control": 0.1,
+            "upkeep": 0.1,
+            "duel": 0.05
+          },
+          "upkeepOrder": [
+            "miner",
+            "hauler",
+            "freighter",
+            "screen",
+            "repairer",
+            "skirm",
+            "sentry",
+            "gun",
+            "runner",
+            "wing",
+            "ghost"
+          ]
+        },
+        "types": {
+          "miner": {
+            "cycles": 6000,
+            "every": 2
+          },
+          "wing": {
+            "share": 4200,
+            "every": 2
+          },
+          "screen": {
+            "share": 6000,
+            "every": 1
+          },
+          "runner": {
+            "share": 6000,
+            "every": 1
+          },
+          "skirm": {
+            "share": 6000,
+            "every": 1
+          },
+          "lancer": {
+            "share": 6000,
+            "every": 2
+          },
+          "sentry": {
+            "share": 6000,
+            "every": 1
+          },
+          "gun": {
+            "share": 6000,
+            "every": 1
+          },
+          "repairer": {
+            "share": 5000,
+            "every": 1
+          },
+          "ghost": {
+            "share": 4200,
+            "every": 1
+          },
+          "hauler": {
+            "cycles": 10000,
+            "every": 2
+          },
+          "freighter": {
+            "cycles": 12000,
+            "every": 2
+          }
+        }
+      }
+    ]
+  },
+  "handoff": "The root agent will rebuild all integrated guests and rerun the unchanged full native suite. Temporary engine host.rs edits were restored byte-for-byte and are not part of this change."
+}

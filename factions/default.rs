@@ -20,6 +20,7 @@ program!(think, hauler, freighter, miner, guard, longbow, spy, scout, reflex, re
 const TECHS: [&str; 15] = ["extraction", "ranged", "dash", "repair", "turbines", "transmission", "seaTraversal", "mountainTraversal", "storage", "cloak", "mining", "archery", "boats", "alpine", "espionage"];
 
 fn think(world: View, me: View) -> Value {
+    if cycles_left()<800.0 {return obj!{};}
     common::govern(world, me, 0.4, || strategy(world, me))
 }
 
@@ -127,7 +128,10 @@ fn miner(units: View, world: View, me: View) {
 // One guard holds the capital's ring (a siege there needs 3 capturers for each guard, and a spy stealing there is
 // likelier to be caught). The rest fight invaders first; otherwise they muster and capture the plan's target together.
 // When the capital itself is invaded, everyone goes home: the faction falls with it.
+const GUARD_CALLBACK_RUNWAY: f64 = 1200.0;
 fn guard(units: View, world: View, me: View) {
+    // The alarm and plan both build a map index.  A partial callback must leave standing orders alone.
+    if cycles_left()<GUARD_CALLBACK_RUNWAY {return;}
     if home_alarm(units, world, me) {
         return;
     }

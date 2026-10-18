@@ -82,7 +82,44 @@ fn fleet_keeps_its_opening_air_wing_small_until_a_carrier_is_fielded() {
 }
 
 #[test]
+fn fleet_rebuild_uses_the_posted_fabrication_policy_not_the_recovery_lane() {
+    // `fixtures/fleet-think-rebuild.json` is a public house observation used by
+    // native metering; it changes only available.think to 64,554 and fabrication to 0.
+    let me = Value::parse(r#"{"id":1,"seat":4,"bank":100000,"costs":{"unit":100},
+        "units":{"cap":28,"total":13,"queued":0,"spawned":20,"byType":{}},
+        "rts":{"bank":8000000,"costs":{"fabrication":{"base":4728,"module":2364}},
+        "cpu":{"income":65000,"bank":8000000,"spendCap":85000,
+        "available":{"fabrication":0},"spent":{}}}}"#);
+    let args = views(&[me]);
+    let mut orders = obj! {"compute"=>obj! {"cpu"=>obj! {
+        "limits"=>obj! {"fabrication"=>27938},"reserve"=>obj! {}}}};
+    assert!(super::add_spawn(&mut orders, args[0], "miner", obj! {}, &[]),
+        "a productive policy must not inherit recovery's zero fabrication lane");
+    let kept = super::affordable(orders, args[0], cycles_left());
+    assert_eq!(kept.get("spawn").len(), 1,
+        "the posted 27,938-cycle lane and bank reserve pay for the rebuild: {kept:?}");
+}
+
+#[test]
+fn fleet_rebuild_still_rejects_an_unfunded_posted_fabrication_policy() {
+    let me = Value::parse(r#"{"id":1,"seat":4,"bank":100000,"costs":{"unit":100},
+        "units":{"cap":28,"total":13,"queued":0,"spawned":20,"byType":{}},
+        "rts":{"bank":8000000,"costs":{"fabrication":{"base":4728,"module":2364}},
+        "cpu":{"income":65000,"bank":8000000,"spendCap":85000,
+        "available":{"fabrication":0},"spent":{}}}}"#);
+    let args = views(&[me]);
+    let mut orders = obj! {"compute"=>obj! {"cpu"=>obj! {
+        "limits"=>obj! {"fabrication"=>4000},"reserve"=>obj! {}}}};
+    assert!(super::add_spawn(&mut orders, args[0], "miner", obj! {}, &[]));
+    let kept = super::affordable(orders, args[0], cycles_left());
+    assert!(kept.get("spawn").is_empty(),
+        "the final proposed policy still blocks an unpaid 4,728-cycle rebuild: {kept:?}");
+}
+
+#[test]
 fn fleet_kite_callback_routes_a_hot_wing_to_an_adjacent_carrier_deck() {
+    // Native metering uses the authored 939-byte cold plans in
+    // `fixtures/fleet-kite-{deck,land}-cold.json`.
     let units = Value::parse(r#"[{"id":101,"owner":1,"type":"kite","air":true,"at":5,
         "build":{"vision":0,"range":0,"wings":1},"rts":{"air":{"heat":30,"aloft":true},"sea":{}}}]"#);
     let world = Value::parse(r#"{"seconds":1,"provinces":[{"id":5,"owner":1,"adj":[6]},{"id":6,"owner":1,"adj":[5]}],"units":[
@@ -130,6 +167,63 @@ fn fleet_low_think_allowance_recovers_and_funded_retry_can_plan() {
 }
 
 #[test]
+fn fleet_rich_capped_rebuild_funds_an_active_study_without_admitting_the_planner() {
+    let world = Value::parse(r#"{"techs":{}}"#);
+    let me = Value::parse(r#"{"id":4,"research":{"tech":"flight"},"units":{"total":6,"stalled":0},
+        "compute":{"cycles":12130,"thinkPeak":32000},"rts":{"bank":3145458,
+        "cpu":{"income":12130,"bank":3145458,"spendCap":15163,"capacity":3152000,
+        "available":{"think":14890},"limits":{},"reserve":{},"spent":{}}}}"#);
+    let args = views(&[world, me]);
+    let orders = super::lean_rebuild(args[0], args[1]);
+    assert_eq!(orders.get("memo").str(), "Fleet rebuilding crew and research");
+    assert_eq!(orders.get("compute").get("cpu").get("limits").get("research").num(), 0.3,
+        "an active study must retain a funded lane below the full-plan admission floor");
+    assert!(orders.get("compute").get("cpu").get("limits").get("fabrication").num() > 0.0,
+        "the bounded path restores production policy without scanning the map");
+}
+
+#[test]
+fn fleet_lean_rebuild_requires_paid_unstalled_crew() {
+    let low_bank = Value::parse(r#"{"units":{"total":6,"stalled":0},"rts":{"cpu":{"income":12130,"bank":24259}}}"#);
+    let stalled = Value::parse(r#"{"units":{"total":6,"stalled":1},"rts":{"cpu":{"income":12130,"bank":1000000}}}"#);
+    let paid = Value::parse(r#"{"units":{"total":4,"stalled":0},"rts":{"cpu":{"income":12130,"bank":24260}}}"#);
+    assert!(!super::rich_rebuild_ready(views(&[low_bank])[0]),
+        "low savings must stay in recovery rather than fund optional study and fabrication");
+    assert!(!super::rich_rebuild_ready(views(&[stalled])[0]),
+        "unpaid crew must stay in recovery even with a historical CPU balance");
+    assert!(super::rich_rebuild_ready(views(&[paid])[0]));
+}
+
+#[test]
+fn fleet_lean_rebuild_only_replaces_a_hard_cap_that_cannot_fund_the_planner() {
+    let mut provinces = Value::arr();
+    for _ in 0..44 { provinces.push(Value::obj()); }
+    let mut waters = Value::arr();
+    for _ in 0..71 { waters.push(Value::obj()); }
+    let world = obj! { "provinces" => provinces, "waters" => waters, "units" => Value::arr() };
+    let capped = Value::parse(r#"{"units":{"total":6,"stalled":0},"compute":{"thinkPeak":32000},
+        "rts":{"cpu":{"income":12130,"bank":3145458,"spendCap":15163}}}"#);
+    let lean_cap = Value::parse(r#"{"units":{"total":6,"stalled":0},"compute":{"thinkPeak":32000},
+        "rts":{"cpu":{"income":12130,"bank":3145458,"spendCap":18000}}}"#);
+    let funded = Value::parse(r#"{"units":{"total":6,"stalled":0},"compute":{"thinkPeak":32000},
+        "rts":{"cpu":{"income":12130,"bank":3145458,"spendCap":20000}}}"#);
+    let full = Value::parse(r#"{"units":{"total":6,"stalled":0},"compute":{"thinkPeak":32000},
+        "rts":{"cpu":{"income":12130,"bank":3145458,"spendCap":24000}}}"#);
+    let args = views(&[world, capped]);
+    assert!(super::rich_rebuild_is_capped(args[0], args[1]),
+        "the C8 cap cannot carry planner work plus its protected return tail");
+    let args = views(&[args[0].value(), lean_cap]);
+    assert!(super::rich_rebuild_is_capped(args[0], args[1]),
+        "an 18k cap still cannot retain the selected plan's protected return tail");
+    let args = views(&[args[0].value(), funded]);
+    assert!(super::rich_rebuild_is_capped(args[0], args[1]),
+        "a broad visible sea map needs more than 20k before the planner's return tail");
+    let args = views(&[args[0].value(), full]);
+    assert!(!super::rich_rebuild_is_capped(args[0], args[1]),
+        "24k restores the normal planner/retry path for the captured coast");
+}
+
+#[test]
 fn fleet_uses_lean_plan_when_the_full_estimate_exceeds_the_spend_cap() {
     let mut world = Value::parse(r#"{"seconds":6,"provinces":[],"units":[]}"#);
     let mut provinces = Value::arr();
@@ -166,4 +260,130 @@ fn fleet_uses_lean_plan_when_the_full_estimate_exceeds_the_spend_cap() {
     assert!(cheap_limit <= 14000.0, "recovery must respect the lower spend cap: {cheap:?}");
     assert!(!super::plan_fuel_ready(cheap_limit, cheap_limit - super::PLAN_CALLBACK_OVERHEAD, low_cap_need),
         "when even the lean pass does not fit, stay on cheap recovery");
+}
+
+#[test]
+fn fleet_quarry_rejects_unprofitable_or_escorted_prey() {
+    let me = Value::parse(r#"{"rts":{"logistics":{"rules":{"shipHoldPerCarry":160000}},"sea":{"contacts":[]}}}"#);
+    let prey = Value::parse(r#"{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":2},"cargo":{"load":2}}"#);
+    let empty=Value::arr();
+    let args=views(&[me.clone(),prey,empty]);
+    assert!(!super::paying_corsair_prey(args[1], args[2], args[0], 160000.0, true, 0.0), "a half-load cannot repay the existing corsair trip gate");
+    let prey = Value::parse(r#"{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":3},"cargo":{"load":3}}"#);
+    let contacts=Value::parse(r#"[{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":3},"cargo":{"load":3}},{"id":10,"ship":true,"water":1,"build":{"range":1}}]"#);
+    let args=views(&[me,prey,contacts]);
+    assert!(!super::paying_corsair_prey(args[1],args[2],args[0],160000.0,true,0.0),"an armed escort rejects the spawn just as it rejects a chase");
+}
+
+#[test]
+fn fleet_quarry_keeps_a_profitable_unescorted_prey_eligible() {
+    let me=Value::parse(r#"{"rts":{"logistics":{"rules":{"shipHoldPerCarry":160000}}}}"#);
+    let prey=Value::parse(r#"{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":3},"cargo":{"load":3}}"#);
+    let empty=Value::arr();
+    let args=views(&[me,prey,empty]);
+    assert!(super::paying_corsair_prey(args[1],args[2],args[0],300000.0,true,0.0));
+}
+
+fn recovery_corsair_args(wreck:&str,corsairs:f64,queued:f64,coast:bool)->Vec<View>{
+    let waters=if coast {r#"[{"id":0,"p":0,"coast":[0],"adj":[1]},{"id":1,"p":1,"coast":[1],"adj":[0]}]"#}else{r#"[{"id":0,"p":1,"coast":[1],"adj":[]}]"#};
+    let world=Value::parse(&format!(r#"{{"seconds":1,"logistics":{{}},"waters":{waters}}}"#));
+    let me=Value::parse(&format!(r#"{{"id":1,"seat":4,"capital":0,"bank":1000,"costs":{{"unit":1}},"techs":{{"seaTraversal":true,"ranged":true}},"units":{{"cap":20,"total":10,"queued":{queued},"spawned":0,"byType":{{"kite":0,"carrier":0,"picket":0,"warjunk":0,"corsair":{corsairs},"freighter":0}}}},"build":{{"max":{{"hp":5,"speed":5,"strength":5,"carry":2,"vision":5}},"price":{{}},"points":100}},"rts":{{"licenses":["hull","dash"],"sea":{{"ports":[0],"contacts":[]}},"logistics":{{"rules":{{"shipHoldPerCarry":160000}},"wrecks":{wreck}}},"cpu":{{"income":60000,"available":{{"fabrication":100000}}}}}}}}"#));
+    views(&[world,me])
+}
+
+#[test]
+fn fleet_emergency_recovery_recruits_one_cargo_corsair_for_a_paying_nearby_sea_wreck(){
+    let args=recovery_corsair_args(r#"[{"sea":true,"water":1,"cycles":160000,"until":1000}]"#,0.0,0.0,true);
+    let naval=super::Naval{stations:5,landing:-1.0,landing_name:String::new(),fleet:-1.0,blockade:0,raid:0};let mut orders=Value::obj();
+    assert!(super::naval_spawn(&mut orders,args[0],args[1],&naval,0.0,false));
+    let corsair=orders.get("spawn").at(0);assert_eq!(corsair.get("type").str(),"corsair");assert_eq!(corsair.get("build").get("carry").num(),1.0);
+}
+
+#[test]
+fn fleet_emergency_recovery_rejects_unprofitable_wrecks_and_inland_capitals(){
+    let naval=super::Naval{stations:0,landing:-1.0,landing_name:String::new(),fleet:-1.0,blockade:0,raid:0};let mut orders=Value::obj();
+    let args=recovery_corsair_args(r#"[{"sea":true,"water":1,"cycles":118000,"until":1000}]"#,0.0,0.0,true);
+    assert!(!super::naval_spawn(&mut orders,args[0],args[1],&naval,0.0,false));
+    let args=recovery_corsair_args(r#"[{"sea":true,"water":0,"cycles":160000,"until":1000}]"#,0.0,0.0,false);
+    assert!(!super::naval_spawn(&mut orders,args[0],args[1],&naval,0.0,false));
+}
+
+#[test]
+fn fleet_emergency_recovery_does_not_duplicate_a_live_or_queued_corsair(){
+    let args=recovery_corsair_args(r#"[{"sea":true,"water":1,"cycles":160000,"until":1000}]"#,1.0,1.0,true);
+    let naval=super::Naval{stations:0,landing:-1.0,landing_name:String::new(),fleet:-1.0,blockade:0,raid:0};let mut orders=Value::obj();
+    assert!(!super::naval_spawn(&mut orders,args[0],args[1],&naval,0.0,false));assert!(orders.get("spawn").is_empty());
+}
+
+fn storage_research_pick(powered: f64, capacity: f64) -> String {
+    let provinces = arr![obj! { "id"=>0,"owner"=>1,"power"=>obj! {"sunFactor"=>1,"lat"=>0,"windFactor"=>1} }];
+    let mut world_techs = obj! {};
+    for t in super::TECHS { world_techs.set(t, obj! {"offer"=>1000,"requires"=>arr![]}); }
+    let world = obj! {"provinces"=>provinces,"techs"=>world_techs};
+    let mut owned = obj! {};
+    for t in ["extraction","seaTraversal","turbines","ranged","armor","dash","cloak","scan","influence","faith","pierce","artillery","antiAir","repair","flight"] {
+        owned.set(t, true);
+    }
+    let plants = if capacity > 0.0 { arr![obj! {"state"=>"ready","p"=>0,"ports"=>arr![obj! {"kind"=>"tidal","capacity"=>capacity}]}] } else { Value::arr() };
+    let me = obj! {
+        "id"=>1,"capital"=>0,"techs"=>owned,
+        "energy"=>obj! {"powered"=>powered,"house"=>3,"plants"=>plants,
+            "islands"=>arr![obj! {"capital"=>true,"provinces"=>arr![0],"demand"=>8,"powered"=>powered,"storage"=>0}]},
+        "compute"=>obj! {"cycles"=>100000,"thinkPeak"=>1000,"used"=>obj!{}},
+        "units"=>obj! {"total"=>0,"queued"=>0,"cap"=>100},"costs"=>obj! {"unit"=>100,"upkeep"=>1},"bank"=>0
+    };
+    let args = views(&[world,me]);
+    let techs = super::research_techs(args[0],args[1]);
+    let mut orders = obj! {};
+    super::common::budget(&mut orders,args[0],args[1],&super::common::Budget {research:0.12,code:0.10,techs,types:None});
+    orders.get("research").str().to_string()
+}
+
+#[test]
+fn fleet_prioritizes_storage_only_for_a_dim_grid_with_chargeable_variable_surplus() {
+    assert_eq!(storage_research_pick(0.8,10.0),"storage");
+    assert_eq!(storage_research_pick(0.96,10.0),"airWeapons","a stable grid keeps the air path ahead of storage");
+    assert_eq!(storage_research_pick(0.8,2.0),"airWeapons","a low powered share without generation headroom is not a battery case");
+}
+
+#[test]
+fn urgent_landings_include_moving_wings_before_normal_flight_admission() {
+    let units=Value::parse(r#"[{"id":1,"doing":"move","rts":{"air":{"aloft":true,"heat":53}}},
+        {"id":2,"doing":"move","rts":{"air":{"aloft":true,"heat":47}}},
+        {"id":3,"doing":"move","rts":{"air":{"aloft":true,"heat":46}}},
+        {"id":4,"doing":"move","rts":{"air":{"aloft":true,"heat":43}}},
+        {"id":5,"doing":"idle","rts":{"air":{"aloft":false,"heat":60}}}]"#);
+    let args=views(&[units]);
+    super::land_urgent(args[0]);
+    let out=emitted();
+    assert_eq!(out.iter().map(|order|order.get("id").num()).collect::<Vec<_>>(),vec![1.0,2.0,3.0]);
+    assert!(out.iter().all(|order|order.get("land").truthy()));
+}
+
+#[test]
+fn fleet_funded_zero_unit_startup_reaches_the_governed_miner_bootstrap() {
+    // The captured startup's financial envelope, with an authored local mine.
+    let world=obj!{"seconds"=>3,"logistics"=>obj!{},"units"=>arr![],"waters"=>arr![],"techs"=>obj!{},
+        "provinces"=>arr![obj!{"id"=>0,"owner"=>0,"hops"=>0,"mines"=>arr![1],"staff"=>arr![0]}]};
+    let me=Value::parse(r#"{"id":0,"seat":0,"capital":0,"bank":184,"costs":{"unit":30},"units":{"total":0,"queued":0,"stalled":0,"byType":{}},
+        "types":{"miner":{}},"rts":{"bank":27470.984375,"cpu":{"income":12350,"bank":27470.984375,"capacity":6400000,
+        "spendCap":15438,"burst":15430,"available":{"think":13992},"limits":{},"reserve":{}},
+        "costs":{"priceLevel":8,"fabrication":{"base":9600,"module":4800}}}}"#);
+    let mut args=vec![world,me];
+    for total in [0,1,3] {
+        args[1].entry("units").set("total",total);
+        args[1].entry("units").entry("byType").set("miner",total);
+        let v=views(&args);
+        assert!(!super::rich_rebuild_ready(v[1]),"the first four bodies belong to the governed bootstrap");
+        let out=super::think(v[0],v[1]);
+        assert!(out.get("spawn").items().iter().any(|s|s.get("type").str()=="miner"),"a funded startup must recruit: {out:?}");
+        assert!(out.get("compute").get("cpu").get("limits").get("fabrication").num()>0.0);
+    }
+    args[1].entry("units").set("total",0);
+    args[1].entry("units").set("byType",obj!{});
+    args[1].entry("rts").entry("cpu").set("bank",0);
+    args[1].entry("rts").set("bank",0);
+    let v=views(&args);
+    let out=super::think(v[0],v[1]);
+    assert!(out.get("spawn").is_empty(),"a genuinely unfunded startup must wait for a body and income: {out:?}");
 }

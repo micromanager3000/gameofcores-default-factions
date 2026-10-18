@@ -259,9 +259,19 @@ fn short(me: View) -> bool {
 
 // ---- think ----
 
+// Naval station searches are optional ranking work; keep the rest of the planner funded.
+fn target_hold(world: View, me: View) -> impl Fn(View, f64) -> bool {
+    let land = common::can_hold(world, me, false);
+    let naval = common::can_hold(world, me, true);
+    let water_work = 300.0 * world.get("waters").len() as f64;
+    let cpu = me.get("rts").truthy();
+    move |q, left| land(q) || ((!cpu || left > 18000.0 + water_work
+        * (q.path("routes.sea").len() + q.path("routes.air").len()).max(1) as f64) && naval(q))
+}
+
 fn targets(world: View, me: View) -> Vec<View> {
     // land the army couldn't hold on to (over the water, no ship of ours on station) counts for less: common::can_hold
-    let hold = common::can_hold(world, me, true);
+    let hold = target_hold(world, me);
     let campaign = mem::get(me.get("ramCapital"), 0).get("campaign").num_or(-1.0);
     let by_id = realm::index(world);
     let fighters = common::fighters(me);
@@ -290,7 +300,7 @@ fn targets(world: View, me: View) -> Vec<View> {
             + if enemy > 0.0 && owner == campaign { 4.0 } else { 0.0 }
             + crusade
             + min(sway::favour(m, num(q.get("id"))), 300.0) / 60.0
-            - if hold(q) { 0.0 } else { common::OVER_WATER }
+            - if hold(q, cycles_left()) { 0.0 } else { common::OVER_WATER }
     });
     common::rally(world, me, ranked)
 }
@@ -724,6 +734,7 @@ fn lean_research(orders: &mut Value, world: View, me: View) {
 }
 
 fn think(world: View, me: View) -> Value {
+    if cycles_left()<800.0 {return obj!{};}
     // A nearly empty slice cannot afford govern's scans. Open the next allowance,
     // keep miners first for upkeep, and leave type schedules and standing orders alone.
     if me.get("rts").truthy() && cycles_left() < 3000.0 {

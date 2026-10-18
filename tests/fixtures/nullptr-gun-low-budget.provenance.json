@@ -1,0 +1,11 @@
+{
+  "source": "C7 holdout diagnostic",
+  "capturedError": "/Users/reddybot/code/gameofcores-work/gameofcores-gameplay/artifacts/balance-oct16/gameplay-depth-holdout-final-7a5ad21/holdout-long-409.errors/error-21-faction-6-gun.json",
+  "function": "gun",
+  "fuel": 2320,
+  "tick": 41494,
+  "faction": 6,
+  "engine": "82ecc9ba99b7494e948e7c77ff543ffd3a694586",
+  "factions": "7a5ad215f43d5afd6e1d560e201b96e0efa3f235",
+  "note": "Null gun callback error from C7 holdout long seed 409, tick 41494."
+}

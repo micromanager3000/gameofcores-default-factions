@@ -1,0 +1,35 @@
+{
+  "source": "gameofcores-gameplay/artifacts/balance-oct16/gameplay-depth-candidate2-2078d11/long-149.errors/error-24-faction-7-miner.json",
+  "sourceSha256": "8b2b0bc36396423788b7d6ad6c6aa42ab95967d264cafb5ef21c664dd70eaa81",
+  "fixtureSha256": "914e6a7eaa5b5201cc0a7608741564c2133bf569c1abc715b5cc6399e3eb7f41",
+  "engineRevision": "10e5b5e2",
+  "faction": 7,
+  "function": "miner",
+  "tick": 105093,
+  "rate": 64,
+  "fuel": 4260,
+  "envelope": {
+    "ok": false,
+    "error": "ran out of cycles",
+    "fuel": true,
+    "used": 4260,
+    "instr": 272640,
+    "read": 979,
+    "pages": 0,
+    "module": true
+  },
+  "context": "Actual Nations miner callback. Fourteen miners were present. Miner 6 was gathering at province 16 with 87050.51884403177 cargo cycles and no cargo job. The fixture preserves the captured arguments without modification.",
+  "factionRevision": "2078d11",
+  "validation": {
+    "rate": 64,
+    "moduleSha256": "079c1aa525c66a1102baa6f54b611acfda36abd707f8f2dd01eeb96dd582287e",
+    "calls": 74,
+    "errors": 0,
+    "inputs": "Unchanged captured observation and authored counterfactual changing only first miner 6 doing from gather to idle.",
+    "budgets": "200\u20133000 by 100 plus 227,385,800,900,999,1000,1001,2199,2200,2201,4260,8000.",
+    "original4260Used": 265.0625,
+    "idle4260Used": 1635.15625,
+    "idle4260Result": "Local unload at province 16; cargo retained.",
+    "guard": "Below 1000 returns before per-unit lookup. Low-budget scan stops before 2200 remaining; normal 4300+ path unchanged."
+  }
+}
