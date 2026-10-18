@@ -1048,17 +1048,16 @@ fn gun(units: View, world: View, me: View) {
 fn wing(units: View, world: View, me: View) {
     // a flier a minute up comes down on your nearest land before anything else, even short of cycles: its burn climbs
     // the longer it flies, and an unpaid one crashes
-    for u in units.iter() {
+    for u in units.iter().take_while(|_| cycles_left() > 400.0) {
         let a = u.path("rts.air");
         if a.truthy() && a.get("aloft").truthy() && n(a.get("heat")) >= 60.0 && !is_str(u.get("doing"), "move") {
             order(obj! { "id" => u.get("id"), "land" => true });
         }
     }
-    if me.get("rts").truthy() && cycles_left() < 2200.0 {
+    if me.get("rts").truthy() && cycles_left() < 2600.0 {
         return;
     }
     let pl = plan::for_units(me, units, world);
-    let by_id = realm::index(world);
     let hunt = pl.get("hunt");
     let abroad = hunt.is_undef();
     let goal = if !abroad && vn(hunt) >= 0.0 {
@@ -1074,7 +1073,7 @@ fn wing(units: View, world: View, me: View) {
     let g = vn(goal);
     let me_id = n(me.get("id"));
     let allies = me.get("allies");
-    let q = by_id.get(g);
+    let q = world.get("provinces").iter().find(|p| n(p.get("id")) == g).unwrap_or(View::undefined());
     let foes = if q.truthy() && q.get("units").truthy() {
         q.get("units").keys().filter(|f| {
             let f = js_key_num(f);
@@ -1087,7 +1086,7 @@ fn wing(units: View, world: View, me: View) {
     let verb = if q.truthy() && n(owner) >= 0.0 && !same(owner, me.get("id")) && !allies.has_num(n(owner)) && foes == 0 { "raid" } else { "fight" };
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
-        if rts && cycles_left() < 2200.0 {
+        if rts && cycles_left() < 1800.0 {
             break;
         }
         let u = turn(units, i, world);
