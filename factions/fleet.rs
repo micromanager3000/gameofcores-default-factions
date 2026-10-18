@@ -1607,7 +1607,7 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
     let corsair_capacity=me.path("rts.logistics.rules.shipHoldPerCarry").num_or(160000.0*common::price_level(me));
     let contacts=me.path("rts.sea.contacts");
     let prospects=contacts.iter().filter(|c| nearby(c.get("water").num_or(-1.0))
-        && paying_corsair_prey(*c, contacts, me, corsair_capacity, true)).count();
+        && paying_corsair_prey(*c, contacts, me, corsair_capacity, true, 1.0)).count();
     let salvage=me.path("rts.logistics.wrecks").iter().any(|w|w.get("sea").truthy()&&nearby(w.get("water").num_or(-1.0))&&w.get("cycles").num_or(0.0)>160000.0*common::price_level(me));
     // a raider for cargo seen near home, a wreck to salvage, or rival shipping lanes to hunt
     let want_cors = if !guns { 0.0 } else if prospects>0 || salvage { (prospects as f64).clamp(1.0,2.0) } else if naval.raid > 0 { 1.0 } else { 0.0 };
@@ -1690,14 +1690,14 @@ fn junk_goal(nv: &Value, role: u8, k: usize, now: f64) -> f64 {
 
 /// True when a visible merchant can pay for a healthy corsair's round trip.  Spawn and chase
 /// share this exact gate so Fleet never launches a hull that its controller immediately rejects.
-fn paying_corsair_prey(c: View, contacts: View, me: View, capacity: f64, healthy: bool) -> bool {
+fn paying_corsair_prey(c: View, contacts: View, me: View, capacity: f64, healthy: bool, hops: f64) -> bool {
     if !healthy || !c.get("ship").truthy() || c.get("build").get("range").num_or(0.0)>0.0 { return false; }
     let load=c.path("cargo.load").num_or(0.0);
     if load<2.0 || c.get("build").get("carry").num_or(0.0)<2.0 { return false; }
     let water=c.get("water").num_or(-1.0);
     if contacts.iter().any(|guard| guard.get("id").num()!=c.get("id").num() && guard.get("ship").truthy() && guard.get("water").num_or(-1.0)==water && guard.path("build.range").num_or(0.0)>0.0) { return false; }
     let prize=c.path("build.carry").num_or(0.0)*160000.0*common::price_level(me)*if load>=3.0 {1.0}else{0.5};
-    (prize*0.7).min(capacity) >= 1.5*(55.0* (600.0*common::price_level(me)+1500.0))
+    (prize*0.7).min(capacity) >= 1.5*((55.0+hops*30.0)* (600.0*common::price_level(me)+1500.0))
 }
 
 /// A rival ship for junk `u` to go after (me.rts.sea.contacts): on its water or one next to it, the weakest first; a
@@ -1731,7 +1731,7 @@ fn quarry(u: View, me: View, world: View, role: u8) -> Option<View> {
         let mut value=0.0;
         if (role==2 || !armed) && world.get("logistics").truthy() {
             let healthy=u.get("hp").num()>=u.get("hpMax").num()*0.7;
-            if armed || !paying_corsair_prey(c, me.path("rts.sea.contacts"), me, logistics::capacity(u), healthy) {continue;}
+            if armed || !paying_corsair_prey(c, me.path("rts.sea.contacts"), me, logistics::capacity(u), healthy, hops) {continue;}
             let prize=c.path("build.carry").num_or(0.0)*160000.0*common::price_level(me);
             value=prize.min(logistics::capacity(u))/1e6;
         }

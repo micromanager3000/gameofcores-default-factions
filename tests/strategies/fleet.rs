@@ -174,7 +174,7 @@ fn fleet_corsair_spawn_rejects_the_same_unprofitable_or_escorted_prey_as_quarry(
     let prey = Value::parse(r#"{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":2},"cargo":{"load":2}}"#);
     let empty=Value::arr();
     let args=views(&[me.clone(),prey,empty]);
-    assert!(!super::paying_corsair_prey(args[1], args[2], args[0], 160000.0, true), "a half-load cannot repay the existing corsair trip gate");
+    assert!(!super::paying_corsair_prey(args[1], args[2], args[0], 160000.0, true, 0.0), "a half-load cannot repay the existing corsair trip gate");
     let prey = Value::parse(r#"{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":3},"cargo":{"load":3}}"#);
     let contacts=Value::parse(r#"[{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":3},"cargo":{"load":3}},{"id":10,"ship":true,"water":1,"build":{"range":1}}]"#);
     let args=views(&[me,prey,contacts]);
@@ -187,5 +187,5 @@ fn fleet_corsair_spawn_keeps_a_profitable_unescorted_prey_eligible() {
     let prey=Value::parse(r#"{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":3},"cargo":{"load":3}}"#);
     let empty=Value::arr();
     let args=views(&[me,prey,empty]);
-    assert!(super::paying_corsair_prey(args[1],args[2],args[0],300000.0,true));
+    assert!(super::paying_corsair_prey(args[1],args[2],args[0],300000.0,true,0.0));
 }
