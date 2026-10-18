@@ -3313,7 +3313,7 @@ fn scene8(info: View, _: f64) -> Value {
         p.push(obj!{"type"=>"hall","x"=>x,"z"=>z,"w"=>w,"d"=>10,"h"=>7,"roof"=>"sawtooth","material"=>"metal","color"=>"#7b8581","trim"=>"#2e7c58","court"=>"paddock","pri"=>6});
     }
     for x in [-48.0, -32.0, -16.0, 16.0, 32.0, 48.0] {
-        p.push(obj!{"type"=>"wall","x"=>x,"z"=>42,"x2"=>x+10,"z2"=>42,"h"=>2,"t"=>.5,"color"=>"#9f8650","pri"=>3});
+        p.push(obj!{"type"=>"wall","x"=>x,"z"=>42,"x2"=>x+10,"z2"=>42,"h"=>2,"t"=>0.5,"color"=>"#9f8650","pri"=>3});
     }
     obj! {"title"=>"The Wheat Front","motto"=>"Machine guns met twenty thousand emus.","palette"=>obj!{"primary"=>c,"secondary"=>"#c8a64b","accent"=>"#205c42"},"sky"=>obj!{"time"=>"day","top"=>"#6fa3c0","horizon"=>"#ebd58f","fog"=>0.2},"ground"=>obj!{"kind"=>"grass","color"=>"#789044","open"=>true},"pieces"=>p}
 }
