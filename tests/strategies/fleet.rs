@@ -189,3 +189,34 @@ fn fleet_corsair_spawn_keeps_a_profitable_unescorted_prey_eligible() {
     let args=views(&[me,prey,empty]);
     assert!(super::paying_corsair_prey(args[1],args[2],args[0],300000.0,true,0.0));
 }
+
+fn storage_research_pick(powered: f64, capacity: f64) -> String {
+    let provinces = arr![obj! { "id"=>0,"owner"=>1,"power"=>obj! {"sunFactor"=>1,"lat"=>0,"windFactor"=>1} }];
+    let mut world_techs = obj! {};
+    for t in super::TECHS { world_techs.set(t, obj! {"offer"=>1000,"requires"=>arr![]}); }
+    let world = obj! {"provinces"=>provinces,"techs"=>world_techs};
+    let mut owned = obj! {};
+    for t in ["extraction","seaTraversal","turbines","ranged","armor","dash","cloak","scan","influence","faith","pierce","artillery","antiAir","repair","flight"] {
+        owned.set(t, true);
+    }
+    let plants = if capacity > 0.0 { arr![obj! {"state"=>"ready","p"=>0,"ports"=>arr![obj! {"kind"=>"tidal","capacity"=>capacity}]}] } else { Value::arr() };
+    let me = obj! {
+        "id"=>1,"capital"=>0,"techs"=>owned,
+        "energy"=>obj! {"powered"=>powered,"house"=>3,"plants"=>plants,
+            "islands"=>arr![obj! {"capital"=>true,"provinces"=>arr![0],"demand"=>8,"powered"=>powered,"storage"=>0}]},
+        "compute"=>obj! {"cycles"=>100000,"thinkPeak"=>1000,"used"=>obj!{}},
+        "units"=>obj! {"total"=>0,"queued"=>0,"cap"=>100},"costs"=>obj! {"unit"=>100,"upkeep"=>1},"bank"=>0
+    };
+    let args = views(&[world,me]);
+    let techs = super::research_techs(args[0],args[1]);
+    let mut orders = obj! {};
+    super::common::budget(&mut orders,args[0],args[1],&super::common::Budget {research:0.12,code:0.10,techs,types:None});
+    orders.get("research").str().to_string()
+}
+
+#[test]
+fn fleet_prioritizes_storage_only_for_a_dim_grid_with_chargeable_variable_surplus() {
+    assert_eq!(storage_research_pick(0.8,10.0),"storage");
+    assert_eq!(storage_research_pick(0.96,10.0),"airWeapons","a stable grid keeps the air path ahead of storage");
+    assert_eq!(storage_research_pick(0.8,2.0),"airWeapons","a low powered share without generation headroom is not a battery case");
+}
