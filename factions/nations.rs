@@ -514,6 +514,37 @@ fn think(world: View, me: View) -> Value {
     common::govern(world, me, 0.4, || strategy(world, me))
 }
 
+// Repair a planner allowance before opening the map and market. A full allowance spent is a lower bound on work.
+fn planner_recovery(me: View, remaining: f64) -> Option<Value> {
+    let cpu = me.path("rts.cpu");
+    let income = cpu.get("income").num_or(0.0);
+    let bank = cpu.get("bank").num_or(0.0);
+    let cap = cpu.get("spendCap").num_or(0.0);
+    if income <= 0.0 || cap <= 0.0 || bank < income * 2.0 || me.path("units.stalled").num_or(0.0) > 0.0 { return None; }
+    let amount = |n: f64| if n <= 1.0 { n * income } else { n };
+    let configured = amount(cpu.path("limits.think").num_or(cap));
+    let peak = me.path("compute.thinkPeak").num_or(0.0).max(me.path("compute.used.think").num_or(0.0));
+    if peak <= 0.0 { return None; }
+    let exhausted = peak >= configured * 0.97;
+    let observed = if exhausted { peak.max(configured) } else { peak };
+    let base: f64 = if me.path("units.total").num_or(0.0) < 20.0 { 15000.0 } else { 20000.0 };
+    let required = base.max(observed * 1.2 + 4000.0);
+    if remaining >= required { return None; }
+    let protected: f64 = cpu.get("reserve").entries().filter(|(lane, _)| *lane != "think")
+        .map(|(_, value)| amount(value.num_or(0.0))).sum();
+    let ceiling = cap.min((bank - protected - 4000.0).max(0.0)).floor();
+    let next = (required + 4000.0).min(ceiling).floor();
+    // If the hard cap already binds, keep the ordinary lean admission path instead of requesting an unattainable call.
+    if next <= configured + 2000.0 || next < base + 4000.0 { return None; }
+    let mut policy = obj! {
+        "limits"=>if cpu.get("limits").truthy() {cpu.get("limits").value()} else {obj! {}},
+        "reserve"=>if cpu.get("reserve").truthy() {cpu.get("reserve").value()} else {obj! {}},
+        "upkeepOrder"=>if cpu.get("upkeepOrder").is_arr() {cpu.get("upkeepOrder").value()} else {arr!["miner"]},
+    };
+    policy.entry("limits").set("think",if next <= income {next / income} else {next});
+    Some(obj! {"compute"=>obj! {"cpu"=>policy}})
+}
+
 fn strategy(world: View, me: View) -> Value {
     // (from 3,000 cycles the short path below still sets the CPU policy: a think that sets none keeps a limit that may
     // be too small for it every second after)
@@ -521,6 +552,9 @@ fn strategy(world: View, me: View) -> Value {
         return common::recovery(world, me);
     }
     let start = cycles_left();
+    if rts(me) {
+        if let Some(orders) = planner_recovery(me, start) { return orders; }
+    }
     // A full think costs 13,000 to 35,000 cycles as the world fills: under 20,000, keep standing orders rather than run
     // out halfway (the census below and the market at the end also wait for a fuller second). With under 20 units
     // the world is young and think cheap, and 15,000 will do: on the floor's income, with this program's code paid
@@ -1751,16 +1785,57 @@ fn spire(units: View, world: View, me: View) {
     sentry(units, world, me);
 }
 
+struct SentryBudget {
+    next: f64,
+    read: Vec<(f64, f64)>,
+}
+
+fn sentry_has_runway(available: f64, next: f64, read: f64) -> bool {
+    available >= next.max(2400.0) + read + 1800.0
+}
+
+impl SentryBudget {
+    fn new(me: View) -> Self {
+        if rts(me) {
+            orders::set_reserve(1100.0);
+            orders::set_first(1400.0);
+        }
+        Self { next: 2400.0, read: Vec::new() }
+    }
+
+    fn admits(&mut self, u: View, me: View) -> bool {
+        if !rts(me) { return true; }
+        let province = u.get("at").num();
+        let page = me.get("ramProvince").key(province).key(0.0);
+        let stamp = page.get("t").num_or(-1.0);
+        let cold = page.truthy() && !self.read.contains(&(province, stamp));
+        let bytes = page.get("bytes");
+        let read = if cold && bytes.is_bytes() && bytes.len() >= 2 {
+            let b = bytes.bytes();
+            2.0 * f64::from(u16::from_le_bytes([b[0], b[1]]))
+        } else { 0.0 };
+        if !sentry_has_runway(cycles_left(), self.next, read) { return false; }
+        if cold { self.read.push((province, stamp)); }
+        true
+    }
+
+    fn spent(&mut self, cycles: f64) {
+        // Include plan decoding, the route, core/front RAM copies and committing the order.
+        self.next = self.next.max(cycles * 2.0 + 1200.0);
+    }
+}
+
 fn sentry(units: View, world: View, me: View) -> Value {
     if short(me, 3500.0, 1600.0) {
         return Value::arr();
     }
     let by_id = realm::index(world);
+    let mut budget = SentryBudget::new(me);
     for turn in 0..units.len() {
-        if rts(me) && cycles_left() < 2200.0 {
-            break;
-        }
+        if rts(me) && cycles_left() < 4200.0 { break; }
         let u = nth(units, turn, world);
+        if !budget.admits(u, me) { break; }
+        let began = cycles_left();
         let pl = plan::of(me, u);
         let defend = common::defends(&pl, u);
         let attack = pl.get("attack").num_or(-1.0);
@@ -1784,10 +1859,12 @@ fn sentry(units: View, world: View, me: View) -> Value {
             o.get_or_insert_with(|| obj! { "id" => u.get("id") }).set("ram", ops);
         }
         if let Some(mut o) = o {
+            if rts(me) && cycles_left() < 600.0 { break; }
             o.set("power", obj! { "drive" => 120, "armor" => 0, "weapon" => 180 });
             o.set("alert", 7);
             order(o);
         }
+        budget.spent(began - cycles_left());
     }
     Value::Undef
 }

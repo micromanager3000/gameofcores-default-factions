@@ -27,7 +27,7 @@ fn flight_views(values: &[Value]) -> Vec<View> {
         if u.get("owner").num()!=v[2].get("id").num() && u.get("air").truthy() {contacts.push(u.clone());}
         let deck=u.get("rts").get("sea").get("deck");
         if u.get("owner").num()==v[2].get("id").num() && deck.get("room").num_or(0.0)>0.0 {
-            decks.push(obj!{"id"=>u.get("id").clone(),"at"=>u.get("at").clone(),"room"=>deck.get("room").clone(),"riders"=>deck.get("riders").clone()});
+            decks.push(obj!{"id"=>u.get("id").clone(),"at"=>u.get("at").clone(),"room"=>deck.get("room").clone(),"free"=>deck.get("free").num_or(deck.get("room").num_or(0.0)-deck.get("riders").len() as f64),"riders"=>deck.get("riders").clone()});
         }
     }
     v[1].set("units",Value::arr());

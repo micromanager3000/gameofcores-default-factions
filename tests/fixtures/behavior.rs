@@ -256,6 +256,94 @@ fn front_snapshots_count_ground_fighters_and_exclude_workers_scouts_ships_and_ai
     assert_eq!(plan.get("front"),&arr![5,4,5,21,10,10]);
     assert!(plan.get("front").to_json().len()<=62,"the snapshot must fit one unit RAM page");
 }
+fn breach_fixture(force: usize, guards: usize, neutral: bool) -> (Value, Value) {
+    let mut provinces = arr![
+        obj! {"id"=>0,"owner"=>1,"adj"=>arr![1,2],"hops"=>0,"units"=>obj! {"1"=>force as f64}},
+        obj! {"id"=>1,"owner"=>2,"adj"=>arr![0],"capital"=>true,"visible"=>true,
+            "garrison"=>guards as f64,"townGarrison"=>guards as f64,"units"=>obj! {"2"=>guards as f64}},
+    ];
+    if neutral { provinces.push(obj! {"id"=>2,"owner"=>-1,"adj"=>arr![0],"visible"=>true,"garrison"=>0}); }
+    let mut units = Value::arr();
+    for i in 0..force { units.push(obj! {"id"=>i as f64+1.0,"owner"=>1,"type"=>"line","at"=>0,"to"=>-1,
+        "doing"=>"idle","target"=>-1,"hp"=>5,"build"=>obj! {"strength"=>2}}); }
+    for i in 0..guards { units.push(obj! {"id"=>i as f64+100.0,"owner"=>2,"type"=>"line","at"=>1,"to"=>-1,
+        "doing"=>"fight","target"=>1,"hp"=>5,"build"=>obj! {"strength"=>2}}); }
+    let world = obj! {"seconds"=>100,"provinces"=>provinces,"units"=>units,
+        "factions"=>Value::parse(r#"[null,{"id":1,"alive":true},{"id":2,"alive":true}]"#)};
+    let me = obj! {"id"=>1,"capital"=>0,"allies"=>arr![],"contracts"=>arr![],"ramCapital"=>obj! {},
+        "units"=>obj! {"total"=>force as f64+4.0,"byType"=>obj! {"miner"=>4},"doing"=>obj! {"gather"=>4}}};
+    (world,me)
+}
+
+fn breach_plan(world: &Value, me: &Value) -> Value {
+    let args = views(&[world.clone(),me.clone()]);
+    let targets = realm::frontier(args[0],args[1]);
+    common::survey(args[0],args[1],&targets,2.0)
+}
+
+#[test]
+fn an_assault_reaches_a_defended_capital_before_capture_odds_are_met() {
+    let (world,me) = breach_fixture(14,7,false);
+    let plan = breach_plan(&world,&me);
+    assert_eq!(plan.get("attack").num(),1.0,"a plausible fight must remain an objective");
+    assert_eq!(plan.get("need").num(),13.0,"combat needs a 50% advantage and two reserves, rather than 23 capturers");
+    let own = Value::Arr(world.get("units").items().into_iter().filter(|u|u.get("owner").num()==1.0).cloned().collect());
+    let mut callback_world = world.clone();
+    if let Value::Obj(o) = &mut callback_world {o.remove("units");}
+    let args = views(&[own,callback_world,me]);
+    let units:Vec<View>=args[0].iter().collect();
+    let plans:Vec<Rc<Value>>=units.iter().map(|_|Rc::new(plan.clone())).collect();
+    let orders=common::muster(&units,args[1],args[2],"capture",&plans);
+    assert!(orders.iter().any(|o|o.get("do").str()=="capture"&&o.get("target").num()==1.0),"the assault must leave its stage: {orders:?}");
+}
+
+#[test]
+fn a_weak_army_waits_and_safe_expansion_keeps_priority_over_an_assault() {
+    let (world,me)=breach_fixture(10,7,false);
+    assert_eq!(breach_plan(&world,&me).get("attack").num(),-1.0,"a smaller army cannot afford this fight");
+    let (world,me)=breach_fixture(5,3,false);
+    assert_eq!(breach_plan(&world,&me).get("attack").num(),-1.0,"an assault requires at least six ground fighters");
+    let (world,me)=breach_fixture(14,7,true);
+    let plan=breach_plan(&world,&me);
+    assert_eq!(plan.get("attack").num(),2.0,"ordinary capturable land has priority");
+    assert_eq!(plan.get("need").num(),2.0);
+}
+
+#[test]
+fn the_same_capital_returns_to_normal_capture_planning_when_defenders_fall() {
+    let (world,me)=breach_fixture(14,2,false);
+    let plan=breach_plan(&world,&me);
+    assert_eq!(plan.get("attack").num(),1.0);
+    assert_eq!(plan.get("need").num(),8.0,"ordinary three-to-one capture odds replace the assault threshold");
+}
+
+#[test]
+fn assaults_respect_passage_and_do_not_count_aircraft_as_ground_replacements() {
+    let (world,mut me)=breach_fixture(14,7,false);
+    me.set("contracts",arr![obj! {"with"=>2,"get"=>obj! {"passage"=>true}}]);
+    assert_eq!(breach_plan(&world,&me).get("attack").num(),-1.0,"a passage host stays protected");
+    let (mut world,me)=breach_fixture(14,7,false);
+    item(world.entry("provinces"),1).set("visible",false);
+    assert_eq!(breach_plan(&world,&me).get("attack").num(),-1.0,"stale garrison observations cannot justify an assault");
+    let (mut world,me)=breach_fixture(14,7,false);
+    for i in 4..14 { item(world.entry("units"),i).entry("build").set("wings",1); }
+    assert_eq!(breach_plan(&world,&me).get("attack").num(),-1.0,"ten aircraft cannot replace missing capturers");
+}
+
+#[test]
+fn a_plausible_assault_keeps_its_existing_target() {
+    let (mut world,mut me)=breach_fixture(14,7,false);
+    world.entry("provinces").push(obj! {"id"=>2,"owner"=>3,"adj"=>arr![0],"capital"=>true,"visible"=>true,
+        "garrison"=>6,"townGarrison"=>6,"units"=>obj! {"3"=>6}});
+    world.entry("factions").push(obj! {"id"=>3,"alive"=>true});
+    for i in 0..6 {world.entry("units").push(obj! {"id"=>i as f64+200.0,"owner"=>3,"type"=>"line","at"=>2,"to"=>-1,
+        "doing"=>"fight","target"=>2,"hp"=>5,"build"=>obj! {"strength"=>2}});}
+    me.set("ramCapital",ram_pages(&obj! {"ram"=>mem::put(0,&obj! {"attack"=>2},"local",None,1).unwrap()}));
+    let plan=breach_plan(&world,&me);
+    assert_eq!(plan.get("attack").num(),2.0,"fallback assaults use the existing sticky target selection");
+    assert_eq!(plan.get("need").num(),11.0);
+}
+
 #[test]
 fn a_full_think_runs_every_third_second_while_nothing_presses() {
     let (mut world, mut me, units) = fixture();

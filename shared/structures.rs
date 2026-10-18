@@ -56,6 +56,11 @@ fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: Vie
     let hostile: Vec<View> = sites.iter().take_while(|_| cycles_left() > 6500.0).filter(|s| s.get("state").str() != "ruin"
         && realm::is_rival(world, me, s.get("owner").num_or(-1.0))).collect();
     if hostile.is_empty() { return; }
+    // A live passage contract covers some of our units while they stand in its host's land. The public unit view only
+    // exposes former-pact conduct, not that per-unit passage assignment; do not ask those covered units to fire there.
+    let passage_hosts: Vec<f64> = me.get("contracts").iter().filter(|c| !c.get("ended").truthy()
+        && c.get("get").get("passage").truthy()).map(|c| c.get("with").num_or(-1.0)).collect();
+    let provinces = realm::index(world);
     let mut attacks = Value::arr();
     for &u in units {
         if attacks.len() >= 8 || cycles_left() < 4500.0 { break; }
@@ -68,7 +73,9 @@ fn besiege(orders: &mut Value, world: View, me: View, units: &[View], sites: Vie
         let conduct = u.get("conduct");
         let target = hostile.iter().copied().take_while(|_| cycles_left() > 4500.0).filter(|s| {
             let protected = conduct.get("seconds").num_or(0.0) > 0.0 && same(conduct.get("from"), s.get("owner"));
-            !protected && near(u, *s, reach + s.get("radius").num_or(0.0))
+            let host = s.get("owner").num_or(-1.0);
+            let passage = passage_hosts.contains(&host) && same(provinces.get(u.get("at").num_or(-1.0)).get("owner"), s.get("owner"));
+            !protected && !passage && near(u, *s, reach + s.get("radius").num_or(0.0))
         }).min_by(|a, b| {
             // An armed shell stops the advance; finish damaged shells within the same priority.
             // Then plants: a rival's dark towns are a weaker rival.

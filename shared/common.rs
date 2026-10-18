@@ -157,6 +157,7 @@ use super::{air, theme};
         if air_recovery(units,me) {return;}
         let by = realm::index(world);
         let carriers: Vec<View> = me.path("rts.air.decks").iter().take(12).collect();
+        let deck_free = |c: View| c.get("free").num_or(c.get("room").num_or(0.0) - c.get("riders").len() as f64);
         let mut returning = Vec::new();
         let mut reserved: Vec<f64> = Vec::new();
         for u in units.iter() {
@@ -170,7 +171,8 @@ use super::{air, theme};
             }
             // A paid return to a deck stands until it arrives. Reserve room before sending another wing.
             let board = sea.path("course.board").num_or(-1.0);
-            if board >= 0.0 && carriers.iter().any(|c| c.get("id").num() == board) {
+            if board >= 0.0 && carriers.iter().any(|c| c.get("id").num() == board
+                && deck_free(*c) > reserved.iter().filter(|&&id| id == board).count() as f64) {
                 reserved.push(board); returning.push(u.get("id").num()); continue;
             }
             if a.get("aloft").truthy() && (a.get("heat").num_or(0.0) >= 30.0
@@ -179,8 +181,7 @@ use super::{air, theme};
                 let carrier = carriers.iter().find(|c| {
                     let p = c.get("at").num_or(-2.0);
                     (p == at || by.get(at).get("adj").has_num(p))
-                        && c.get("room").num_or(0.0) > c.get("riders").len() as f64
-                            + reserved.iter().filter(|&&id| id == c.get("id").num()).count() as f64
+                        && deck_free(**c) > reserved.iter().filter(|&&id| id == c.get("id").num()).count() as f64
                 });
                 if let Some(c) = carrier {
                     let id = c.get("id").num(); reserved.push(id); returning.push(u.get("id").num());
@@ -450,10 +451,13 @@ use super::{air, theme};
     /// escorts use this compact think snapshot rather than inferring a convoy from their own type call.
     pub fn share(orders: &mut Value, pl: &Value, world: View, me: View) {
         let mut packed = pl.clone();
+        // These optional snapshots run before recruitment and the CPU policy. Leave
+        // enough time to publish those decisions, even in a crowded world.
+        front_snapshot(&mut packed, world, me);
         let ours = me.get("id").num();
         let mut convoy = Vec::new();
         for u in world.get("units").iter() {
-            if cycles_left() < 2500.0 || convoy.len() >= 4 { break; }
+            if cycles_left() < 18000.0 || convoy.len() >= 4 { break; }
             if u.get("owner").num_or(-1.0) != ours || u.get("type").str() != "freighter" { continue; }
             let water = u.path("rts.sea.water").num_or(-1.0);
             if water < 0.0 || convoy.iter().any(|w: &Value| w.num_or(-1.0) == water) { continue; }
@@ -461,7 +465,6 @@ use super::{air, theme};
         }
         packed.set("convoy", Value::Arr(convoy));
         packed.set("convoyAt", world.get("seconds"));
-        front_snapshot(&mut packed, world, me);
         plan::share(orders, &packed, me);
     }
 
@@ -962,13 +965,56 @@ use super::{air, theme};
     /// only a change) and your units can tell a plan that stands from land cut off from it (`plan::check`); partner:
     /// unseen land the game said a pact partner holds ([`partner_land`]), left off the targets. The last plan (in capital
     /// RAM) keeps the target sticky. Targets that need more than about 60% of your fighters wait while others are on
-    /// the list, and a hopeless siege ([`hopeless`]) is no target at all. `per_slot` is how deep to stack miners (2 is
-    /// the usual).
+    /// the list. If none can be captured yet, a larger ground force may assault a visible rival first.
+    /// `per_slot` is how deep to stack miners (2 is the usual).
     pub fn survey(world: View, me: View, targets: &[View], per_slot: f64) -> Value {
         let last = mem::get(me.get("ramCapital"), 0).get("attack").num_or(-1.0);
         let me_id = me.get("id").num();
         let partner = partner_land(world, me);
-        let kept: Vec<View> = targets.iter().copied().filter(|q| !partner.contains(&q.get("id").num()) && !hopeless(me, *q)).collect();
+        let mut kept: Vec<View> = targets.iter().copied().filter(|q| !partner.contains(&q.get("id").num()) && !hopeless(me, *q)).collect();
+        let mut breaches: Vec<(f64, f64)> = Vec::new();
+        // Capture odds decide when a siege progresses. Capture orders also fight through the house's reflexes.
+        // With no capture available, require six ground fighters and a 50% numerical advantage plus two reserves.
+        // Six covers a capital's four capturers with two replacements; aircraft and workers cannot supply them.
+        let seen = world.get("units");
+        if kept.is_empty() && seen.is_arr() && cycles_left() > 7000.0 + seen.len() as f64 * 60.0 {
+            let mut ground = 0.0;
+            let mut complete = true;
+            for u in seen.iter() {
+                if cycles_left() < 5000.0 { complete = false; break; }
+                if u.get("owner").num_or(-1.0) != me_id || u.get("hp").num_or(0.0) <= 0.0 { continue; }
+                if matches!(u.get("type").str(), "miner" | "hauler" | "freighter" | "scout")
+                    || matches!(u.get("doing").str(), "gather" | "study") || u.get("hired").truthy()
+                    || u.path("build.strength").num_or(1.0) <= 0.0
+                    || u.get("air").truthy() || u.path("build.wings").num_or(0.0) > 0.0
+                    || u.path("rts.sea.ship").truthy() { continue; }
+                ground += 1.0;
+            }
+            if complete && ground >= 6.0 {
+                let by_id = realm::index(world);
+                let hold = can_hold(world, me, false);
+                for &q in targets {
+                    if cycles_left() < 5000.0 { break; }
+                    let id = q.get("id").num_or(-1.0);
+                    let owner = q.get("owner").num_or(-1.0);
+                    let Some(from) = realm::from(q) else { continue; };
+                    let origin = by_id.get(from);
+                    if !q.get("visible").truthy() || partner.contains(&id) || !realm::is_rival(world, me, owner)
+                        || origin.get("owner").num_or(-1.0) != me_id || !hold(q)
+                        || !realm::reach(origin, me).contains(&id)
+                        || me.get("contracts").iter().any(|c| !c.get("ended").truthy()
+                            && c.get("with").num_or(-1.0) == owner && c.path("get.passage").truthy()) { continue; }
+                    // Whole-province counts cover reinforcements outside the town ring too.
+                    let defenders = q.get("garrison").num_or(f64::INFINITY)
+                        .max(q.get("townGarrison").num_or(0.0));
+                    let need = (defenders * 1.5).ceil().max(4.0) + 2.0;
+                    if need.is_finite() && need <= ground && need <= 255.0 {
+                        kept.push(q);
+                        breaches.push((id, need));
+                    }
+                }
+            }
+        }
         let targets = &kept[..];
         let joint = targets.iter().copied().find(|q| {
             let by = q.get("siege").get("by").num();
@@ -977,7 +1023,8 @@ use super::{air, theme};
         let can = (fighters(me) * 0.6).floor().max(4.0);
         let fit: Vec<View> = targets.iter().copied().filter(|q| muster_for(*q) <= can).collect();
         let t = joint.or_else(|| pick(if fit.is_empty() { targets } else { &fit }, last));
-        let need = if joint.is_some() { 1.0 } else { t.map_or(0.0, muster_for) };
+        let need = if joint.is_some() { 1.0 } else { t.map_or(0.0, |q| breaches.iter()
+            .find(|(id, _)| *id == q.get("id").num()).map_or_else(|| muster_for(q), |(_, need)| *need)) };
         let mines: Vec<Value> = realm::open_mines(world, me, per_slot, 24.0).into_iter().map(|[p, k]| arr![p, k]).collect();
         let mut plan = obj! {
             "mines" => mines,
@@ -1098,7 +1145,7 @@ use super::{air, theme};
         let me_id = me.get("id").num();
         let (mut ours, mut theirs, mut home) = (0.0, 0.0, 0.0);
         for u in world.get("units").iter() {
-            if cycles_left() < 3500.0 { return; }
+            if cycles_left() < 18000.0 { return; }
             let at = u.get("at").num_or(-1.0);
             if at != attack && at != stage { continue; }
             let (kind, doing) = (u.get("type").str(), u.get("doing").str());

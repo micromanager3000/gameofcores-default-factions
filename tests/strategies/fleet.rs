@@ -96,12 +96,14 @@ fn fleet_uses_lean_plan_when_the_full_estimate_exceeds_the_spend_cap() {
     let full_need = super::full_think_need(args[0], args[1]);
     let need = super::budgeted_think_need(args[0], args[1], 47400.0);
     assert!(need < full_need, "a capped house should receive the guarded lean estimate");
+    assert!(need <= 14000.0, "small rich factions need an opening pass sized to their measured workload");
     let fallback = super::recovery_for_plan(args[0], args[1], need);
     let next_limit = fallback.get("compute").get("cpu").get("limits").get("think").num();
 
     assert!(next_limit >= need + super::PLAN_REMAINING_MARGIN + super::PLAN_CALLBACK_OVERHEAD,
         "the lean pass should fit inside the healthy 47.4k spend cap: {fallback:?}");
     assert!(next_limit <= 47400.0, "the retry permission must respect the spend cap");
+    assert!(next_limit < 20000.0, "the saved opening policy should fit the observed 20k-class budget");
     assert!(super::plan_fuel_ready(next_limit, next_limit - super::PLAN_CALLBACK_OVERHEAD, need),
         "the saved lean policy should admit after callback overhead");
 

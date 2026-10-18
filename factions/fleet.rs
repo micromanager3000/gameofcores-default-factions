@@ -587,9 +587,11 @@ fn full_think_need(world: View, me: View) -> f64 {
 }
 
 fn lean_think_need(world: View, me: View) -> f64 {
-    // A funded lean pass still builds the local plan. Its expensive census and
-    // naval searches already have their own cycle guards below.
-    24000.0 + world.get("provinces").len() as f64 * 100.0 + me.get("units").get("total").or(0.0) * 125.0
+    // The opening plan (local frontier, mine room, and recruitment policy) starts
+    // around 13k cycles on a small realm. Census, field routes, and naval search
+    // already have separate cycle guards below, so this lower budget still makes
+    // expansion decisions without starting those optional scans.
+    10000.0 + world.get("provinces").len() as f64 * 40.0 + me.get("units").get("total").or(0.0) * 60.0
 }
 
 fn budgeted_think_need(world: View, me: View, spend_cap: f64) -> f64 {
@@ -664,8 +666,8 @@ fn strategy(world: View, me: View) -> Value {
         return recovery_for_plan(world, me, need);
     }
     let start = cycles_left();
-    // Skip the full scan before it can exceed this second's think lane. Recovery
-    // keeps local defenses and mining active, then raises a funded next attempt.
+    // Skip planning before it can exceed this second's think lane. In a smaller
+    // funded lane the existing guards below limit census, field, and naval scans.
     let available = me.get("rts").get("cpu").get("available");
     if rts(me) {
         let allowance = if available.truthy() { available.get("think").num_or(0.0) } else { cycles_left() };

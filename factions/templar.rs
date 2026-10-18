@@ -592,6 +592,55 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     Some(field)
 }
 
+// A planner that starts with more call cycles than the think lane can actually
+// spend still loses all of its orders. Keep a peak-aware full estimate, while a
+// capped faction can resume with the guarded lean pass below.
+const PLAN_REMAINING_MARGIN: f64 = 6000.0;
+const PLAN_CALLBACK_OVERHEAD: f64 = 2500.0;
+
+fn full_think_need(world: View, me: View) -> f64 {
+    let measured = me.get("compute").get("thinkPeak").num_or(0.0);
+    (26000.0 + world.get("provinces").len() as f64 * 220.0 + world.get("units").len() as f64 * 120.0)
+        .max(measured * 1.25 + PLAN_REMAINING_MARGIN)
+}
+
+fn lean_think_need(world: View, me: View) -> f64 {
+    10000.0 + world.get("provinces").len() as f64 * 40.0 + me.get("units").get("total").num_or(0.0) * 60.0
+}
+
+fn hard_think_cap(me: View) -> f64 {
+    let cpu = me.path("rts.cpu");
+    cpu.get("spendCap").num_or(cpu.get("burst").num_or(cpu.get("bank").num_or(0.0) + cpu.get("income").num_or(20000.0)))
+}
+
+fn budgeted_think_need(world: View, me: View) -> f64 {
+    let full = full_think_need(world, me);
+    if hard_think_cap(me) >= full + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD { full } else { lean_think_need(world, me) }
+}
+
+fn full_plan_selected(world: View, me: View) -> bool {
+    hard_think_cap(me) >= full_think_need(world, me) + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD
+}
+
+fn plan_fuel_ready(allowance: f64, remaining: f64, need: f64) -> bool {
+    allowance >= need && remaining >= need + PLAN_REMAINING_MARGIN
+}
+
+fn recovery_for_plan(world: View, me: View, need: f64) -> Value {
+    let mut orders = common::recovery(world, me);
+    let cpu = me.path("rts.cpu");
+    let income = cpu.get("income").num_or(20000.0).max(1.0);
+    let bank = cpu.get("bank").num_or(0.0);
+    let cap = hard_think_cap(me);
+    let limit = orders.get("compute").get("cpu").get("limits").get("think").num_or(0.0).min(cap);
+    orders.entry("compute").entry("cpu").entry("limits").set("think", limit);
+    let retry = need + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD;
+    if bank >= income * 2.0 && retry <= cap && retry <= bank + income {
+        orders.entry("compute").entry("cpu").entry("limits").set("think", retry);
+    }
+    orders
+}
+
 fn think(world: View, me: View) -> Value {
     // A nearly empty slice cannot afford govern's scans. Open the next allowance,
     // keep miners first for upkeep, and leave type schedules and standing orders alone.
@@ -612,18 +661,16 @@ fn strategy(world: View, me: View) -> Value {
     let rts = me.get("rts");
     // (from 3,000 cycles the short path below still sets the CPU policy: a think that sets none keeps a limit that may
     // be too small for it every second after)
-    if rts.truthy() && cycles_left() < 3000.0 {
-        return common::recovery(world, me);
-    }
+    let need = budgeted_think_need(world, me);
+    let full_plan = full_plan_selected(world, me);
+    if rts.truthy() && cycles_left() < 3000.0 { return recovery_for_plan(world, me, need); }
     let start = cycles_left();
     if !rts.truthy() {
         return legacy_think(world, me);
     }
-    // A full think costs about 20,000 cycles: with less, keep the standing orders and set only the CPU policy, which
-    // leaves think more room next second, rather than run out halfway.
-    if cycles_left() < 20000.0 {
-        return common::recovery(world, me);
-    }
+    let available = rts.get("cpu").get("available");
+    let allowance = if available.truthy() { available.get("think").num_or(0.0) } else { cycles_left() };
+    if !plan_fuel_ready(allowance, cycles_left(), need) { return recovery_for_plan(world, me, need); }
     let mut orders = obj! { "policy" => obj! { "extraction" => 0.47, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true } };
     // Survey needs every candidate to retain an active siege or bypass an unwinnable one.
     let ranked = targets(world, me);
@@ -631,14 +678,20 @@ fn strategy(world: View, me: View) -> Value {
     let owner = realm::index(world).get(survey.get("attack").num_or(-1.0)).get("owner").num_or(-1.0);
     survey.set("campaign", if realm::is_rival(world, me, owner) { owner } else { -1.0 });
     survey.set("home", me.get("capital"));
-    // the road goes where the army goes: the province everyone defends, else the attack (a picket's guard is near it)
-    let defend = vnum(survey.get("defend"));
-    let to = if defend >= 0.0 { defend } else { vnum(survey.get("attack")) };
-    if let Some(field) = road(world, me, to, 18000.0) {
-        survey.set("field", field);
+    if full_plan {
+        // The road goes where the army goes: the province everyone defends, else the attack.
+        let defend = vnum(survey.get("defend"));
+        let to = if defend >= 0.0 { defend } else { vnum(survey.get("attack")) };
+        if let Some(field) = road(world, me, to, 18000.0) {
+            survey.set("field", field);
+        }
+        // The pilgrims' holy sites travel in the plan to the scouts at home.
+        survey.set("pilgrims", pilgrim_sites(world, me));
+    } else {
+        // A lean plan must not erase the routes its scouts are still following.
+        let pilgrims = mem::get(me.get("ramCapital"), 0).get("pilgrims").clone();
+        if pilgrims.truthy() { survey.set("pilgrims", pilgrims); }
     }
-    // the pilgrims' holy sites travel in the plan to the scouts at home
-    survey.set("pilgrims", pilgrim_sites(world, me));
     common::share(&mut orders, &survey, world, me);
 
     let techs = me.get("techs");
@@ -648,7 +701,7 @@ fn strategy(world: View, me: View) -> Value {
     // actually seen, rather than to a hidden global composition. The census costs
     // about 50 cycles a unit, so it runs only when think can still finish after it.
     let seen = world.get("units");
-    let census = cycles_left() > 55.0 * seen.len() as f64 + 12000.0;
+    let census = full_plan && cycles_left() > 55.0 * seen.len() as f64 + 12000.0;
     if census {
         let me_id = me.get("id");
         for u in seen.iter() {
