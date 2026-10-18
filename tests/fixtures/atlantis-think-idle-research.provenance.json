@@ -1,0 +1,335 @@
+{
+  "scope": "Exact own observation from a public default-program simulation; no player data.",
+  "origin": {
+    "game": "holdout-long-409",
+    "snapshotSha256": "01bd30b2df1e9b5c50d4842194e2dab007b5201231e6b5b9a0eecee8efeb07f3",
+    "path": "artifacts/balance-oct16/gameplay-depth-holdout-final-af6732e/holdout-long-409.state.json"
+  },
+  "faction": 3,
+  "function": "think",
+  "budget": 21714,
+  "rate": 64,
+  "fixtureSha256": "7726e60abe1a742d5245512f21c8c06184aa14ca45d5a9b5e9eb1ef341b12a74",
+  "controlSourceSha256": "5780ec83ef43c5ae806f4ee2ddd5bbc13e0d75c7cc76bc9d43a2f14f7c164aca",
+  "treatmentSourceSha256": "d5ecff63d2167d01b0ac258bafde82d9a835fdf51627d7409a2d6c017dd01e23",
+  "meteredCalls": [
+    {
+      "arm": "control",
+      "budget": 18000,
+      "ok": true,
+      "used": 5773.78125,
+      "research": null,
+      "fab": 0,
+      "error": null
+    },
+    {
+      "arm": "control",
+      "budget": 19000,
+      "ok": true,
+      "used": 10056.640625,
+      "research": null,
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "control",
+      "budget": 20000,
+      "ok": true,
+      "used": 10056.640625,
+      "research": null,
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "control",
+      "budget": 21000,
+      "ok": true,
+      "used": 10056.640625,
+      "research": null,
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "control",
+      "budget": 21714,
+      "ok": true,
+      "used": 10056.640625,
+      "research": null,
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "control",
+      "budget": 22000,
+      "ok": true,
+      "used": 10056.640625,
+      "research": null,
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "control",
+      "budget": 24000,
+      "ok": true,
+      "used": 12597.046875,
+      "research": null,
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "control",
+      "budget": 30000,
+      "ok": true,
+      "used": 13987.359375,
+      "research": null,
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "control",
+      "budget": 40000,
+      "ok": true,
+      "used": 13987.359375,
+      "research": null,
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "treatment",
+      "budget": 18000,
+      "ok": true,
+      "used": 5773.421875,
+      "research": null,
+      "fab": 0,
+      "error": null
+    },
+    {
+      "arm": "treatment",
+      "budget": 19000,
+      "ok": true,
+      "used": 10195.15625,
+      "research": "extraction",
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "treatment",
+      "budget": 20000,
+      "ok": true,
+      "used": 10195.15625,
+      "research": "extraction",
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "treatment",
+      "budget": 21000,
+      "ok": true,
+      "used": 10195.15625,
+      "research": "extraction",
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "treatment",
+      "budget": 21714,
+      "ok": true,
+      "used": 10195.15625,
+      "research": "extraction",
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "treatment",
+      "budget": 22000,
+      "ok": true,
+      "used": 10195.15625,
+      "research": "extraction",
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "treatment",
+      "budget": 24000,
+      "ok": true,
+      "used": 12748.015625,
+      "research": "extraction",
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "treatment",
+      "budget": 30000,
+      "ok": true,
+      "used": 14258.890625,
+      "research": "extraction",
+      "fab": 23640,
+      "error": null
+    },
+    {
+      "arm": "treatment",
+      "budget": 40000,
+      "ok": true,
+      "used": 14258.890625,
+      "research": "extraction",
+      "fab": 23640,
+      "error": null
+    }
+  ],
+  "continuation": {
+    "control": {
+      "delta": {
+        "spawned": 0,
+        "cycleBank": -68953.25588516938,
+        "cargoProduced": 6339285.644309044,
+        "cargoDelivered": 6177920.000000566,
+        "upkeepSpent": 6832199.999982119,
+        "researchSpent": 0.0,
+        "fabricationSpent": 0.0
+      },
+      "newTechs": []
+    },
+    "treatment": {
+      "delta": {
+        "spawned": 0,
+        "cycleBank": -3310161.0869071614,
+        "cargoProduced": 7942100.425605476,
+        "cargoDelivered": 7753920.0,
+        "upkeepSpent": 6832199.999982119,
+        "researchSpent": 4915749.446282237,
+        "fabricationSpent": 0.0
+      },
+      "newTechs": [
+        "antiAir",
+        "armor",
+        "dash",
+        "drilling",
+        "extraction",
+        "pierce",
+        "ranged",
+        "turbines"
+      ]
+    }
+  },
+  "limits": [
+    "One saved world and 600 seconds do not establish campaign balance or a Crown.",
+    "Research restarts but neither arm recruits or gains land during this interval.",
+    "Treatment spends savings on research and ends with a much smaller bank.",
+    "Both arms capture one Fleet planning failure and no Atlantis failure.",
+    "Other public programs retain C8 source; later controller repairs are absent."
+  ],
+  "boundaryAndActiveProjectChecks": [
+    {
+      "active": null,
+      "budget": 17999,
+      "ok": true,
+      "used": 5773.421875,
+      "research": null
+    },
+    {
+      "active": null,
+      "budget": 18001,
+      "ok": true,
+      "used": 5773.421875,
+      "research": null
+    },
+    {
+      "active": null,
+      "budget": 18025,
+      "ok": true,
+      "used": 5773.421875,
+      "research": null
+    },
+    {
+      "active": null,
+      "budget": 18100,
+      "ok": true,
+      "used": 10195.15625,
+      "research": "extraction"
+    },
+    {
+      "active": null,
+      "budget": 18200,
+      "ok": true,
+      "used": 10195.15625,
+      "research": "extraction"
+    },
+    {
+      "active": null,
+      "budget": 18500,
+      "ok": true,
+      "used": 10195.15625,
+      "research": "extraction"
+    },
+    {
+      "active": null,
+      "budget": 21714,
+      "ok": true,
+      "used": 10195.15625,
+      "research": "extraction"
+    },
+    {
+      "active": null,
+      "budget": 26000,
+      "ok": true,
+      "used": 12748.75,
+      "research": "extraction"
+    },
+    {
+      "active": "armor",
+      "budget": 17999,
+      "ok": true,
+      "used": 5773.421875,
+      "research": null
+    },
+    {
+      "active": "armor",
+      "budget": 18001,
+      "ok": true,
+      "used": 5773.421875,
+      "research": null
+    },
+    {
+      "active": "armor",
+      "budget": 18025,
+      "ok": true,
+      "used": 5773.421875,
+      "research": null
+    },
+    {
+      "active": "armor",
+      "budget": 18100,
+      "ok": true,
+      "used": 10142.390625,
+      "research": null
+    },
+    {
+      "active": "armor",
+      "budget": 18200,
+      "ok": true,
+      "used": 10142.390625,
+      "research": null
+    },
+    {
+      "active": "armor",
+      "budget": 18500,
+      "ok": true,
+      "used": 10142.390625,
+      "research": null
+    },
+    {
+      "active": "armor",
+      "budget": 21714,
+      "ok": true,
+      "used": 10142.390625,
+      "research": null
+    },
+    {
+      "active": "armor",
+      "budget": 26000,
+      "ok": true,
+      "used": 12693.46875,
+      "research": null
+    }
+  ]
+}

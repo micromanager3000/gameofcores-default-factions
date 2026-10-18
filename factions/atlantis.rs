@@ -687,6 +687,10 @@ fn strategy(world: View, me: View) -> Value {
         me.get("units").get("byType"),
     );
     if lean {
+        // A completed project leaves no standing research. Select the next one before returning the bounded plan.
+        if me.path("research.tech").str().is_empty() && cycles_left()>6000.0 {
+            atlantis_ext::choose_research(&mut orders,world,me);
+        }
         orders.entry("compute").set("types",types);
         let mut policy=cpu_policy(world,me,&orders,pressure,need);
         common::fit_cpu(&mut policy,me);
