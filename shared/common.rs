@@ -676,7 +676,8 @@ use super::{air, theme};
             else if me.path("techs.seaTraversal").truthy() && have.get("freighter").num_or(0.0) < 2.0
                 && world.get("seconds").num_or(0.0) >= mem::get(me.get("ramCapital"), FREIGHT_PAGE).get("until").num_or(0.0) {
                 for p in me.path("rts.sea.ports").iter() {
-                    if cycles_left() < 5000.0 { break; }
+                    // Leave room for a cold port probe and returning the completed orders.
+                    if cycles_left() < 9000.0 { break; }
                     let at = p.num();
                     let Some(d) = world.path("logistics.docks").iter().find(|d| d.get("p").num() == at) else { continue };
                     let Some(home) = freight_home(world, me, d.get("water").num()) else { continue };
