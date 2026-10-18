@@ -192,3 +192,47 @@ fn the_bounded_planner_keeps_insolvent_crews_in_shared_recovery() {
     assert_eq!(out.get("compute").get("cpu").get("limits").get("fabrication").num(),0.0);
     assert!(out.get("spawn").is_empty());
 }
+
+#[test]
+fn an_active_funded_topic_needs_no_flight_progress_rewrite() {
+    let (world,me)=bounded_planner_case(600.0);let args=views(&[world,me]);
+    let mut orders=obj!{"compute"=>obj!{"cpu"=>obj!{"limits"=>obj!{
+        "think"=>50000,"research"=>0.25,"fabrication"=>24000,"control"=>40000},
+        "reserve"=>obj!{"research"=>0.05}}}};
+    let before=orders.clone();super::flight_progress(&mut orders,args[0],args[1]);
+    assert_eq!(orders,before,"the complete standing policy already funds the active topic");
+}
+
+#[test]
+fn flight_progress_still_selects_a_topic_and_reopens_recovery_research() {
+    let (world,mut me)=bounded_planner_case(600.0);
+    me.set("research",Value::Undef);
+    let args=views(&[world.clone(),me.clone()]);
+    let mut normal=obj!{"compute"=>obj!{"cpu"=>obj!{"limits"=>obj!{"research"=>0.25,"fabrication"=>24000}}}};
+    super::flight_progress(&mut normal,args[0],args[1]);
+    assert_eq!(normal.get("research").str(),"flight");
+    assert_eq!(normal.get("compute").get("cpu").get("limits").get("research").num(),0.25);
+    me.set("research",obj!{"tech"=>"flight"});
+    let args=views(&[world,me]);
+    let mut recovery=obj!{"memo"=>"Recovering production","compute"=>obj!{"cpu"=>obj!{"limits"=>obj!{"research"=>0,"fabrication"=>0}}}};
+    super::flight_progress(&mut recovery,args[0],args[1]);
+    assert_eq!(recovery.get("compute").get("cpu").get("limits").get("research").num(),0.12);
+    assert_eq!(recovery.get("compute").get("cpu").get("limits").get("fabrication").num(),0.0);
+}
+
+#[test]
+fn lean_recruitment_avoids_only_proven_upkeep_rejections() {
+    let (mut world,mut me)=bounded_planner_case(600.0);
+    me.entry("rts").entry("cpu").entry("last").set("upkeep",20000);
+    let args=views(&[world.clone(),me.clone()]);let unaffordable=think(args[0],args[1]);
+    assert!(unaffordable.get("spawn").is_empty());
+    assert_eq!(unaffordable.get("slots").num(),0.0);
+    assert!(unaffordable.get("compute").get("cpu").get("limits").get("fabrication").num()>0.0);
+    // A mixed ownership view cannot establish the same lower bound for the governor's own-body census.
+    let units=world.get("units").items().iter().enumerate().map(|(i,u)|{
+        let mut u=u.clone();if i>=2 {u.set("owner",99);}u
+    }).collect::<Vec<_>>();world.set("units",units);
+    let args=views(&[world,me]);let unproved=think(args[0],args[1]);
+    assert!(unproved.get("slots").num()>0.0);
+    assert!(!unproved.get("spawn").is_empty());
+}

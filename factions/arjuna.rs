@@ -347,9 +347,14 @@ fn think(world: View, me: View) -> Value {
 // A healthy cargo crew can fund the Flight path while the full army planner waits for savings.
 // Keep emergency recovery closed when upkeep is unpaid or the bank cannot cover two seconds of income.
 fn flight_progress(orders: &mut Value, world: View, me: View) {
-    if cycles_left() < 4000.0 || me.get("seat").num_or(-1.0) == 8.0
+    if cycles_left()<4000.0 { return; }
+    if me.get("seat").num_or(-1.0) == 8.0
         || !world.get("logistics").truthy()
         || me.path("units.total").num_or(0.0) < 4.0 || me.path("units.stalled").num_or(0.0) > 0.0 { return; }
+    if me.path("research.tech").truthy()
+        && orders.get("compute").get("cpu").get("limits").get("research").num_or(0.0)>0.0
+        && orders.get("memo").str()!="Recovering production"
+        && !mem::get(me.get("ramCapital"), RECOVERY_PAGE).get("r").truthy() { return; }
     let income = me.path("rts.cpu.income").num_or(0.0);
     if income <= 0.0 || me.path("rts.cpu.bank").num_or(0.0) < income * 2.0
         || common::unit_upkeep(me) > income * 0.5 { return; }
@@ -559,7 +564,9 @@ fn strategy(world: View, me: View) -> Value {
         "fabrication" => fabrication,
         "treasury" => me.get("bank"),
         "unitPrice" => me.get("costs").get("unit"),
-        "slots" => army_room(me),
+        "slots" => if !full && cpu.path("last.upkeep").num_or(0.0)>cpu.get("income").num_or(0.0)*0.4
+            && world.get("units").iter().take(512).filter(|u|u.get("owner").num_or(-1.0)==me.get("id").num()).count() as f64
+                >= (me.path("units.total").num_or(0.0)-me.path("units.stalled").num_or(0.0)).max(1.0) {0.0}else{army_room(me)},
         "priceLevel" => common::price_level(me),
     };
     if full {common::share(&mut orders, &plan, world, me);} else {plan::share(&mut orders,&plan,me);}

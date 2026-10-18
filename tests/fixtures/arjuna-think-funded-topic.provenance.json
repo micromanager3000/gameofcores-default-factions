@@ -1,0 +1,156 @@
+{
+  "purpose": "Avoid redundant research and impossible-recruit validation work in bounded Arjuna planning.",
+  "baseFactionRevision": "70c2f1cf00f16c51128222c3b18415e8be857724",
+  "fixture": "arjuna-think-funded-topic.json",
+  "fixtureSha256": "7ae21278a745a0b6c46fc6220cf50e3e4084a35ab6f0d7f6b447d03077538fe0",
+  "origin": "Exact faction1 public THINK arguments captured during the600second combined70c2f1c continuation of C4day101. No observation fields changed.",
+  "capture": "/tmp/goc-depth-arjuna-lean-resume/combined-final-70c2f1c/errors/error-02-faction-1-think.json",
+  "tick": 433849,
+  "seconds": 86769,
+  "fuel": 33823,
+  "publicSpendCap": 33896,
+  "candidateFactionSourceSha256": "efbfbf3c1366a70670020db6209c2c409a88d9dbe9df2c3f40827c93cffd3316",
+  "before": {
+    "ok": false,
+    "used": 33823,
+    "error": "ran out of cycles"
+  },
+  "after": {
+    "ok": true,
+    "used": 17626.8125,
+    "fabrication": 20488
+  },
+  "mechanism": "The captured observation has an active ComputeBoost topic, a positive outgoing research lane and no recovery marker. flight_progress cannot change this policy; previously it still scanned building upkeep before returning. The new early return follows the original low-fuel/Emu/logistics/unit/stall guards and skips only that proven no-op case. Recovery and no-topic research paths remain unchanged.",
+  "metering": {
+    "toolchain": "1.97.0",
+    "instructionsPerCycle": 64,
+    "sourceSha256": "70759d7f1bb1baa79c7dd16ac39a92b5b181f79f00504770f29e2d9d6c53d179",
+    "wasmSha256": "3478dae252ccc717a5a1423d9005c6119fef41a57fe82b591cfeb3b254ee708d",
+    "resultFile": "/tmp/goc-depth-arjuna-two-tail-meter/results.json",
+    "calls": 66,
+    "failures": 0,
+    "budgets": {
+      "decayed": [
+        21346,
+        22000
+      ],
+      "endpoint": [
+        2000,
+        6000,
+        18000,
+        45000,
+        52180,
+        52269,
+        63500,
+        75000
+      ],
+      "funded-topic": [
+        33000,
+        33500,
+        34000,
+        34500,
+        35000,
+        35500,
+        36000,
+        33823
+      ],
+      "poor": [
+        52180
+      ],
+      "rest": [
+        52180
+      ],
+      "unpayable-recruits": [
+        19000,
+        19250,
+        19500,
+        19750,
+        20000,
+        20250,
+        20500,
+        20750,
+        21000,
+        21250,
+        21500,
+        21750,
+        22000,
+        22250,
+        22500,
+        22750,
+        23000,
+        23250,
+        23500,
+        23750,
+        24000,
+        24250,
+        24500,
+        24750,
+        25000,
+        25250,
+        25500,
+        25750,
+        26000,
+        26250,
+        26500,
+        26750,
+        27000,
+        27250,
+        27500,
+        27750,
+        28000,
+        28250,
+        28500,
+        28750,
+        29000,
+        29250,
+        29500,
+        29750,
+        30000,
+        23892
+      ]
+    },
+    "command": "cores call MODULE think ARGS FUEL64",
+    "sourceBytes": 501087
+  },
+  "tests": {
+    "strategies": {
+      "passed": 16,
+      "failed": 0,
+      "log": "/tmp/goc-depth-arjuna-two-tail-final-strategies.log"
+    },
+    "sourceChecks": {
+      "passed": 5,
+      "failed": 0,
+      "log": "/tmp/goc-depth-arjuna-two-tail-source-checks.log"
+    }
+  },
+  "continuation": {
+    "priorCombinedManifest": "/tmp/goc-depth-arjuna-lean-resume/manifest-combined-final.json",
+    "priorComparison": "/tmp/goc-depth-arjuna-lean-resume/comparison-combined-final.json",
+    "scope": "All600second arms start from the identical C4 day101 saved world on one frozen simulator; only faction1 source differs. Existing seven source strings and allworld/RNG/CPU/units/RAM remain unchanged. The final two-tail fix is metered against both captured failures; any further combined continuation is retained separately under /tmp/goc-depth-arjuna-lean-resume.",
+    "fundedTopicOnly": {
+      "manifest": "/tmp/goc-depth-arjuna-lean-resume/manifest-combined-funded-final.json",
+      "comparison": "/tmp/goc-depth-arjuna-lean-resume/comparison-funded-final.json",
+      "result": "The funded-topic guard ends with137kbank,0stalls and positivefabrication, but no new combat units. It captures the additional23892failure, motivating the impossible-recruit validation fast path. This intermediate arm is not presented as clean or as final military recovery."
+    }
+  },
+  "additionalFixture": {
+    "file": "arjuna-think-unpayable-recruits.json",
+    "sha256": "6b294df25e3547e810c686b15ec9ddcb08574cba509aa89de1bf2fbb93694e9c",
+    "origin": "Exact faction1 public THINK args from the combined funded-topic follow-up600second continuation. No observation fields changed.",
+    "capture": "/tmp/goc-depth-arjuna-lean-resume/combined-funded-final/errors/error-01-faction-1-think.json",
+    "tick": 433104,
+    "fuel": 23892,
+    "before": {
+      "ok": false,
+      "used": 23892,
+      "error": "ran out of cycles"
+    },
+    "after": {
+      "ok": true,
+      "used": 16279.703125,
+      "fabrication": 20488
+    },
+    "mechanism": "The unchanged governor admits army upkeep only below40percent of income. Here the paid bill15955 already exceeds that9159 allowance, and the visible own-body count covers all paid units. Its observed-upkeep floor must reject every proposed recruit. The lean planner sets its internal spawn slots to zero only when that lower bound is proven, avoiding an8700cycle validation census. The count stops after512 visible bodies; unproved mixed ownership keeps ordinary recruitment. Full planning, army share and controller/fabrication policy are unchanged."
+  }
+}
