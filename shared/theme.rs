@@ -3128,7 +3128,7 @@ fn look9(b: f64) -> Value {
 fn scene0(info: View, budget: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
-        obj! { "type"=>"wonder", "id"=>"wonder", "tap"=>true, "shape"=>"dome", "tiers"=>3, "h"=>38, "r"=>9, "glow"=>true, "material"=>"metal", "color"=>"#e9b949", "trim"=>c, "court"=>"steppe", "pri"=>9 },
+        obj! { "type"=>"wonder", "id"=>"wonder", "tap"=>true, "shape"=>"dome", "tiers"=>3, "h"=>38, "r"=>9, "glow"=>true, "spin"=>false, "material"=>"metal", "color"=>"#e9b949", "trim"=>c, "court"=>"steppe", "pri"=>9 },
     ];
     for (x, z, r) in [
         (-31.0, -12.0, 5.0),
@@ -3161,7 +3161,7 @@ fn scene0(info: View, budget: f64) -> Value {
 fn scene2(info: View, _: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
-        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"spire","tiers"=>4,"h"=>47,"r"=>8,"material"=>"stone","color"=>"#ded8ca","trim"=>"#a91f2e","court"=>"cloister","pri"=>9},
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"spire","tiers"=>4,"h"=>47,"r"=>8,"spin"=>false,"material"=>"stone","color"=>"#ded8ca","trim"=>"#a91f2e","court"=>"cloister","pri"=>9},
     ];
     for z in [-28.0, 28.0] {
         for x in [-30.0, -20.0, -10.0, 10.0, 20.0, 30.0] {
@@ -3177,7 +3177,7 @@ fn scene2(info: View, _: f64) -> Value {
 fn scene3(info: View, _: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
-        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"ziggurat","tiers"=>4,"h"=>34,"r"=>8,"glow"=>true,"material"=>"glass","color"=>"#93d9d0","trim"=>"#c99b42","court"=>"laboratory","pri"=>9},
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"ziggurat","tiers"=>4,"h"=>34,"r"=>8,"glow"=>true,"spin"=>false,"material"=>"glass","color"=>"#93d9d0","trim"=>"#c99b42","court"=>"laboratory","pri"=>9},
     ];
     for (x, z) in [(-34.0, -20.0), (34.0, -20.0), (-34.0, 19.0), (34.0, 19.0)] {
         p.push(obj!{"type"=>"dome","x"=>x,"z"=>z,"r"=>7,"drum"=>2,"material"=>"glass","color"=>"#b7e6df","trim"=>"#b8873e","pri"=>6});
@@ -3191,7 +3191,9 @@ fn scene3(info: View, _: f64) -> Value {
         let d = if z2 >= z { z2 - z + 3.0 } else { z - z2 + 3.0 };
         p.push(obj!{"type"=>"water","shape"=>"rect","x"=>x,"z"=>z,"w"=>w,"d"=>d,"color"=>"#3f8490","pri"=>5});
     }
-    p.push(obj!{"type"=>"screen","id"=>"ledger","x"=>0,"z"=>42,"y"=>3,"w"=>14,"h"=>7,"show"=>"messages","title"=>"SALOMON'S HOUSE","pri"=>7});
+    // The south lane remains clear for visitors; the publication ledger sits beside
+    // the eastern laboratory instead of becoming an accidental gate.
+    p.push(obj!{"type"=>"screen","id"=>"ledger","x"=>34,"z"=>35,"y"=>3,"w"=>14,"h"=>7,"show"=>"messages","title"=>"SALOMON'S HOUSE","pri"=>7});
     obj! {"title"=>"Salomon's House","motto"=>"What the college chooses to publish.","palette"=>obj!{"primary"=>c,"secondary"=>"#d8efe7","accent"=>"#503426"},"sky"=>obj!{"time"=>"day","top"=>"#5b9ec8","horizon"=>"#e5d3a3","fog"=>0.18},"ground"=>obj!{"kind"=>"stone","color"=>"#8f775c"},"pieces"=>p}
 }
 fn scene4(info: View, budget: f64) -> Value {
@@ -3262,10 +3264,10 @@ fn scene5(info: View, _: f64) -> Value {
     let c = info.get("color");
     let script = kernel_script();
     let mut p = vec![
-        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"spire","tiers"=>5,"h"=>48,"r"=>7,"glow"=>true,"material"=>"crystal","color"=>c,"trim"=>"#ffd0e6","court"=>"reading","pri"=>9},
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"spire","tiers"=>5,"h"=>48,"r"=>7,"glow"=>true,"spin"=>false,"material"=>"crystal","color"=>c,"trim"=>"#ffd0e6","court"=>"reading","pri"=>9},
     ];
     for (r, z) in [(24.0, 0.0), (17.0, 0.0)] {
-        p.push(obj!{"type"=>"ring","x"=>0,"z"=>z,"y"=>1,"r"=>r,"t"=>1.2,"material"=>"wood","color"=>"#4a2238","trim"=>c,"pri"=>8});
+        p.push(obj!{"type"=>"ring","x"=>0,"z"=>z,"y"=>1,"r"=>r,"t"=>1.2,"tilt"=>90,"material"=>"wood","color"=>"#4a2238","trim"=>c,"pri"=>8});
     }
     p.push(obj!{"type"=>"figure","id"=>"marx","x"=>0,"z"=>38,"rot"=>0,"h"=>3.2,"pose"=>"teach","skin"=>"#e6c2a4","color"=>"#45404c","trim"=>"#6a6472","hair"=>"#f2efe8","beard"=>true,"clothed"=>true,"label"=>"KARL MARX"});
     for (x, z) in [(-31.0, -23.0), (-27.0, -23.0), (-23.0, -23.0)] {
@@ -3294,7 +3296,7 @@ fn scene6(info: View, _: f64) -> Value {
 fn scene7(info: View, _: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
-        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"obelisk","tiers"=>3,"h"=>44,"r"=>5,"glow"=>true,"material"=>"metal","color"=>"#d8d2b8","trim"=>"#c9a14a","court"=>"market","pri"=>9},
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"obelisk","tiers"=>3,"h"=>44,"r"=>5,"glow"=>true,"spin"=>false,"material"=>"metal","color"=>"#d8d2b8","trim"=>"#c9a14a","court"=>"market","pri"=>9},
     ];
     for i in 0..7 {
         p.push(obj!{"type"=>"tower","x"=>-50.0+i as f64*15.0,"z"=>8,"r"=>3,"h"=>7,"sides"=>4,"roof"=>"sawtooth","material"=>"wood","color"=>"#4a3a2a","trim"=>"#c9a14a","pri"=>6});
@@ -3305,7 +3307,7 @@ fn scene7(info: View, _: f64) -> Value {
 fn scene8(info: View, _: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
-        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"ziggurat","tiers"=>4,"h"=>28,"r"=>7,"material"=>"metal","color"=>"#d8b66a","trim"=>"#2e7c58","court"=>"paddock","pri"=>9},
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"ziggurat","tiers"=>4,"h"=>28,"r"=>7,"spin"=>false,"material"=>"metal","color"=>"#d8b66a","trim"=>"#2e7c58","court"=>"paddock","pri"=>9},
     ];
     for (x, z, w) in [
         (-34.0, -24.0, 16.0),
@@ -3323,7 +3325,7 @@ fn scene8(info: View, _: f64) -> Value {
 fn scene9(info: View, _: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
-        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"tree","tiers"=>4,"h"=>34,"r"=>8,"glow"=>true,"material"=>"glass","color"=>"#5fae4a","trim"=>"#d4b54a","court"=>"garden","pri"=>9},
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"tree","tiers"=>4,"h"=>34,"r"=>8,"glow"=>true,"spin"=>false,"material"=>"glass","color"=>"#5fae4a","trim"=>"#d4b54a","court"=>"garden","pri"=>9},
     ];
     for (x, z) in [(-32.0, 20.0), (32.0, 20.0)] {
         p.push(obj!{"type"=>"dome","x"=>x,"z"=>z,"r"=>7,"drum"=>2,"material"=>"glass","color"=>"#e9fff0","trim"=>c,"pri"=>6});
