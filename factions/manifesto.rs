@@ -925,7 +925,7 @@ fn spark(units: View, world: View, me: View) {
     if rts(me) && cycles_left() < 2200.0 {
         return;
     }
-    let p = plan::for_units(me, units, world);
+    let Some(p) = line_plan(units, world, me) else { return; };
     let sway = p.get("sway");
     // (a plan without marks, from a unit that carried it abroad, says nothing: they keep their orders)
     if sway.is_undef() {
@@ -934,7 +934,7 @@ fn spark(units: View, world: View, me: View) {
     let marks: Vec<f64> = sway.items().iter().map(num).collect();
     let home = if num(p.get("home")).is_nan() { me.get("capital").num() } else { num(p.get("home")) };
     for turn in 0..units.len() {
-        if rts(me) && cycles_left() < 2200.0 {
+        if rts(me) && !orders::room(world) {
             break;
         }
         let u = nth(units, turn, world);
