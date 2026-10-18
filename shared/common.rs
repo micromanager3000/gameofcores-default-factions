@@ -932,17 +932,20 @@ use super::{air, theme};
         out
     }
 
-    /// `realm::frontier` without the partner land you can't see ([`partner_land`]), nor the land of a faction whose
-    /// passage you hold: a capture there ends the deal at once, in public ("broke its deal by attacking"). Free land and
-    /// rivals' next to yours.
+    /// `realm::frontier` without unseen partner land or incoming passage and mine leases that protect your units.
+    /// Ended contracts still protect guests until their published grace expires.
     pub fn frontier(world: View, me: View) -> Vec<View> {
         let skip = partner_land(world, me);
-        let hosts: Vec<f64> =
-            me.get("contracts").iter().filter(|c| !c.get("ended").truthy() && c.get("get").get("passage").truthy()).map(|c| c.get("with").num()).collect();
-        realm::frontier(world, me)
-            .into_iter()
-            .filter(|q| !skip.contains(&q.get("id").num()) && !(q.get("owner").is_num() && hosts.contains(&q.get("owner").num())))
-            .collect()
+        let ours=me.get("id").num();
+        let live=|c:View|c.get("graceIn").num_or(if c.get("ended").truthy(){0.0}else{c.get("endsIn").num_or(1.0)})>0.0;
+        let hosts: Vec<f64> = me.get("contracts").iter().filter(|c|live(*c)&&c.path("get.passage").truthy()
+            && !(c.path("ended.by").num_or(-1.0)==ours&&c.path("ended.why").str()=="broke its deal by attacking"))
+            .map(|c|c.get("with").num()).collect();
+        let leased:Vec<f64>=me.get("contracts").iter().filter(|c|live(*c)).flat_map(|c|c.get("mines").iter()
+            .filter(|l|l.get("to").num_or(-1.0)==ours).map(|l|l.get("province").num())).collect();
+        realm::frontier(world, me).into_iter().filter(|q|!skip.contains(&q.get("id").num())
+            && !leased.contains(&q.get("id").num()) && !q.get("leased").iter().any(|l|l.get("to").num_or(-1.0)==ours)
+            && !(q.get("owner").is_num()&&hosts.contains(&q.get("owner").num()))).collect()
     }
 
     /// Rival provinces in sight on your land border, the likeliest to turn first: restive, then uneasy, then the most
@@ -2436,8 +2439,8 @@ use super::{air, theme};
     /// the units you'd get fit under your unit limit. A tech you hold, or that isn't in `techs` (what you research), is
     /// worth nothing to you, and so are passage, sight and relay rights you hold from the same faction for more than
     /// another minute: it buys none of them twice. It sells no passage to a faction whose units stand in your land, unless it renews passage
-    /// that faction has from you (passage ends the moment its holder attacks). It takes no mine lease in a province
-    /// you're besieging, and no passage from a faction whose land you're besieging: either would stop your own siege.
+    /// that faction has from you (passage ends the moment its holder attacks). It takes no mine lease or incoming
+    /// passage that would protect a target of your saved plan, standing capture orders or active siege.
     /// With `world` undefined it sells no land and no passage.
     pub fn fair(m: View, me: View, world: View, techs: &[&str]) -> bool {
         let (give, ask) = (m.get("give"), m.get("ask"));
@@ -2471,8 +2474,18 @@ use super::{air, theme};
                 return false;
             }
         }
-        if world.truthy() {
-            let besieged = |p: View| p.get("siege").get("by").num() == me_id;
+        if world.truthy() && (give.get("mines").truthy()||give.get("passage").truthy()) {
+            let bytes=me.get("ramCapital").key(0.0).get("bytes");
+            let read=if bytes.is_bytes()&&bytes.len()>=2 {let b=bytes.bytes();4.0*f64::from(u16::from_le_bytes([b[0],b[1]]))}else{0.0};
+            if cycles_left()<read+5000.0 {return false;}
+            let mut targets=vec![mem::get(me.get("ramCapital"),0).get("attack").num_or(-1.0)];
+            for u in world.get("units").iter() {
+                if cycles_left()<4000.0 {return false;}
+                if u.get("owner").num_or(-1.0)==me_id&&u.get("doing").str()=="capture" {
+                    let to=u.get("target").num_or(-1.0);if to>=0.0&&!targets.contains(&to){targets.push(to);}
+                }
+            }
+            let besieged = |p: View| p.get("siege").get("by").num_or(-1.0)==me_id||targets.contains(&p.get("id").num_or(-2.0));
             let by_id = realm::index(world);
             let mines = give.get("mines");
             let leased: Vec<View> = if mines.is_arr() { mines.iter().collect() } else { vec![mines] };
