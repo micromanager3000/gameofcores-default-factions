@@ -208,16 +208,27 @@ fn scout(units: View, world: View, me: View) -> Vec<Value> {
 
 // Units in contact: each strikes the nearest rival it can hit (reflex::can_hit), and holds its ground doing so on an
 // aggressive order. Orders commit as they are made. Both rulesets keep room for the most expensive prior turn.
+fn classic_reflex_runway(previous: f64, visible: usize) -> f64 {
+    previous.max(450.0 + 70.0 * visible as f64)
+}
+
+fn next_reflex_runway(previous: f64, spent: f64, rts: bool) -> f64 {
+    previous.max(if rts { 1.5 } else { 2.0 } * spent)
+}
+
 fn reflex(units: View, near: View) -> Vec<Value> {
     let mut out = Vec::new();
     let mut turn_cost=1800.0_f64;
     let mut classic_turn_cost=120.0_f64;
     for u in units.iter() {
+        let unit_began=cycles_left();
         let seen = near.key(n(u.get("id")));
-        if cycles_left() < if u.get("rts").truthy() {turn_cost}else{classic_turn_cost.max(280.0 + 50.0 * seen.len() as f64)} {
+        let rts = u.get("rts").truthy();
+        let began = if rts { cycles_left() } else { unit_began };
+        let runway = if rts { turn_cost } else { classic_reflex_runway(classic_turn_cost, seen.len()) };
+        if cycles_left() < runway {
             break;
         }
-        let began=cycles_left();
         let target = common::windup_target(u,seen,seen.iter().find(|t| reflex::can_hit(u, *t)));
         let mut o = obj! { "id" => u.get("id") };
         if let Some(t)=target {o.set("hit",t.get("id"));}
@@ -226,14 +237,16 @@ fn reflex(units: View, near: View) -> Vec<Value> {
         common::close_melee(u,seen,&mut o);
         common::space_ranged(u,seen,&mut o);
         common::steer_ground(u,seen,&mut o);
+        classic_turn_cost=next_reflex_runway(classic_turn_cost, began - cycles_left(), false);
         if target.is_none() && !o.get("step").truthy() && !o.get("ability").truthy() {continue;}
         if reflex::engaged(u) && !o.get("step").truthy() {
             o.set("hold", true);
         }
         order(o.clone());
         out.push(o);
-        turn_cost=turn_cost.max(1.5*(began-cycles_left()));
-        classic_turn_cost=classic_turn_cost.max(1.5*(began-cycles_left()));
+        let spent = began - cycles_left();
+        turn_cost=next_reflex_runway(turn_cost, spent, true);
+        classic_turn_cost=next_reflex_runway(classic_turn_cost, spent, false);
     }
     out
 }
