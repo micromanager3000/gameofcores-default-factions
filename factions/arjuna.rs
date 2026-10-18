@@ -906,13 +906,17 @@ const TURN: f64 = 50.0;
 const READY: f64 = 6.0;
 const HOP: f64 = 4.5;
 
+fn wing_full_path_need(units: View, world: View) -> f64 {
+    6000.0 + world.get("provinces").len() as f64 * 30.0 + units.len() as f64 * 37.5
+}
+
 fn wing(units: View, world: View, me: View) {
     if common::air_recovery(units, me) { return; }
     let rts = me.get("rts").truthy();
     if rts && cycles_left() < 800.0 {
         return;
     }
-    if rts && cycles_left() < 6000.0 {
+    if rts && cycles_left() < wing_full_path_need(units, world) {
         // A short call still flies the army's target and lands hot aircraft.
         common::fly(units, world, me);
         return;

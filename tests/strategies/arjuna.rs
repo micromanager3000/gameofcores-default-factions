@@ -42,6 +42,21 @@ fn aircraft_abroad_uses_its_standing_target_to_intercept_a_visible_contact() {
 }
 
 #[test]
+fn wing_full_path_runway_covers_a_four_aircraft_forty_five_province_call() {
+    let mut units = Value::arr();
+    for id in 0..4 { units.push(obj! { "id"=>id, "type"=>"wing" }); }
+    let mut provinces = Value::arr();
+    for id in 0..45 { provinces.push(obj! { "id"=>id }); }
+    let args = views(&[units, obj! { "provinces"=>provinces }, obj! {}]);
+    let need = super::wing_full_path_need(args[0], args[1]);
+    assert_eq!(args[1].get("provinces").len(), 45);
+    assert_eq!(args[0].len(), 4);
+    assert_eq!(need, 7500.0);
+    assert!(need > 7000.0, "rejects the metered failing range");
+    assert!(need < 8000.0, "keeps the tested 8,000-cycle full path available");
+}
+
+#[test]
 fn fresh_home_launch_carries_the_sdk_core_plan_with_its_sky_sortie() {
     let mut me = flight_me();
     let plan = obj! {"attack"=>2,"sky"=>1,"stage"=>0,"defend"=>-1};
