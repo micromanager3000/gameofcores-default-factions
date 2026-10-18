@@ -3266,9 +3266,6 @@ fn scene5(info: View, _: f64) -> Value {
     let mut p = vec![
         obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"spire","tiers"=>5,"h"=>48,"r"=>7,"glow"=>true,"spin"=>false,"material"=>"crystal","color"=>c,"trim"=>"#ffd0e6","court"=>"reading","pri"=>9},
     ];
-    for (r, z) in [(24.0, 0.0), (17.0, 0.0)] {
-        p.push(obj!{"type"=>"ring","x"=>0,"z"=>z,"y"=>1,"r"=>r,"t"=>1.2,"tilt"=>90,"material"=>"wood","color"=>"#4a2238","trim"=>c,"pri"=>8});
-    }
     p.push(obj!{"type"=>"figure","id"=>"marx","x"=>0,"z"=>38,"rot"=>0,"h"=>3.2,"pose"=>"teach","skin"=>"#e6c2a4","color"=>"#45404c","trim"=>"#6a6472","hair"=>"#f2efe8","beard"=>true,"clothed"=>true,"label"=>"KARL MARX"});
     for (x, z) in [(-31.0, -23.0), (-27.0, -23.0), (-23.0, -23.0)] {
         p.push(obj!{"type"=>"tower","x"=>x,"z"=>z,"r"=>2,"h"=>8,"sides"=>4,"roof"=>"flat","material"=>"wood","color"=>"#a5222a","trim"=>"#d8c8b6","pri"=>7});
