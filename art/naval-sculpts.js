@@ -22,12 +22,27 @@ export function shipTitle(style,role,variant=''){
 }
 export const navalVariant=u=>u.type==='picket'?'picket':u.type==='corsair'?'raider':'';
 
-// Polygon in the water plane. Layered narrower keels give every hull real freeboard.
+// Polygon in the water plane, retained for decks and sail platforms.
 function plate(s,points,y,depth,c){s.poly([0,y,0],points,depth,c,'',[0,y,0],[Math.PI/2,0,0]);}
-function hull(s,{length=1.15,beam=.38,c=WOOD,deck=DECK,square=false}={}){
- const points=square?[-length,-beam,length*.74,-beam,length,-beam*.6,length,beam*.6,length*.74,beam,-length,beam]:[-length,-beam*.65,-length*.7,-beam,length*.57,-beam,length,0,length*.57,beam,-length*.7,beam,-length,beam*.65];
- plate(s,points.map(v=>v*.84),.20,.22,DARK);plate(s,points,.38,.27,c);plate(s,points.map(v=>v*.94),.53,.045,deck);
- for(const z of [-beam,beam])s.box([-.10,.55,z],[length*1.5,.065,.045],c);
+function hull(s,{length=1.15,beam=.38,c=WOOD,deck=DECK,profile='round'}={}){
+ const shape={
+  ferry:[[-1,.12,.38],[-.72,.15,.88],[.20,.18,1],[.74,.25,.86],[1,.46,.30]],
+  galley:[[-1,.19,.18],[-.67,.15,.66],[.28,.17,.78],[.91,.36,.23],[1,.52,.04]],
+  cog:[[-1,.20,.30],[-.74,.15,.82],[.18,.18,1],[.70,.38,.89],[1,.73,.40]],
+  bulbous:[[-1,.20,.22],[-.74,.10,.72],[.12,.12,1],[.75,.19,.78],[1,.40,.28]],
+  junk:[[-1,.36,.24],[-.72,.14,.82],[.22,.16,1],[.82,.39,.84],[1,.68,.27]],
+  chine:[[-1,.15,.16],[-.68,.12,.61],[.30,.15,.73],[.89,.20,.36],[1,.35,.05]],
+  merchant:[[-1,.27,.29],[-.72,.13,.78],[.13,.16,1],[.69,.38,.92],[1,.72,.34]],
+  punt:[[-1,.17,.48],[-.72,.15,.94],[.45,.16,1],[.93,.20,.68],[1,.31,.35]],
+  frame:[[-1,.16,.18],[-.70,.10,.68],[.24,.12,.82],[.86,.20,.55],[1,.37,.10]],
+  open:[[-1,.24,.20],[-.67,.14,.72],[.20,.15,.92],[.82,.27,.66],[1,.48,.18]],
+ }[profile]||null;
+ // The top of every elliptical cross-section meets the deck underside. `y` adds
+ // sheer at the bow and stern, so the deck never reads as a floating flat plate.
+ const rings=shape.map(([x,y,z])=>{const half=z*beam,top=.552+Math.max(0,y-.15);return [x*length,top-half*.62,half];});
+ // A single closed loft supplies keel, bilge, flare and sheer without stacked slabs.
+ s.loft(rings,c);const deckPts=rings.slice(1,-1).flatMap(([x,,z])=>[x,-z]).concat(rings.slice(1,-1).reverse().flatMap(([x,,z])=>[x,z]));
+ plate(s,deckPts,.57,.035,deck);
 }
 function flag(s,x,y,c=P){s.rod([x,.57,0],[x,y,0],.035,WOOD);s.poly([x,y-.26,0],[0,0,.40,.05,.31,.26,0,.26],.035,c,'sway',[x,y,0]);}
 function sail(s,x,{height=1.65,width=.62,c=S,lateen=false,batten=false,cross=false}={}){
@@ -42,7 +57,7 @@ function oars(s,beam=.36,n=3){for(const z of [-1,1])for(let i=0;i<n;i++){const x
 function gun(s,x,y,z=0,{brass=false,twins=false}={}){
  s.box([x,y-.07,z],[.28,.17,.29],P);for(const side of twins?[-.07,.07]:[0])s.box([x+.27,y+.03,z+side],[.58,.07,.07],brass?GOLD:IRON,'recoil');
 }
-function tower(s,x,y,c=P){s.box([x,.55+y/2,0],[.32,y,.36],c);s.box([x,.57+y,0],[.43,.06,.47],S);}
+function tower(s,x,y,c=P){s.capsule([x,.55+y/2,0],[.34,y,.38],c);s.box([x,.57+y,0],[.43,.06,.47],S);s.orb([x+.03,.57+y,0],[.22,.11,.22],c);}
 function lantern(s,x,y,z=0){s.rod([x,.55,z],[x,y,z],.035,WOOD);s.box([x,y-.12,z],[.19,.25,.19],GOLD);s.box([x,y-.12,z+.10],[.13,.15,.025],'#fff0ad');}
 function cross(s,x,y,z,c=RED){s.box([x,y,z],[.055,.29,.025],c);s.box([x,y+.045,z],[.23,.055,.03],c);}
 function landing(s,{c=DECK,beam=.47,length=1.0}={}){
@@ -58,7 +73,7 @@ function fan(s,x,y,z,c=GOLD){for(const a of [-.65,-.32,0,.32,.65])s.rod([x,y,z],
 
 function ger(s,role,v){
  if(role==='sub'){capsule(s,{c:'#65564b',beam:.66});s.part('cylinder',[-.18,.64,0],[.44,.44,.29],IVORY,'',[-.18,.64,0],[Math.PI/2,0,0]);s.orb([-.18,.80,0],[.53,.22,.48],P);periscope(s,-.13,1.07,GOLD);for(const z of [-.35,.35])s.box([.58,.37,z],[.50,.10,.13],WOOD);return;}
- hull(s,{beam:v==='raider'?.27:.39,c:'#65503a',square:true});
+ hull(s,{beam:v==='raider'?.27:.39,c:'#65503a',profile:'ferry'});
  if(role==='carrier'){landing(s);for(const z of [-.36,.36]){s.rod([-.64,.75,z],[-.64,1.25,z],.04,WOOD);s.box([-.57,1.25,z],[.38,.05,.09],WOOD);s.orb([-.57,1.34,z],[.23,.21,.16],'#725338');}flag(s,-.85,1.6);return;}
  if(v==='raider'){s.box([-.65,.65,0],[.44,.17,.37],P);s.rod([1,.50,0],[1.40,.65,0],.06,WOOD);}
  else{s.part('cylinder',[-.63,.74,0],[.48,.48,.32],IVORY,'',[-.63,.74,0],[Math.PI/2,0,0]);s.orb([-.63,.94,0],[.60,.28,.56],P);}
@@ -69,7 +84,7 @@ function ger(s,role,v){
 }
 function peacock(s,role,v){
  if(role==='sub'){capsule(s,{c:'#247d83',beam:.68});fan(s,-.47,.38,0,P);s.rod([.72,.47,0],[1.00,.80,0],.15,GOLD);s.orb([1.03,.84,0],[.29,.25,.27],GOLD);s.box([1.17,.81,0],[.22,.07,.14],IVORY);periscope(s,0,1.03,GOLD);return;}
- hull(s,{beam:v==='raider'?.28:.43,c:'#255c70',deck:'#c19b62'});
+ hull(s,{beam:v==='raider'?.28:.43,c:'#255c70',deck:'#c19b62',profile:'galley'});
  s.rod([.85,.52,0],[1.03,1.08,0],.11,GOLD);s.orb([1.07,1.12,0],[.25,.22,.24],P);s.box([1.20,1.10,0],[.18,.05,.11],GOLD);fan(s,-.82,.62,0);
  if(role==='carrier'){landing(s,{c:'#316b80'});for(const z of [-1,1])s.poly([-.13,.78,z*.31],[-.40,0,.45,0,.13,.37,-.33,.26],.035,GOLD,'',[0,.78,z*.31],[Math.PI/2,0,0]);wing(s,.05,.85,GOLD);flag(s,-.73,1.63);return;}
  oars(s,v==='raider'?.28:.43,3);sail(s,-.18,{height:v==='raider'?1.42:1.65,width:v==='raider'?.98:.69,c:v==='raider'?P:'#e0b65f',lateen:true});
@@ -79,7 +94,7 @@ function peacock(s,role,v){
 }
 function cog(s,role,v){
  if(role==='sub'){capsule(s,{c:'#88715a',beam:.64});s.box([-.12,.66,0],[.52,.39,.37],IVORY);s.poly([-.12,.88,0],[-.35,0,.35,0,0,.28],.45,GOLD);cross(s,-.12,.68,.20);periscope(s,.16,1.17,GOLD);return;}
- hull(s,{beam:v==='raider'?.27:.44,c:'#62402f',square:true});
+ hull(s,{beam:v==='raider'?.27:.44,c:'#62402f',profile:'cog'});
  for(const x of v?[-.81]:[-.81,.72]){tower(s,x,v==='raider'?.24:.40,IVORY);for(const z of [-.18,0,.18])s.box([x,v==='raider'?.83:.99,z],[.41,.13,.09],IVORY);cross(s,x,.79,.20);}
  if(role==='carrier'){landing(s,{c:'#a88c6a'});s.box([-.48,.96,0],[.38,.40,.37],IVORY);s.poly([-.48,1.16,0],[-.27,0,.27,0,0,.28],.47,RED);wing(s,.42,.85,IVORY);cross(s,-.48,.98,.21);return;}
  sail(s,-.12,{height:v==='picket'?1.94:v==='raider'?1.53:1.78,width:v==='raider'?.94:.83,c:IVORY,cross:true,lateen:v==='raider'});
@@ -88,7 +103,7 @@ function cog(s,role,v){
 }
 function steamer(s,role,v){
  if(role==='sub'){capsule(s,{c:'#a58b50',length:1.94,beam:.86});s.part('cylinder',[.10,.65,0],[.62,.62,.28],GOLD,'',[.10,.65,0],[Math.PI/2,0,0]);s.orb([.10,.83,0],[.47,.30,.47],'#93cbd3');for(const z of [-.39,.39])s.orb([.45,.34,z],[.16,.18,.04],LIGHT);periscope(s,-.32,1.14,GOLD);return;}
- hull(s,{beam:v==='raider'?.29:.42,c:'#50636b',deck:'#bba16c'});
+ hull(s,{beam:v==='raider'?.29:.42,c:'#50636b',deck:'#bba16c',profile:'bulbous'});
  for(const z of [-.47,.47]){if(v==='raider'){s.box([-.54,.39,z],[.56,.13,.15],GOLD);s.box([-.85,.39,z],[.045,.34,.28],DARK);}else{s.wheel([-.26,.37,z],.28,GOLD);s.box([-.26,.61,z],[.69,.09,.20],P);}}
  tower(s,-.63,.34,WOOD);s.part('cylinder',[.02,.78,0],[.39,.39,.60],GOLD,'',[.02,.78,0],[0,Math.PI/2,0]);s.rod([-.02,.78,0],[-.02,1.43,0],.14,DARK);s.box([-.02,1.43,0],[.23,.08,.23],GOLD);
  if(role==='carrier'){landing(s,{c:'#887653'});wing(s,.36,.87,IVORY);s.rod([-.67,.91,0],[-.67,1.42,0],.05,GOLD);s.box([-.45,1.42,0],[.52,.04,.07],GOLD);return;}
@@ -98,7 +113,7 @@ function steamer(s,role,v){
 }
 function junk(s,role,v){
  if(role==='sub'){s.orb([0,.35,0],[1.83,.64,1.02],'#457a62');plate(s,[-.80,-.40,.58,-.40,.91,0,.58,.40,-.80,.40],.55,.12,P);for(const x of [-.45,0,.45])s.box([x,.65,0],[.035,.06,.70],GOLD);for(const z of [-.42,.42])s.box([0,.29,z],[1.25,.07,.38],DARK);s.rod([.67,.44,0],[.95,.75,0],.11,GOLD);s.orb([1,.75,0],[.25,.23,.28],GOLD);periscope(s,-.25,1.03);return;}
- hull(s,{length:1.18,beam:v==='raider'?.29:.47,c:'#6a3d2d',deck:'#c7a56c',square:true});
+ hull(s,{length:1.18,beam:v==='raider'?.29:.47,c:'#6a3d2d',deck:'#c7a56c',profile:'junk'});
  tower(s,-.80,.34,'#934b3c');s.box([-.80,.97,0],[.54,.08,.57],DARK);for(const z of [-.27,.27])s.box([-.80,1.01,z],[.61,.05,.08],GOLD);
  if(role==='carrier'){landing(s,{c:'#8c4d3b',beam:.51});for(const z of [-.28,.28]){wing(s,.14,.86,'#d8b46d',z);s.rod([-.37,.76,z],[.30,1.28,z],.035,WOOD);}sail(s,-.77,{height:1.73,width:.49,batten:true,c:'#d9b77c'});return;}
  const masts=v==='raider'?[.05]:v==='picket'?[-.42]:role==='gun'?[-.50,.10,.62]:[-.40,.34];for(const x of masts)sail(s,x,{height:v==='raider'?1.48:x<0?1.90:x>.5?1.40:1.75,width:v==='raider'?.89:x<0?.70:.56,c:v==='raider'?P:'#d9b77c',batten:true});
@@ -108,7 +123,7 @@ function junk(s,role,v){
 }
 function cruiser(s,role,v){
  if(role==='sub'){capsule(s,{c:'#485954',length:2.40,beam:.50});s.box([-.17,.61,0],[.51,.38,.27],DARK);periscope(s,-.20,1.07);periscope(s,.02,.94);s.box([-.16,.68,.15],[.22,.14,.025],RED);gun(s,.45,.49);return;}
- hull(s,{length:1.28,beam:v==='raider'?.26:.37,c:'#54625a',deck:'#869084'});
+ hull(s,{length:1.28,beam:v==='raider'?.26:.37,c:'#54625a',deck:'#869084',profile:'chine'});
  if(role==='carrier'){landing(s,{c:'#5b6868',beam:.53,length:1.23});s.box([-.42,.94,.40],[.58,.42,.20],IRON);s.box([-.44,1.26,.40],[.13,.30,.14],DARK);for(const x of [-.62,.40])wing(s,x,.83,'#aebba1',-.18);s.box([.15,.76,0],[1.7,.025,.04],IVORY);return;}
  tower(s,-.13,v==='raider'?.23:.42,IRON);for(const x of v?[-.48]:[-.63,.22]){s.box([x,v==='raider'?.79:.94,0],[.16,v==='raider'?.34:.64,.18],DARK);s.box([x,v==='raider'?.93:1.18,0],[.18,.14,.20],RED);}flag(s,-.37,v==='raider'?1.20:1.55,RED);
  if(role==='gun'){gun(s,.65,.68,0,{twins:!v});if(!v)gun(s,-.87,.65,0,{twins:true});if(v==='raider')for(const z of [-.24,.24])s.box([-.2,.65,z],[.78,.12,.12],IRON);}
@@ -117,8 +132,8 @@ function cruiser(s,role,v){
 function pointer(s,role,v){
  if(role==='sub'){for(const z of [-.29,.29]){s.orb([0,.31,z],[2.05,.33,.25],DARK);s.box([-.14,.49,z],[1.25,.035,.035],LIGHT);}s.box([-.12,.44,0],[.46,.12,.67],IRON);s.poly([-.13,.50,0],[-.34,0,.34,0,.16,.42,-.18,.30],.20,DARK);s.box([.05,.80,.12],[.19,.06,.025],LIGHT);return;}
  const beam=v==='raider'?.26:.37;
- for(const z of [-beam,beam]){s.poly([0,.32,z],[-1.10,-.13,.74,-.13,1.26,.02,.48,.18,-.85,.18],.22,DARK);s.box([-.17,.50,z],[1.61,.035,.045],P);}
- s.box([-.12,.48,0],[1.30,.14,.69],IRON);
+ hull(s,{length:1.12,beam,c:DARK,deck:IRON,profile:'frame'});
+ for(const z of [-beam,beam])s.rod([-.68,.38,z],[.78,.56,z],.028,P);
  if(role==='carrier'){landing(s,{c:DARK,beam:.54,length:1.13});for(const z of [-.46,.46]){s.box([-.55,1.05,z],[.18,.70,.15],DARK);s.box([-.55,1.05,z-Math.sign(z)*.09],[.07,.49,.025],LIGHT);}s.box([-.55,1.39,0],[.18,.13,1.05],P);for(const z of [-.22,.22])wing(s,.32,.83,LIGHT,z);return;}
  s.poly([-.19,.55,0],[-.51,0,.45,0,.13,.42,-.32,.27],.40,DARK);s.box([.01,.81,.21],[.27,.06,.025],LIGHT);
  if(role==='gun')for(const z of v==='raider'?[0]:[-.22,.22]){s.box([.63,.71,z],[v==='raider'?1.02:.68,.12,.12],P);s.box([v==='raider'?1.16:.99,.71,z],[.04,.055,.065],LIGHT);}
@@ -127,7 +142,7 @@ function pointer(s,role,v){
 }
 function indiaman(s,role,v){
  if(role==='sub'){capsule(s,{c:'#6c4b35',beam:.65});s.box([-.21,.59,0],[.61,.21,.37],DECK);s.orb([-.21,.78,0],[.41,.35,.39],GOLD);s.orb([.67,.41,0],[.32,.32,.56],GOLD);periscope(s,-.20,1.08,GOLD);for(const z of [-.36,.36])s.box([-.73,.36,z],[.43,.06,.23],WOOD);return;}
- hull(s,{length:1.19,beam:v==='raider'?.30:.44,c:'#533b2f'});tower(s,-.83,.38,'#79503a');s.box([-.99,.84,0],[.035,.18,.42],GOLD);
+ hull(s,{length:1.19,beam:v==='raider'?.30:.44,c:'#533b2f',profile:'merchant'});tower(s,-.83,.38,'#79503a');s.box([-.99,.84,0],[.035,.18,.42],GOLD);
  for(const z of [-.44,.44]){s.box([-.10,.57,z],[1.65,.075,.035],GOLD);for(const x of [-.50,0,.50])s.box([x,.44,z],[.14,.10,.035],DARK);}
  if(role==='carrier'){landing(s,{c:DECK});s.orb([-.30,1.30,0],[1.20,.48,.49],IVORY,'bob');for(const z of [-.20,.20])s.rod([-.30,.76,z],[-.30,1.1,z],.025,WOOD);wing(s,.47,.84,S);flag(s,-.93,1.50);return;}
  for(const x of v?[.08]:[-.48,.13,.66])sail(s,x,{height:v==='raider'?1.49:v==='picket'?1.76:x===.13?1.94:1.65,width:v?.94:.56,c:v==='raider'?'#c0b18b':IVORY,lateen:!!v});
@@ -138,7 +153,7 @@ function indiaman(s,role,v){
 function emu(s,role,v){
  if(role==='sub'){s.orb([-.08,.39,0],[1.45,.83,.77],'#d1c6a4');s.box([.35,.68,0],[.26,.18,.27],DARK);periscope(s,.36,1.16,WOOD);for(const z of [-.48,.48])s.poly([-.20,.28,z],[-.45,0,.27,0,-.20,.28],.055,'#85775c');s.box([1,.31,0],[.32,.06,.16],GOLD);return;}
  // A captured shallow-draught gun punt: tall bird lookout and broad exposed machinery.
- hull(s,{length:v==='raider'?1.24:1.03,beam:v==='raider'?.25:.49,c:'#7e8060',square:true});s.box([-.61,.71,0],[.46,.32,.52],WOOD);if(v!=='raider')s.box([-.61,.90,0],[.59,.07,.61],P);else{s.box([-.85,.86,0],[.14,.12,.21],DARK);for(const z of [-.49,.49])s.box([-.35,.31,z],[1.35,.16,.13],WOOD);}
+ hull(s,{length:v==='raider'?1.24:1.03,beam:v==='raider'?.25:.49,c:'#7e8060',profile:'punt'});s.box([-.61,.71,0],[.46,.32,.52],WOOD);if(v!=='raider')s.box([-.61,.90,0],[.59,.07,.61],P);else{s.box([-.85,.86,0],[.14,.12,.21],DARK);for(const z of [-.49,.49])s.box([-.35,.31,z],[1.35,.16,.13],WOOD);}
  const neck=role==='sonar'||v==='picket'?1.46:1.08;s.rod([.70,.54,0],[.79,neck,0],.13,'#8a7d61');s.orb([.83,neck+.13,0],[.28,.28,.23],DARK);s.box([1.02,neck+.10,0],[.23,.065,.13],GOLD);
  for(const z of [-.54,.54])s.box([-.15,.31,z],[.59,.28,.12],DARK);
  if(role==='carrier'){landing(s,{c:'#8c8060',beam:.55});s.orb([-.21,.83,0],[.71,.24,.63],WOOD);s.orb([-.21,.95,0],[.30,.42,.29],IVORY);for(const z of [-.30,.30])wing(s,.35,.87,'#ad9a72',z);return;}
@@ -147,7 +162,7 @@ function emu(s,role,v){
 }
 function paper(s,role,v){
  if(role==='sub'){s.orb([0,.33,0],[1.62,.51,.79],'#71916e');for(const z of [-.19,0,.19])s.poly([-.10,.47,z],[-.74,0,.62,0,.18,.45,-.35,.35],.035,z===0?IVORY:'#a8bf8b');s.rod([.29,.56,0],[.29,1.05,0],.045,WOOD);s.orb([.29,1.05,0],[.30,.27,.29],'#d3a7a4');return;}
- plate(s,[-1.10,-.40,1.10,0,-1.10,.40,-.50,0],.28,.12,'#b0b69a');
+ hull(s,{length:1.10,beam:.40,c:'#b0b69a',deck:'#819b76',profile:'open'});
  for(const z of [-1,1])s.poly([0,.41,z*.18],[-1.05,0,1.07,0,.55,.39,-.65,.28],.045,z<0?IVORY:'#bdc8ab','',[0,.41,z*.18],[z*.65,0,0]);
  if(role==='carrier'){plate(s,[-.94,-.54,.81,-.42,1.02,0,.81,.42,-.94,.54],.59,.07,'#819b76');for(const z of [-.27,.27]){s.rod([-.24,.64,z],[-.24,1.06,z],.035,WOOD);for(const a of [0,2.1,4.2])s.orb([-.24+Math.cos(a)*.13,1.08,z+Math.sin(a)*.13],[.30,.20,.27],'#d5a0a2');}wing(s,.53,.72,IVORY);return;}
  if(v!=='picket'){s.poly([-.11,.56,0],[-.56,0,.65,0,-.13,.90],.035,IVORY,'sway',[-.11,1.46,0]);s.rod([-.24,.55,0],[-.24,1.53,0],.025,WOOD);}
@@ -158,14 +173,31 @@ function paper(s,role,v){
 }
 function sloop(s,role,v){
  if(role==='sub'){capsule(s);s.box([-.18,.59,0],[.43,.30,.27],P);periscope(s);return;}
- hull(s,{beam:v==='raider'?.27:.36});
+ hull(s,{beam:v==='raider'?.27:.36,profile:'open'});
  if(role==='carrier'){landing(s);wing(s,.28,.83);tower(s,-.67,.35);return;}
  sail(s,-.07,{height:1.70,width:.77,lateen:true});flag(s,-.78,1.2);
  if(role==='gun')gun(s,.51,.71);if(role==='sonar'||v==='picket')dish(s,.47,1.15);
 }
 const BUILDERS={sloop,ger,peacock,cog,steamer,junk,cruiser,pointer,indiaman,emu,paper};
+// House-specific high silhouette. These are kept above the waterline so each hull
+// stays recognizable in a monochrome fleet while preserving its role equipment.
+function houseRig(s,style){
+ if(style==='ger'){s.part('cylinder',[-.54,.82,0],[.52,.52,.28],IVORY,'',[-.54,.82,0],[Math.PI/2,0,0]);s.orb([-.54,1.02,0],[.58,.24,.52],P);}
+ else if(style==='peacock'){fan(s,-.72,.78,0,GOLD);s.orb([.72,.82,0],[.30,.27,.28],P);}
+ else if(style==='cog'){s.poly([-.56,1.08,0],[-.33,0,.33,0,0,.42],.36,RED);cross(s,-.56,.99,.19);}
+ else if(style==='steamer'){s.part('cylinder',[-.22,1.00,0],[.36,.36,.16],GOLD,'spin',[-.22,1.00,0],[Math.PI/2,0,0]);s.orb([-.22,1.00,.10],[.10,.20,.12],'#9cccd3');}
+ else if(style==='junk'){for(const z of [-.26,.26])s.box([-.72,1.20,z],[.58,.04,.055],GOLD);s.poly([-.72,1.23,0],[-.34,0,.34,0,0,.25],.42,'#934b3c');}
+ else if(style==='cruiser'){for(const z of [-.15,.15])s.box([-.25,1.12,z],[.18,.54,.04],IRON);s.box([-.25,1.40,0],[.48,.06,.43],RED);}
+ else if(style==='pointer'){for(const z of [-.31,.31])s.rod([-.40,.57,z],[-.40,1.32,z],.035,IRON);s.orb([-.40,1.32,0],[.46,.12,.46],LIGHT);}
+ else if(style==='indiaman'){s.part('cylinder',[-.62,1.02,0],[.34,.34,.045],GOLD,'',[-.62,1.02,0],[Math.PI/2,0,0]);s.rod([-.62,.66,0],[-.62,1.39,0],.035,GOLD);}
+ // Emu hulls already carry their long-neck lookout as their main superstructure.
+ // Do not add a second head merely to satisfy a house signature.
+ else if(style==='emu'){}
+ else if(style==='paper'){for(const z of [-.28,0,.28])s.orb([-.30,.86,z],[.32,.08,.29],z?'#d3a7a4':IVORY,'sway',[-.30,.63,0]);}
+}
 export function navalSculpt(style,role='hull',riders=0,variant=''){
  const s=new Sculpt();(BUILDERS[style]||sloop)(s,NAVAL_ROLES.includes(role)?role:'hull',variant);
+ houseRig(s,style);
  // Only carriers display parked aircraft. Passenger count stays out of all other cache variants.
  if(role==='carrier')for(let i=0;i<Math.min(4,Math.max(0,riders));i++)wing(s,-.65+i*.40,.88,P,i%2?.25:-.25);
  return {parts:s.parts};

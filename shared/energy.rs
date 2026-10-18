@@ -352,9 +352,49 @@ fn sell(orders: &mut Value, world: View, me: View, d: &Doctrine) {
 // ---------------------------------------------------------------------------------------------------------------------
 // How plants look. Pieces are in cells from the site's centre (x east, y north, z up), as in `structures`.
 
+fn shell_piece(pieces: &mut Vec<Value>, kind: &str, x: f64, y: f64, z: f64, w: f64, h: f64, d: f64, tone: &str) {
+    let mut p = obj! { "kind" => kind, "x" => x, "y" => y, "z" => z, "w" => w, "h" => h };
+    if d > 0.0 { p.set("d", d); }
+    if !tone.is_empty() { p.set("tone", tone); }
+    pieces.push(p);
+}
+
+/// The working machinery has a common public role, but its principal housing is
+/// owned by the founder.  These pieces deliberately sit over the generic plant
+/// core rather than as unrelated corner ornaments: batteries become containers,
+/// reactors containment works, and wind and water plants get their own frames.
+fn faction_shell(p: &mut Vec<Value>, kind: &str, style: usize) {
+    let (x, y, z, w, d) = match kind {
+        "solar" | "wind" => (0., 0.82, 0.12, 1.28, 0.92), "hydro" | "tidal" => (0., 0.66, 0.72, 1.34, 0.72),
+        "boiler" | "geo" => (-0.20, 0.18, 0.12, 1.70, 1.16), "reactor" => (0.18, -0.56, 0.12, 1.48, 1.20),
+        "fusion" => (0., 0.76, 0.12, 1.58, 1.24), _ => (0., 0.38, 0.12, 1.80, 1.28),
+    };
+    match style.min(9) {
+        // felt court / temple / Gothic chapter works
+        0 => { shell_piece(p,"spire",x,y,z,w*1.06,0.54,d*0.94,"marble"); shell_piece(p,"spire",x-w*0.42,y,z,w*0.36,0.34,d*0.36,"faction"); shell_piece(p,"spire",x+w*0.48,y,z,0.14,1.62,0.,"gold"); },
+        1 => { shell_piece(p,"pyramid",x,y,z,w*1.12,0.66,d,"sand"); shell_piece(p,"pyramid",x,y,z+0.50,w*0.72,0.60,d*0.68,"sand"); shell_piece(p,"pyramid",x,y,z+1.00,w*0.42,0.56,d*0.38,"faction"); },
+        2 => { shell_piece(p,"arch",x,y,z,w,1.06,d*0.44,"stone"); shell_piece(p,"spire",x,y,z+1.02,w*0.24,0.88,0.,"faction"); shell_piece(p,"arch",x-w*0.52,y,z,0.34,0.78,0.22,"stone"); },
+        // glass pressure laboratory / timber harbour pavilion / brick factory
+        3 => { shell_piece(p,"drum",x-w*0.34,y,z,w*0.25,0.70,0.,"metal"); shell_piece(p,"drum",x+w*0.34,y,z,w*0.25,0.70,0.,"metal"); shell_piece(p,"hall",x,y+d*0.16,z+0.76,w*1.18,0.66,d*0.54,"glass"); },
+        4 => { shell_piece(p,"platform",x,y,z,w*1.16,0.16,d,"wood"); shell_piece(p,"hall",x,y,z+0.16,w*0.64,0.82,d*0.58,"wood"); shell_piece(p,"roof",x,y,z+0.94,w*1.22,0.28,d*1.14,"faction"); },
+        5 => { shell_piece(p,"hall",x,y,z,w*1.16,0.72,d,"brick"); shell_piece(p,"roof",x-w*0.24,y,z+0.70,w*0.36,0.40,d*1.08,"faction"); shell_piece(p,"stack",x+w*0.42,y,z,0.20,1.62,0.,"metal"); },
+        // floating signal geometry / slate exchange pump house / field tank
+        6 => { shell_piece(p,"platform",x-w*0.26,y,z+0.20,w*0.54,0.12,d*0.82,"dark"); shell_piece(p,"torus",x+w*0.24,y,z+0.48,w*0.68,0.30,0.,"glass"); shell_piece(p,"spire",x-w*0.52,y,z,0.12,1.74,0.,"faction"); },
+        7 => { shell_piece(p,"hall",x,y,z,w,0.74,d,"brick"); shell_piece(p,"roof",x,y,z+0.74,w*1.06,0.48,d*1.06,"dark"); shell_piece(p,"drum",x+w*0.30,y,z+0.76,w*0.24,0.74,0.,"gold"); },
+        8 => { shell_piece(p,"hall",x-w*0.10,y,z,w*1.08,0.52,d,"metal"); shell_piece(p,"drum",x+w*0.34,y,z,w*0.30,1.30,0.,"sand"); shell_piece(p,"spire",x-w*0.48,y,z,0.12,1.48,0.,"faction"); },
+        // living oval / flowering arch / translucent seed pod
+        _ => { shell_piece(p,"garden",x,y,z,w*1.16,0.14,d,"jade"); shell_piece(p,"arch",x-w*0.28,y,z+0.14,w*0.50,1.02,d*0.30,"marble"); shell_piece(p,"arch",x+w*0.28,y,z+0.14,w*0.50,0.84,d*0.30,"marble"); },
+    }
+}
+/// The core machinery identifies the resource; this is the largest supporting
+/// structure and deliberately changes its silhouette with the founder.
+fn plant_shell(pieces: &mut Vec<Value>, kind: &str, style: usize) {
+    faction_shell(pieces, kind, style);
+}
+
 /// A plant's appearance: its kind's machinery, more of it the bigger the plant, on the house's ground.
 pub fn look(kind: &str, cap: f64, style: usize) -> Value {
-    let base = ["stone", "wood", "marble", "glass", "metal", "brick", "dark", "jade", "sand"][style.min(8)];
+    let base = ["stone", "marble", "stone", "metal", "wood", "brick", "dark", "brick", "sand", "marble"][style.min(9)];
     let mut pieces: Vec<Value> = vec![obj! { "kind" => "platform", "x" => 0, "y" => 0, "z" => 0, "w" => 2.6, "h" => 0.12, "d" => 2.2, "tone" => base }];
     let mut add = |kind: &str, x: f64, y: f64, z: f64, w: f64, h: f64, d: f64, rot: f64, tone: &str| {
         let r = |v: f64| (v * 100.0).round() / 100.0;
@@ -368,8 +408,23 @@ pub fn look(kind: &str, cap: f64, style: usize) -> Value {
     let name = match kind {
         "solar" => {
             for i in 0..n(0.8, 8) {
-                let (row, col) = ((i / 4) as f64, (i % 4) as f64);
-                add("panel", -0.9 + col * 0.6, -0.55 + row * 0.9, 0.12, 0.52, 0.12, 0.7, 0.0, "");
+                let q = i as f64;
+                let (x, y, rot) = match style.min(9) {
+                    // Gers and lotus courts collect light in a spoke pattern.
+                    0 => { let a = q * 0.785; (a.cos() * 1.02, a.sin() * 0.72, q * 45.0) }
+                    1 => { let a = q * 0.785 + 0.392; (a.cos() * 0.92, a.sin() * 0.78, q * 45.0 + 22.5) }
+                    // Cloister pairs, laboratory ring, and sail-like harbour strips.
+                    2 => (((i % 2) as f64 - 0.5) * 1.3, (i / 2) as f64 * 0.42 - 0.62, 0.0),
+                    3 => { let a = q * 0.785; (a.cos() * 0.98, a.sin() * 0.68, q * 45.0) }
+                    4 => (-1.05 + (i % 4) as f64 * 0.68, -0.64 + (i / 4) as f64 * 0.98, -24.0),
+                    // The industrial rank stays deliberately regular.
+                    5 => (-0.9 + (i % 4) as f64 * 0.6, -0.55 + (i / 4) as f64 * 0.9, 0.0),
+                    6 => { let a = q * 0.785; (a.cos() * 1.08, a.sin() * 0.82, q * 45.0) },
+                    7 => (-1.05 + (i % 4) as f64 * 0.68, -0.50 + (i / 4) as f64 * 1.02, 18.0),
+                    8 => (-0.98 + (i % 4) as f64 * 0.66 + if i / 4 == 0 { 0.16 } else { -0.16 }, -0.55 + (i / 4) as f64 * 0.92, -8.0),
+                    _ => { let a = q * 0.785; (a.cos() * 0.94, a.sin() * 0.72, q * 45.0) },
+                };
+                add("panel", x, y, 0.12, 0.52, 0.12, 0.7, rot, "");
             }
             add("accent", 1.0, 0.95, 0.12, 0.3, 0.3, 0.3, 0.0, "faction");
             "Solar field"
@@ -427,5 +482,6 @@ pub fn look(kind: &str, cap: f64, style: usize) -> Value {
             "Battery bank"
         }
     };
+    plant_shell(&mut pieces, kind, style);
     obj! { "name" => name, "pieces" => pieces }
 }
