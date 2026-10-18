@@ -975,10 +975,12 @@ fn wing(units: View, world: View, me: View) {
                 .map(|v|v.get("id").num())
         } else { None };
         let verb = if home.is_none() && standing { if is_str(doing, "raid") { "raid" } else { "fight" } } else { verb };
-        let go = target >= 0.0 && (cool >= units.len().min(3) || {
+        // A short-handed squadron only launches alone to defend home. Finding home across a full map is optional
+        // work, though: keep the runway for hot aircraft to land before buying that map search.
+        let go = target >= 0.0 && (cool >= units.len().min(3) || (cycles_left() >= wing_full_path_need(units, world) && {
             geo.ensure_home(world, me, 12.0);
             geo.is_home(target)
-        });
+        }));
         let carried = home.map(|_| &pl);
         if a.get("aloft").truthy() {
             if rts && cycles_left() < 5000.0 { continue; }
