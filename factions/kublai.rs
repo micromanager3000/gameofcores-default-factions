@@ -1582,6 +1582,9 @@ fn gun(units: View, world: View, me: View) {
 // and raids the province when nothing it can hit is left. A flier can't capture, mine, persuade or study. Abroad, with
 // only the core of the plan to go on, a flier keeps the hunt it's on.
 fn wing(units: View, world: View, me: View) {
+    // A zero fabrication lane is recovery. Resolve it before decoding the shared plan so a low-fuel callback can
+    // preserve an aloft wing (or its standing grounded order) without entering the route planner.
+    if common::air_recovery(units, me) { return; }
     // a flier a minute up comes down on your nearest land before anything else, even short of cycles: its burn climbs
     // the longer it flies, and an unpaid one crashes
     for u in units.iter() {
@@ -1590,7 +1593,9 @@ fn wing(units: View, world: View, me: View) {
             order(obj! { "id" => u.get("id"), "land" => true });
         }
     }
-    if me.get("rts").truthy() && cycles_left() < 2200.0 {
+    // A cold plan and its first route need more than the legacy 2,200-cycle floor. Keep the standing sortie until a
+    // funded turn can finish it; recovery above already handles zero-fabrication calls.
+    if me.get("rts").truthy() && cycles_left() < 2500.0 {
         return;
     }
     let pl = plan::for_units(me, units, world);
@@ -1623,7 +1628,7 @@ fn wing(units: View, world: View, me: View) {
     let verb = if q.truthy() && n(owner) >= 0.0 && !same(owner, me.get("id")) && !allies.has_num(n(owner)) && foes == 0 { "raid" } else { "fight" };
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
-        if rts && cycles_left() < 2200.0 {
+        if rts && cycles_left() < 2500.0 {
             break;
         }
         let u = turn(units, i, world);

@@ -15,9 +15,12 @@ fn kublai_gun_callback_leaves_a_route_for_a_funded_control_turn() {
 
 #[test]
 fn deployed_gun_at_its_target_keeps_its_standing_combat_posture() {
-    // `fixtures/kublai-gun-deployed.json` is an authored public callback view
-    // with the plan pages its unit would carry away from home.
-    let fixture = Value::parse(include_str!("../fixtures/kublai-gun-deployed.json")).items().to_vec();
+    let mut me = obj! { "id"=>0, "capital"=>25, "allies"=>arr![], "ramProvince"=>obj! {} };
+    me.entry("ramProvince").set("11", pages(&obj! { "attack"=>11, "stage"=>25 }));
+    let fixture = vec![
+        Value::parse(r#"[{"id":733,"owner":0,"type":"gun","at":11,"to":-1,"doing":"fight","target":11,"rts":{"deployed":true}}]"#),
+        Value::parse(r#"{"provinces":[{"id":11,"owner":1,"units":{"0":1}}]}"#), me,
+    ];
     let args = views(&fixture);
     super::gun(args[0], args[1], args[2]);
     assert!(emitted().is_empty(), "a deployed gun already at its target keeps firing its standing order");
@@ -25,10 +28,12 @@ fn deployed_gun_at_its_target_keeps_its_standing_combat_posture() {
 
 #[test]
 fn at_target_gun_can_still_set_up_without_route_fuel() {
-    let mut fixture = Value::parse(include_str!("../fixtures/kublai-gun-deployed.json")).items().to_vec();
-    let mut gun = fixture[0].at(0).clone();
-    gun.entry("rts").set("deployed", false);
-    fixture[0] = arr![gun];
+    let mut me = obj! { "id"=>0, "capital"=>25, "allies"=>arr![], "ramProvince"=>obj! {} };
+    me.entry("ramProvince").set("11", pages(&obj! { "attack"=>11, "stage"=>25 }));
+    let fixture = vec![
+        Value::parse(r#"[{"id":733,"owner":0,"type":"gun","at":11,"to":-1,"doing":"fight","target":11,"rts":{"deployed":false}}]"#),
+        Value::parse(r#"{"provinces":[{"id":11,"owner":1,"units":{"0":1}}]}"#), me,
+    ];
     let args = views(&fixture);
     super::gun(args[0], args[1], args[2]);
     let orders = emitted();
@@ -66,4 +71,16 @@ fn short_plan_publication_keeps_standing_ram_and_recruitment() {
     super::share_phase(&mut orders, &obj! { "attack"=>3 }, args[0], args[1], 6500.0);
     assert_eq!(orders.get("ram").to_json(), standing.to_json(), "the standing plan and unrelated RAM writes survive");
     assert_eq!(orders.get("spawn").at(0).get("type").str(), "screen");
+}
+
+#[test]
+fn kublai_wing_recovery_skips_the_cold_planner_when_fabrication_is_zero() {
+    let fixture = [
+        Value::parse(r#"[{"id":1034,"owner":0,"type":"wing","at":1,"to":-1,"doing":"idle","target":-1,"rts":{"air":{"aloft":false,"heat":0}}}]"#),
+        Value::parse(r#"{"provinces":[{"id":1,"owner":0,"units":{"0":1}}]}"#),
+        Value::parse(r#"{"id":0,"rts":{"cpu":{"limits":{"fabrication":0}}}}"#),
+    ];
+    let args = views(&fixture);
+    super::wing(args[0], args[1], args[2]);
+    assert!(emitted().is_empty(), "the grounded recovery wing keeps its standing order");
 }
