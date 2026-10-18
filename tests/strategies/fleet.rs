@@ -178,7 +178,7 @@ fn fleet_corsair_spawn_rejects_the_same_unprofitable_or_escorted_prey_as_quarry(
     let prey = Value::parse(r#"{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":3},"cargo":{"load":3}}"#);
     let contacts=Value::parse(r#"[{"id":9,"ship":true,"water":1,"build":{"range":0,"carry":3},"cargo":{"load":3}},{"id":10,"ship":true,"water":1,"build":{"range":1}}]"#);
     let args=views(&[me,prey,contacts]);
-    assert!(!super::paying_corsair_prey(args[1],args[2],args[0],160000.0,true),"an armed escort rejects the spawn just as it rejects a chase");
+    assert!(!super::paying_corsair_prey(args[1],args[2],args[0],160000.0,true,0.0),"an armed escort rejects the spawn just as it rejects a chase");
 }
 
 #[test]
