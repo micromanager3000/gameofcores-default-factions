@@ -361,6 +361,13 @@ fn share_phase(orders: &mut Value, plan: &Value, world: View, me: View, remainin
     }
 }
 
+// A field cannot be published when the later plan share is already out of reach.
+fn road_phase(plan: &mut Value, world: View, me: View, target: f64, remaining: f64) {
+    if !me.path("rts.cpu").truthy() || remaining>=9000.0 {
+        if let Some(field)=road(world,me,target,16000.0) {plan.set("field",field);}
+    }
+}
+
 // Keep controller allocations when the optional crossing, research and rent review cannot leave return runway.
 fn budget_phase(orders: &mut Value, world: View, me: View, budget: &common::Budget, type_calls: &Value, remaining: f64) {
     if me.path("rts.cpu").truthy() && remaining < 8000.0 {
@@ -430,9 +437,8 @@ fn strategy(world: View, me: View) -> Value {
     }
     // the rest of think (spawns, budget, trade and diplomacy) is budgeted at up to 16,000 cycles after the search
     let defend = vn(plan.get("defend"));
-    if let Some(field) = road(world, me, if defend >= 0.0 { defend } else { vn(plan.get("attack")) }, 16000.0) {
-        plan.set("field", field);
-    }
+    let field_target=if defend>=0.0 {defend}else{vn(plan.get("attack"))};
+    road_phase(&mut plan,world,me,field_target,cycles_left());
     let cpu = rts_cpu(me);
     // Fabrication has its own lane. Think reduces the shared bank once.
     let available = if cpu.truthy() { cpu.get("available") } else { cpu };

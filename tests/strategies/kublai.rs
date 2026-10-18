@@ -104,3 +104,17 @@ fn kublai_wing_recovery_skips_the_cold_planner_when_fabrication_is_zero() {
     super::wing(args[0], args[1], args[2]);
     assert!(emitted().is_empty(), "the grounded recovery wing keeps its standing order");
 }
+
+#[test]
+fn road_phase_leaves_the_standing_field_when_a_new_plan_cannot_publish() {
+    let field=obj!{"to"=>3,"at"=>100,"next"=>obj!{"0"=>3}};
+    let world=obj!{"seconds"=>101};
+    let me=obj!{"rts"=>obj!{"cpu"=>obj!{}},"ramCapital"=>pages(&obj!{"field"=>field.clone()})};
+    let a=views(&[world,me]);
+    let mut plan=obj!{"attack"=>3};
+    road_phase(&mut plan,a[0],a[1],3.0,8999.0);
+    assert!(plan.get("field").is_undef(),"a short turn keeps the existing shared plan instead of decoding an unpublished field");
+    road_phase(&mut plan,a[0],a[1],3.0,9000.0);
+    assert_eq!(plan.get("field").get("to").num(),3.0);
+    assert_eq!(plan.get("field").get("next").get("0").num(),3.0);
+}
