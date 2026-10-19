@@ -165,7 +165,7 @@ fn capped_arjuna_publishes_a_local_plan_and_funds_its_ground_column() {
 #[test]
 fn absent_hard_cap_keeps_the_full_planner_available() {
     let (world,mut me)=bounded_planner_case(600.0);me.entry("rts").entry("cpu").set("spendCap",Value::Undef);
-    let args=views(&[world,me]);assert!(super::full_planning_ready(args[0],args[1],120000.0));
+    let args=views(&[world,me]);assert!(super::full_planning_ready(args[0],args[1],130000.0));
 }
 
 #[test]
@@ -246,7 +246,7 @@ fn captured_c6_full_plan_allowance_uses_the_bounded_local_plan() {
     me.entry("rts").entry("cpu").set("spendCap", 57297);
     let args = views(&[world.clone(), me.clone()]);
     assert!(!super::full_planning_ready(args[0], args[1], 45116.0));
-    assert!(super::full_planning_ready(args[0], args[1], 50000.0));
+    assert!(super::full_planning_ready(args[0], args[1], 60000.0));
     me.entry("rts").entry("cpu").set("spendCap", 45116);
     let args = views(&[world, me]);
     let out = think(args[0], args[1]);
@@ -429,4 +429,16 @@ fn field_defenders_keep_fresh_orders_and_capital_defense() {
         let out = emitted();
         assert!(out.iter().all(|o| o.get("do").str() != "capture"), "fresh={fresh}: {out:?}");
     }
+}
+
+#[test]
+fn the_captured_field_advance_reserves_the_full_planning_tail() {
+    let (mut world, mut me) = bounded_planner_case(21936.0);
+    for id in 2..44 { world.entry("provinces").push(obj! { "id"=>id, "owner"=>-1, "adj"=>arr![] }); }
+    for id in 8..56 { world.entry("units").push(obj! { "id"=>id, "owner"=>2, "type"=>"screen", "at"=>1 }); }
+    me.entry("compute").set("thinkPeak", 19829);
+    me.entry("rts").entry("cpu").set("spendCap", 57888);
+    let args = views(&[world, me]);
+    assert!(!super::full_planning_ready(args[0], args[1], 53010.0));
+    assert!(super::full_planning_ready(args[0], args[1], 60000.0));
 }
