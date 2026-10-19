@@ -430,7 +430,7 @@ fn recovery_policy(me: View) -> Value {
 fn full_planning_ready(world:View,me:View,remaining:f64)->bool {
     let scan=18000.0+300.0*world.get("provinces").len() as f64+100.0*world.get("units").len() as f64;
     // Reserve the survey, routes and policy work that follows the census.
-    let need=(me.path("compute.thinkPeak").num_or(0.0)*1.25+6000.0).max(scan)+18000.0;
+    let need=(me.path("compute.thinkPeak").num_or(0.0)*1.25+6000.0).max(scan)+26000.0;
     remaining>=need && me.path("rts.cpu.spendCap").num_or(f64::INFINITY)>=need
 }
 
