@@ -429,7 +429,8 @@ fn recovery_policy(me: View) -> Value {
 
 fn full_planning_ready(world:View,me:View,remaining:f64)->bool {
     let scan=18000.0+300.0*world.get("provinces").len() as f64+100.0*world.get("units").len() as f64;
-    let need=(me.path("compute.thinkPeak").num_or(0.0)*1.25+6000.0).max(scan);
+    // Reserve survey, route and policy work after the census. C6's 44-province, 77-unit call used 48,364 cycles.
+    let need=(me.path("compute.thinkPeak").num_or(0.0)*1.25+6000.0).max(scan)+7500.0;
     remaining>=need && me.path("rts.cpu.spendCap").num_or(f64::INFINITY)>=need
 }
 
@@ -824,13 +825,86 @@ fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
     Some(x)
 }
 
+// Disconnected troops can outlive a fulfilled attack or a cleared field defense.
+// After two minutes, take a visible neutral neighbor and carry the replacement plan.
+// Capital defense and current enemies retain priority.
+fn stale_local_attack(u: View, units: View, world: View, me: View, p: &Rc<Value>) -> Option<Value> {
+    if u.get("to").num_or(-1.0) >= 0.0
+        || !plan::here(me, u) || plan::age(p, world).unwrap_or(0.0) <= 120.0 {
+        return None;
+    }
+    let at = u.get("at").num();
+    let defend = common::defends(p, u);
+    let cleared = defend == at && at != me.get("capital").num()
+        && is_str(u.get("doing"), "fight") && u.get("target").num_or(-1.0) == at;
+    if !cleared && (defend >= 0.0 || !is_str(u.get("doing"), "idle")) { return None; }
+    let target = p.get("attack").num_or(-1.0);
+    if !cleared && (target < 0.0 || realm::index(world).get(target).get("owner").num_or(-2.0) != me.get("id").num()) {
+        return None;
+    }
+    let here = realm::index(world).get(at);
+    if here.get("units").entries().any(|(owner, count)|
+        count.num_or(0.0) > 0.0 && owner.parse::<f64>().is_ok_and(|owner| realm::is_rival(world, me, owner))) {
+        return None;
+    }
+    let companions = if cleared { units.iter().filter(|v| v.get("at").num() == at
+        && v.get("to").num_or(-1.0) < 0.0 && !v.get("stalled").truthy()).count() as f64 } else { 0.0 };
+    let mut best: Option<View> = None;
+    for neighbor in here.get("adj").iter().take(8) {
+        let q = realm::index(world).at(neighbor);
+        let owner = q.get("owner").num_or(-2.0);
+        let conduct = u.get("conduct");
+        if !q.truthy() || !q.get("visible").truthy() || owner >= 0.0
+            || (conduct.get("seconds").num_or(0.0) > 0.0 && conduct.get("from").num_or(-2.0) == owner)
+            || q.get("leased").iter().any(|lease| lease.get("to").num_or(-2.0) == me.get("id").num()) {
+            continue;
+        }
+        let occupants = q.get("units").entries().filter(|(_, count)| count.num_or(0.0) > 0.0).collect::<Vec<_>>();
+        if !occupants.is_empty() && (!cleared
+            || occupants.iter().any(|(owner, _)| !owner.parse::<f64>().is_ok_and(|owner| realm::is_rival(world, me, owner)))
+            || companions < occupants.iter().map(|(_, count)| count.num_or(0.0)).sum::<f64>() * 2.0 + 1.0) { continue; }
+        if cleared && companions < common::muster_for(q) { continue; }
+        if best.is_none_or(|old| old.get("cores").num_or(0.0) < q.get("cores").num_or(0.0)) {
+            best = Some(q);
+        }
+    }
+    if let Some(q) = best {
+        let local = Rc::new(obj! {
+            "home" => me.get("capital"), "stage" => u.get("at"), "attack" => q.get("id"),
+            "need" => common::muster_for(q), "defend" => -1, "threat" => 0,
+            "fresh" => world.get("seconds"), "at" => world.get("seconds"),
+        });
+        if let Some(mut o) = carry(orders::to(u, "capture", q.get("id").num(), world, me, ()), u, &local, me) {
+            o.set("alert", if is_str(u.get("type"), "sentry") { 8 } else { 7 });
+            return Some(o);
+        }
+    }
+    None
+}
+
 // Defend with a fight (those the plan sends: common::defends); attack with a capture, since free land and rivals' towns
 // fall only to units capturing them.
-fn war_order(u: View, world: View, me: View) -> Option<Value> {
-    let p = plan::of(me, u);
+fn war_order(u: View, units: View, world: View, me: View) -> Option<Value> {
+    let mut p = plan::of(me, u);
+    // Keep a newer carried advance when captured land repeats an obsolete plan.
+    if plan::here(me, u) && u.get("at").num() != me.get("capital").num()
+        && plan::age(&p, world).unwrap_or(0.0) > 120.0 {
+        let carried = plan::unpack(u.get("ramUnit").key(0.0).get("bytes").bytes());
+        if carried.get("at").num_or(0.0) > p.get("at").num_or(0.0)
+            && carried.get("defend").num_or(-1.0) < 0.0
+            && !realm::index(world).at(u.get("at")).get("units").entries().any(|(f, n)|
+                n.num_or(0.0) > 0.0 && f.parse::<f64>().is_ok_and(|f| realm::is_rival(world, me, f))) {
+            p = Rc::new(carried);
+        }
+    }
     let defend = common::defends(&p, u);
     let defending = defend >= 0.0;
     let target = if defending { defend } else { vn(p.get("attack")) };
+    if target >= 0.0 && realm::index(world).get(target).get("owner").num_or(-2.0) == me.get("id").num() {
+        if let Some(o) = stale_local_attack(u, units, world, me, &p) {
+            return Some(o);
+        }
+    }
     if target.is_nan() || target < 0.0 {
         return orders::to(u, "fight", n(me.get("capital")), world, me, ());
     }
@@ -881,7 +955,7 @@ fn march(units: View, world: View, me: View) {
         if rts && cycles_left() < 4500.0 {
             break;
         }
-        if let Some(o) = war_order(u, world, me) {
+        if let Some(o) = war_order(u, units, world, me) {
             order(o);
         }
     }
