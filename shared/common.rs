@@ -443,11 +443,14 @@ use super::{air, theme};
     }
     /// A dock reached by sea and connected to the capital by owned land.
     fn freight_home(world: View, me: View, water: f64) -> Option<f64> {
+        freight_home_for(world, me, water, 3000.0)
+    }
+    fn freight_home_for(world: View, me: View, water: f64, tail: f64) -> Option<f64> {
         let cap = me.get("capital").num();
         let mut best = None;
         let mut hops = usize::MAX;
         for d in world.path("logistics.docks").iter() {
-            if cycles_left() < 3000.0 { break; }
+            if cycles_left() < tail { break; }
             let p = d.get("p").num();
             if realm::index(world).get(p).get("owner").num() != me.get("id").num() { continue; }
             let Some(land) = logistics::land_route(world, me, p, cap) else { continue };
@@ -741,7 +744,7 @@ use super::{air, theme};
         }
         Some(out)
     }
-    fn logistics_budget(world:View,me:View,share:f64,mut out:Value)->Value{
+    fn logistics_budget(world:View,me:View,share:f64,mut out:Value,cargo_bridge:bool)->Value{
         if !world.get("logistics").truthy(){return out;}
         if cycles_left()<3500.0{return out;}
         let income=me.path("rts.cpu.income").num_or(20000.0);
@@ -777,17 +780,26 @@ use super::{air, theme};
         let count=n+away;let cap=me.path("units.cap").num_or(0.0);
         let loans=me.path("units.hiredOutByType");let loan=|ty:&str|if loans.is_undef(){away}else{loans.get(ty).num_or(0.0)};
         if stock>16000.0 && depots.iter().filter(|d|d.get("dock").truthy()).count()>=2 && !me.path("techs.seaTraversal").truthy(){out.set("research","seaTraversal");}
-        if stock>16000.0 && out.get("spawn").is_empty() && count<cap && me.path("units.queued").num_or(0.0)==0.0 && me.get("bank").num_or(0.0)>me.path("costs.unit").num_or(1e9)+8.0 && me.path("rts.cpu.bank").num_or(0.0)>fabrication(me,1.0)+income*2.0 {
+        let ships=have.get("freighter").num_or(0.0);let haulers=have.get("hauler").num_or(0.0)+loan("hauler");
+        let first_bridge=cargo_bridge&&ships+loan("freighter")==0.0&&haulers>=2.0
+            &&!me.path("rts.sea.ports").is_empty()
+            &&depots.iter().take_while(|_|cycles_left()>6500.0).any(|d|!d.get("dock").truthy()
+                &&d.get("p").num()!=me.get("capital").num()&&d.get("cycles").num_or(0.0)>120000.0*price_level(me)
+                &&realm::index(world).get(d.get("p").num()).get("owner").num_or(-1.0)==me.get("id").num()
+                &&me.path("rts.sea.links").iter().any(|l|!l.at(2).truthy()&&(l.at(0).num()==d.get("p").num()||l.at(1).num()==d.get("p").num())));
+        if stock>16000.0 && (out.get("spawn").is_empty()||first_bridge) && count<cap && me.path("units.queued").num_or(0.0)==0.0 && me.get("bank").num_or(0.0)>me.path("costs.unit").num_or(1e9)+8.0 && me.path("rts.cpu.bank").num_or(0.0)>fabrication(me,1.0)+income*2.0 {
             let mut port = None;
-            let ty = if have.get("hauler").num_or(0.0)+loan("hauler") < (me.get("provinces").num_or(1.0)/2.0).clamp(2.0,6.0) { "hauler" }
+            let ty = if !first_bridge && haulers < (me.get("provinces").num_or(1.0)/2.0).clamp(2.0,6.0) { "hauler" }
             else if me.path("techs.seaTraversal").truthy() && have.get("freighter").num_or(0.0)+loan("freighter") < 2.0
                 && world.get("seconds").num_or(0.0) >= mem::get(me.get("ramCapital"), FREIGHT_PAGE).get("until").num_or(0.0) {
+                let tail=if first_bridge {5000.0}else{9000.0};
                 for p in me.path("rts.sea.ports").iter() {
-                    if cycles_left() < 9000.0 { break; }
+                    if cycles_left() < tail { break; }
                     let at = p.num();
                     let Some(d) = world.path("logistics.docks").iter().find(|d| d.get("p").num() == at) else { continue };
-                    let Some(home) = freight_home(world, me, d.get("water").num()) else { continue };
-                    if freight_pickup(world, me, home, &[]).is_some_and(|(_, n)| n > 120000.0 * price_level(me)) { port = Some(home); break; }
+                    let home=if first_bridge {freight_home_for(world,me,d.get("water").num(),tail)}else{freight_home(world,me,d.get("water").num())};
+                    let Some(home) = home else { continue };
+                    if first_bridge || freight_pickup(world, me, home, &[]).is_some_and(|(_, n)| n > 120000.0 * price_level(me)) { port = Some(home); break; }
                 }
                 if port.is_none() { return out; }
                 "freighter"
@@ -795,7 +807,7 @@ use super::{air, theme};
             let mods=if ty=="freighter"{vec!["hull"]}else{vec![]};
             let body=obj!{"hp"=>2,"speed"=>2,"strength"=>0,"carry"=>5,"vision"=>1};
             let paid=(n-me.path("units.stalled").num_or(0.0)).max(1.0);let each=(unit_upkeep(me)/paid/(n/cap).max(1.0)).max(me.path("costs.upkeep").num_or(100.0));
-            if (each*count+body_upkeep_value(me,&body,mods.len() as f64))*((count+1.0)/cap).max(1.0)+building_upkeep(me)+me.path("costs.draw").entries().map(|(_,v)|v.num_or(0.0)).fold(0.0,f64::max)>income*share {return out;}
+            if (each*count+body_upkeep_value(me,&body,mods.len() as f64))*((count+1.0)/cap).max(1.0)+building_upkeep(me)+me.path("costs.draw").entries().map(|(_,v)|v.num_or(0.0)).fold(0.0,f64::max)>income*if first_bridge {share.max(0.65)}else{share} {return out;}
             let mut recruit = obj! {"type"=>ty,"build"=>body,"modules"=>mods};
             if let Some(p) = port { recruit.set("port", p); }
             out.set("spawn",vec![recruit]);
@@ -1816,6 +1828,13 @@ use super::{air, theme};
 
     /// Runs the house strategy with economic recovery; classic worlds keep normal planning.
     pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
+        govern_for(world,me,share,false,strategy)
+    }
+    /// Recruit a first ship when owned land cargo needs a RAM crossing.
+    pub fn govern_bridge(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
+        govern_for(world,me,share,true,strategy)
+    }
+    fn govern_for(world: View, me: View, share: f64, cargo_bridge: bool, strategy: impl FnOnce() -> Value) -> Value {
         if cycles_left()<800.0 {return obj!{};}
         if me.path("rts.cpu").truthy() && cycles_left()<6000.0 {
             return obj!{"compute"=>obj!{"cpu"=>obj!{
@@ -1830,8 +1849,8 @@ use super::{air, theme};
         if resting(world, me) {
             return Value::obj();
         }
-        if let Some(orders)=delivery_recovery(world,me) {return orders;}
-        let mut orders = govern_units(world, me, share, strategy);
+        if let Some(orders)=delivery_recovery(world,me) {return if cargo_bridge {logistics_budget(world,me,share,orders,true)}else{orders};}
+        let mut orders = govern_units(world, me, share, cargo_bridge, strategy);
         if orders.get("memo").str() == "Recovering production" {
             // Fund safe landings during recovery.
             for u in world.get("units").iter().take_while(|_| cycles_left() > 3500.0) {
@@ -1869,13 +1888,13 @@ use super::{air, theme};
         now % THINK_EVERY == 0.0 && ((now / THINK_EVERY).floor() + offset).rem_euclid(beats) == 0.0
     }
 
-    fn govern_units(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
+    fn govern_units(world: View, me: View, share: f64, cargo_bridge: bool, strategy: impl FnOnce() -> Value) -> Value {
         if !me.path("rts.cpu").truthy() { return strategy(); }
         if world.get("logistics").truthy() {
             let income=me.path("rts.cpu.income").num_or(20000.0);
             // Recover stalled crews only when cargo savings are short.
             if me.path("units.stalled").num_or(0.0)>0.0 && me.path("rts.cpu.bank").num_or(0.0)<income*2.0 {
-                return logistics_budget(world, me, share, recovery(world, me));
+                return logistics_budget(world, me, share, recovery(world, me), cargo_bridge);
             }
             // A working crew with savings may resume strategy between irregular cargo deliveries.
             let starting=income<30000.0 && me.path("units.total").num_or(0.0)<4.0;
@@ -1907,11 +1926,11 @@ use super::{air, theme};
                     let label=names.map_or_else(||format!("miner-{serial:.0}"),|list|name(me,list,serial));
                     out.set("spawn",vec![obj!{"type"=>"miner","name"=>label}]);
                 }
-                return logistics_budget(world,me,share,out);
+                return logistics_budget(world,me,share,out,cargo_bridge);
             }
         }
         let orders = govern_base(world, me, share, strategy);
-        logistics_budget(world, me, share, orders)
+        logistics_budget(world, me, share, orders,cargo_bridge)
     }
     fn govern_base(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
         if !me.path("rts.cpu").truthy() { return strategy(); }
@@ -2961,6 +2980,18 @@ use super::{air, theme};
 
 pub fn hauler(units: View, world: View, me: View) { haul_cargo(units, world, me); }
 pub fn freighter(units: View, world: View, me: View) { freight(units, world, me); }
+/// Idle empty hulls can restore a down RAM crossing before hauling.
+pub fn freighter_bridge(units: View, world: View, me: View) {
+    if cycles_left()>5000.0 {
+        if let Some(gap)=sea::gaps(me).first() {
+            if let Some(u)=units.iter().find(|u|u.path("rts.sea.ship").truthy()&&logistics::cargo(*u)==0.0&&!cargo_working(*u)) {
+                let at=sea::station(world,gap[0],gap[1]);
+                if at>=0.0 {order(obj!{"id"=>u.get("id"),"sail"=>at});}
+            }
+        }
+    }
+    freighter(units,world,me);
+}
 // @house
 pub fn escort(units: View, world: View, me: View) { guard_shipping(units, world, me); }
 // @end

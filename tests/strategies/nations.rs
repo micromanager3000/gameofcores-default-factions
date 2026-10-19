@@ -366,3 +366,71 @@ fn a_shade_keeps_its_committed_remote_military_destination() {
     let a=views(&[Value::Arr(vec![v[0].clone()]),v[1].clone(),v[2].clone()]);shade(a[0],a[1],a[2]);
     assert!(emitted().iter().all(|o|o.get("structure").is_undef()));
 }
+
+fn bridge_fixture() -> (Value, Value) {
+    let world=Value::parse(r#"{"seconds":3,"logistics":{"docks":[{"p":0,"water":0},{"p":1,"water":1}]},
+        "provinces":[{"id":0,"owner":1,"adj":[],"hops":0},{"id":1,"owner":1,"adj":[]}],
+        "waters":[{"id":0,"adj":[1],"coast":[0]},{"id":1,"adj":[0],"coast":[1]}],"units":[]}"#);
+    let me=Value::parse(r#"{"id":1,"capital":0,"provinces":2,"bank":1000,"ramCapital":{},
+        "techs":{"seaTraversal":true},"costs":{"unit":50,"upkeep":100},
+        "units":{"total":8,"cap":20,"queued":0,"stalled":0,"byType":{"miner":4,"hauler":2,"freighter":0}},
+        "rts":{"cpu":{"income":40000,"bank":200000,"last":{"upkeep":2000}},"sea":{"ports":[0],"links":[[0,1,false]]},
+        "logistics":{"depots":[{"p":0,"dock":true,"cycles":0},{"p":1,"dock":false,"cycles":120001}]}}}"#);
+    (world,me)
+}
+
+fn bridge_item(v:&mut Value,i:usize)->&mut Value { let Value::Arr(items)=v else {panic!("bridge fixture array")};&mut items[i] }
+
+#[test]
+fn nations_bridge_recruits_the_first_freighter_for_a_linked_owned_remote_depot() {
+    let (world,me)=bridge_fixture();let args=views(&[world,me]);
+    let out=common::govern_bridge(args[0],args[1],0.4,||obj!{"spawn"=>arr![obj!{"type"=>"screen"}]});
+    assert_eq!(out.get("spawn").len(),1,"{out:?}");
+    assert_eq!(out.get("spawn").at(0).get("type").str(),"freighter","{out:?}");
+    assert_eq!(out.get("spawn").at(0).get("port").num(),0.0,"{out:?}");
+}
+
+#[test]
+fn default_govern_keeps_the_optional_army_when_only_nations_can_open_a_bridge() {
+    let (world,me)=bridge_fixture();let args=views(&[world,me]);
+    let out=common::govern(args[0],args[1],0.4,||obj!{"spawn"=>arr![obj!{"type"=>"screen"}]});
+    assert_eq!(out.get("spawn").at(0).get("type").str(),"screen","{out:?}");
+}
+
+#[test]
+fn nations_bridge_keeps_optional_army_when_first_freighter_prerequisites_fail() {
+    for kind in ["tech","port","link","owner","stock","ship","hired","hauler","queue","cap","bank","upkeep"] {
+        let (mut world,mut me)=bridge_fixture();
+        match kind {
+            "tech"=>me.entry("techs").set("seaTraversal",false),
+            "port"=>me.entry("rts").entry("sea").set("ports",arr![]),
+            "link"=>me.entry("rts").entry("sea").set("links",vec![arr![Value::Num(0.0),Value::Num(1.0),Value::Bool(true)]]),
+            "owner"=>bridge_item(world.entry("provinces"),1).set("owner",2),
+            "stock"=>bridge_item(me.entry("rts").entry("logistics").entry("depots"),1).set("cycles",120000),
+            "ship"=>me.entry("units").entry("byType").set("freighter",1),
+            "hired"=>{me.entry("units").set("hiredOut",1);me.entry("units").set("hiredOutByType",obj!{"freighter"=>1});},
+            "hauler"=>me.entry("units").entry("byType").set("hauler",1),
+            "queue"=>me.entry("units").set("queued",1),
+            "cap"=>me.entry("units").set("cap",8),
+            "bank"=>me.entry("rts").entry("cpu").set("bank",50000),
+            _=>me.entry("rts").entry("cpu").entry("last").set("upkeep",40000),
+        }
+        let args=views(&[world,me]);let out=common::govern_bridge(args[0],args[1],0.4,||obj!{"spawn"=>arr![obj!{"type"=>"screen"}]});
+        assert_ne!(out.get("spawn").at(0).get("type").str(),"freighter","{kind}: {out:?}");
+        if !matches!(kind,"bank"|"upkeep") {assert_eq!(out.get("spawn").at(0).get("type").str(),"screen","{kind}: {out:?}");}
+    }
+}
+
+#[test]
+fn nations_freighter_bridge_stations_only_an_empty_unassigned_hull() {
+    for kind in ["empty","working","loaded"] {
+        let (world,mut me)=bridge_fixture();me.entry("rts").entry("logistics").set("depots",arr![]);
+        let job=if kind=="working" {obj!{"status"=>"loading","operation"=>obj!{"load"=>obj!{"p"=>1,"dock"=>true}}}} else {Value::Null};
+        let cargo=if kind=="loaded" {1}else{0};
+        let units=arr![obj!{"id"=>9,"owner"=>1,"type"=>"freighter","at"=>0,"to"=>-1,"doing"=>"idle",
+            "rts"=>obj!{"sea"=>obj!{"ship"=>true,"water"=>0},"cargo"=>obj!{"cycles"=>cargo,"job"=>job}}}];
+        let args=views(&[units,world,me]);common::freighter_bridge(args[0],args[1],args[2]);let orders=emitted();
+        if kind!="empty" {assert!(orders.iter().all(|o|o.get("sail").is_undef()),"{kind}: {orders:?}");}
+        else {assert!(orders.iter().any(|o|o.get("id").num()==9.0&&o.get("sail").num()==0.0),"{orders:?}");}
+    }
+}

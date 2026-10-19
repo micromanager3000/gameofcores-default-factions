@@ -2,7 +2,9 @@
 
 use gameofcores::*;
 use shared::{air, capital, common, theme};
-use shared::common::{hauler, freighter, escort};
+use shared::common::{hauler, escort};
+
+fn freighter(units: View, world: View, me: View) { common::freighter_bridge(units, world, me); }
 
 program!(think, hauler, freighter, escort, miner, runner, lancer, shade, sentry, spire, needle, kite, scout, reflex, research, duel, challenge, look, build3d, live3d);
 
@@ -488,7 +490,7 @@ fn conserve(world: View, me: View) -> Value {
 
 fn think(world: View, me: View) -> Value {
     if cycles_left()<800.0 {return obj!{};}
-    common::govern(world, me, 0.4, || {
+    common::govern_bridge(world, me, 0.4, || {
         let mut orders = strategy(world, me);
         // A recruit needs a complete upkeep review before the governor and ABI tail.
         if rts(me) && !orders.get("spawn").is_empty()
