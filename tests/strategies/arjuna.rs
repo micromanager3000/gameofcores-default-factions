@@ -165,7 +165,7 @@ fn capped_arjuna_publishes_a_local_plan_and_funds_its_ground_column() {
 #[test]
 fn absent_hard_cap_keeps_the_full_planner_available() {
     let (world,mut me)=bounded_planner_case(600.0);me.entry("rts").entry("cpu").set("spendCap",Value::Undef);
-    let args=views(&[world,me]);assert!(super::full_planning_ready(args[0],args[1],120000.0));
+    let args=views(&[world,me]);assert!(super::full_planning_ready(args[0],args[1],140000.0));
 }
 
 #[test]
@@ -235,4 +235,210 @@ fn lean_recruitment_avoids_only_proven_upkeep_rejections() {
     let args=views(&[world,me]);let unproved=think(args[0],args[1]);
     assert!(unproved.get("slots").num()>0.0);
     assert!(!unproved.get("spawn").is_empty());
+}
+
+#[test]
+fn captured_c6_full_plan_allowance_uses_the_bounded_local_plan() {
+    let (mut world, mut me) = bounded_planner_case(4668.0);
+    for id in 2..44 { world.entry("provinces").push(obj! { "id"=>id, "owner"=>-1, "adj"=>arr![] }); }
+    for id in 8..77 { world.entry("units").push(obj! { "id"=>id, "owner"=>2, "type"=>"screen", "at"=>1 }); }
+    me.entry("compute").set("thinkPeak", 20856);
+    me.entry("rts").entry("cpu").set("spendCap", 70000);
+    let args = views(&[world.clone(), me.clone()]);
+    assert!(!super::full_planning_ready(args[0], args[1], 45116.0));
+    assert!(super::full_planning_ready(args[0], args[1], 65000.0));
+    me.entry("rts").entry("cpu").set("spendCap", 45116);
+    let args = views(&[world, me]);
+    let out = think(args[0], args[1]);
+    let plan = out.get("ram").items().iter().find_map(|op| {
+        if op.get("write").num_or(-1.0) == 0.0 { Some(op) } else { None }
+    }).expect("lean planning writes its local plan");
+    assert!(plan.get("bytes").truthy());
+    assert!(out.get("compute").get("types").get("screen").get("share").num() > 0.0);
+    assert!(out.get("compute").get("cpu").get("limits").get("fabrication").num() > 0.0);
+}
+
+
+fn stale_local_args(seconds: f64) -> (Value, Value, Value) {
+    let world = obj! {
+        "seconds"=>seconds,
+        "provinces"=>arr![
+            obj! {"id"=>0,"owner"=>1,"visible"=>true,"adj"=>arr![1,2,3],"units"=>obj!{"1"=>1}},
+            obj! {"id"=>1,"owner"=>1,"visible"=>true,"adj"=>arr![0],"units"=>obj!{}},
+            obj! {"id"=>2,"owner"=>-1,"visible"=>true,"cores"=>3,"adj"=>arr![0],"units"=>obj!{}},
+            obj! {"id"=>3,"owner"=>-1,"visible"=>true,"cores"=>7,"adj"=>arr![0],"units"=>obj!{}}
+        ]
+    };
+    let unit = obj! {"id"=>71,"type"=>"screen","at"=>0,"to"=>-1,"doing"=>"idle","ramUnit"=>obj!{}};
+    let me = obj! {"id"=>1,"capital"=>0,"ramProvince"=>obj!{"0"=>pages(&obj!{"attack"=>1,"defend"=>-1})}};
+    (unit, world, me)
+}
+
+fn stale_order(unit: Value, world: Value, me: Value) -> Option<Value> {
+    let args = views(&[unit.clone(), arr![unit], world, me]);
+    super::war_order(args[0], args[1], args[2], args[3])
+}
+
+#[test]
+fn fulfilled_stale_attack_captures_the_best_visible_empty_neutral_and_carries_it() {
+    let (unit, world, me) = stale_local_args(122.0);
+    let order = stale_order(unit, world, me).expect("the stale local plan has a safe neighboring capture");
+    assert_eq!(order.get("do").str(), "capture");
+    assert_eq!(order.get("target").num(), 3.0, "the richer eligible neighbor wins");
+    assert!(!order.get("ram").is_empty(), "the replacement local plan travels with the capture");
+}
+
+#[test]
+fn fresh_defender_protected_and_moving_orders_do_not_use_stale_local_recovery() {
+    let (unit, world, me) = stale_local_args(121.0);
+    let fresh = stale_order(unit.clone(), world, me).expect("ordinary attack order remains");
+    assert_eq!(fresh.get("target").num(), 1.0, "a plan exactly 120 seconds old stays on its order");
+
+    let (defender, world, mut me) = stale_local_args(122.0);
+    let defend_plan = obj! {"attack"=>1,"defend"=>0};
+    me.entry("ramProvince").set("0", pages(&defend_plan));
+    let defending = stale_order(defender, world, me).expect("defender keeps its assigned order");
+    assert_eq!(defending.get("do").str(), "fight");
+    assert_eq!(defending.get("target").num(), 0.0);
+
+    let (mut unit, world, me) = stale_local_args(122.0);
+    unit.set("to", 3);
+    let moving = stale_order(unit, world, me).expect("moving unit keeps its normal order");
+    assert_eq!(moving.get("target").num(), 1.0);
+
+    let (mut unit, world, me) = stale_local_args(122.0);
+    unit.set("conduct", obj! {"seconds"=>20,"from"=>-1});
+    let protected = stale_order(unit, world, me).expect("protected neutral remains excluded");
+    assert_eq!(protected.get("target").num(), 1.0);
+}
+
+#[test]
+fn a_fresh_local_enemy_blocks_stale_expansion_and_live_defense_stays_assigned() {
+    for case in ["idle", "assigned-defender", "standing-defense"] {
+        let (mut unit, mut world, mut me) = stale_local_args(122.0);
+        let mut provinces = world.get("provinces").items().to_vec();
+        provinces[0].entry("units").set("2", 1);
+        world.set("provinces", provinces);
+        world.set("factions", arr![Value::Null, obj!{"id"=>1,"alive"=>true}, obj!{"id"=>2,"alive"=>true}]);
+        me.set("allies", arr![]);
+        me.entry("ramProvince").set("0", pages(&obj!{"attack"=>0,"defend"=>if case=="idle"{-1}else{0}}));
+        if case=="standing-defense" { unit.set("doing", "fight"); unit.set("target", 0); }
+        let args=views(&[arr![unit],world,me]);
+        super::screen(args[0],args[1],args[2]);
+        let out=emitted();
+        assert_eq!(out.len(), 1, "{case}: {out:?}");
+        if case=="standing-defense" {
+            assert!(out[0].get("do").is_undef(), "RAM refresh preserves the standing fight");
+        } else {
+            assert_eq!(out[0].get("target").num(), 0.0, "the local rival prevents a neighboring capture");
+            assert_eq!(out[0].get("do").str(), if case=="idle"{"capture"}else{"fight"});
+        }
+    }
+}
+
+fn stale_field_defense_args() -> Value {
+    let (mut unit, mut world, mut me) = stale_local_args(122.0);
+    unit.set("doing", "fight"); unit.set("target", 0);
+    let mut second = unit.clone(); second.set("id", 72);
+    let mut third = unit.clone(); third.set("id", 73);
+    let mut provinces = world.get("provinces").items().to_vec();
+    provinces[2].entry("units").set("6", 1);
+    provinces[3].set("owner", 6);
+    world.set("provinces", provinces);
+    let mut factions = vec![Value::Null; 7];
+    factions[1] = obj!{"id"=>1,"alive"=>true}; factions[6] = obj!{"id"=>6,"alive"=>true};
+    world.set("factions", factions);
+    me.set("capital", 1); me.set("allies", arr![]);
+    me.entry("ramProvince").set("0", pages(&obj!{"attack"=>3,"defend"=>0,"threat"=>1}));
+    arr![arr![unit,second,third],world,me]
+}
+
+#[test]
+fn a_cleared_stale_field_defense_can_contest_a_neutral_neighbor() {
+    let fixture = stale_field_defense_args();
+    let args = views(fixture.items());
+    super::screen(args[0], args[1], args[2]);
+    let out = emitted();
+    assert!(out.iter().any(|o| o.get("do").str() == "capture" && o.get("target").num() == 2.0), "{out:?}");
+    assert!(out.iter().filter(|o| o.get("do").str() == "capture").all(|o| !o.get("ram").is_empty()));
+}
+
+#[test]
+fn stale_field_defenders_keep_current_threats_and_do_not_send_a_lone_unit() {
+    for threat in [false, true] {
+        let fixture = stale_field_defense_args();
+        let mut args = fixture.items().to_vec();
+        if threat {
+            let mut provinces = args[1].get("provinces").items().to_vec();
+            let here = provinces.iter_mut().find(|p| p.get("id").num() == 0.0).unwrap();
+            here.entry("units").set("6", 1);
+            args[1].set("provinces", provinces);
+        } else {
+            args[0] = arr![args[0].at(0).clone()];
+        }
+        let args = views(&args);
+        super::screen(args[0], args[1], args[2]);
+        let out = emitted();
+        assert!(out.iter().all(|o| o.get("do").str() != "capture"), "threat={threat}: {out:?}");
+    }
+}
+
+#[test]
+fn a_newer_carried_advance_survives_stale_ram_in_captured_land() {
+    for (fresh, enemy) in [(false, false), (true, false), (false, true)] {
+        let (mut unit, mut world, mut me) = stale_local_args(244.0);
+        unit.set("at", 2);
+        unit.set("ramUnit", obj!{"0"=>obj!{"bytes"=>Value::Bytes(plan::pack(
+            &obj!{"attack"=>2,"stage"=>0,"defend"=>-1,"need"=>2,"at"=>122}))}});
+        let mut provinces = world.get("provinces").items().to_vec();
+        provinces[2].set("owner", 1); provinces[2].set("adj", arr![0,3]);
+        provinces[3].set("adj", arr![2]);
+        if enemy { provinces[2].entry("units").set("6", 1); }
+        world.set("provinces", provinces);
+        let mut factions = vec![Value::Null; 7];
+        factions[1] = obj!{"id"=>1,"alive"=>true}; factions[6] = obj!{"id"=>6,"alive"=>true};
+        world.set("factions", factions);
+        me.set("capital", 1); me.set("allies", arr![]);
+        let mut shared = pages(&obj!{"attack"=>3,"defend"=>0,"threat"=>1});
+        if fresh { shared.entry("0").set("t", 243); }
+        me.entry("ramProvince").set("2", shared);
+        let order = stale_order(unit, world, me);
+        if !fresh && !enemy {
+            let order = order.expect("continue from captured land");
+            assert_eq!(order.get("do").str(), "capture");
+            assert_eq!(order.get("target").num(), 3.0);
+        } else {
+            assert!(order.is_none_or(|o| o.get("do").str() != "capture"));
+        }
+    }
+}
+
+
+#[test]
+fn field_defenders_keep_fresh_orders_and_capital_defense() {
+    for fresh in [false, true] {
+        let fixture = stale_field_defense_args();
+        let mut args = fixture.items().to_vec();
+        if fresh {
+            args[2].entry("ramProvince").entry("0").entry("0").set("t", 121);
+        } else {
+            args[2].set("capital", 0);
+        }
+        let args = views(&args);
+        super::screen(args[0], args[1], args[2]);
+        let out = emitted();
+        assert!(out.iter().all(|o| o.get("do").str() != "capture"), "fresh={fresh}: {out:?}");
+    }
+}
+
+#[test]
+fn the_captured_field_advance_reserves_the_full_planning_tail() {
+    let (mut world, mut me) = bounded_planner_case(21936.0);
+    for id in 2..44 { world.entry("provinces").push(obj! { "id"=>id, "owner"=>-1, "adj"=>arr![] }); }
+    for id in 8..56 { world.entry("units").push(obj! { "id"=>id, "owner"=>2, "type"=>"screen", "at"=>1 }); }
+    me.entry("compute").set("thinkPeak", 19829);
+    me.entry("rts").entry("cpu").set("spendCap", 70000);
+    let args = views(&[world, me]);
+    assert!(!super::full_planning_ready(args[0], args[1], 53010.0));
+    assert!(super::full_planning_ready(args[0], args[1], 65000.0));
 }
