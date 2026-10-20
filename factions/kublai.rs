@@ -105,11 +105,10 @@ fn mods(me: View, kind: &str) -> Vec<&'static str> {
     out
 }
 
-// Room for more units: up to the allowance, then past it while their upkeep stays under 55% of income (common::room):
-// the horde is the other half of the Khan's game.
+// Room for more units: up to the army allowance, then past it while their upkeep stays under 65% of income
+// (common::army_room): the horde is the other half of the Khan's game.
 fn army_room(me: View) -> f64 {
-    let u = me.get("units");
-    jmax(n(u.get("cap")) - n(u.get("total")) - n(u.get("queued")) - u.get("hiredOut").or(0.0), common::room(me, 0.55))
+    common::army_room(me, 0.65)
 }
 
 // Reserve fabrication CPU locally while constructing the spawn list. The engine processes spawns in order, so checking
@@ -237,11 +236,9 @@ fn cpu_policy(me: View, plan: &Value, type_calls: &Value) -> Value {
 }
 
 // One route search in think instead of one per unit type each second: the plan carries a field toward where the army
-// goes (the province to defend, else the attack), cut to the steps from our land and the free or allied land next to
-// it (where a unit stepping out stands), and path::to routes along it. None when path::home already leads there from
-// all our land; it can't from an exclave or land over the sea. The last plan's field to the same place serves for 10 s.
-// A search is budgeted at up to about 300 cycles a province, so it runs only when think can pay for that and still
-// have `after` cycles to finish; until then the last field to the same place serves, however old.
+// goes (the province to defend, else the attack), cut to our land and the land next to it, and path::to routes along
+// it. None when path::home already leads there. The last field to the same place serves for 10 s, or until think can
+// pay about 300 cycles a province and keep `after` to finish.
 fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     if to.is_nan() || to < 0.0 {
         return None;
@@ -317,7 +314,7 @@ fn think(world: View, me: View) -> Value {
 fn emergency_recovery_policy(me: View) -> Value {
     obj! { "compute" => obj! { "cpu" => obj! {
         "limits" => obj! {
-            "think" => 24000, "control" => 0.5, "upkeep" => 0.65,
+            "think" => common::short_think(me), "control" => 0.5, "upkeep" => 0.65,
             "research" => 0, "influence" => 0, "fabrication" => 0, "visuals" => 0,
             "reflex" => 0.15, "duel" => 0.08, "challenge" => 0.02,
             "drive" => 0.08, "armor" => 0.05, "weapon" => 0.08, "abilities" => 0, "cloak" => 0, "gate" => 0
@@ -466,6 +463,7 @@ fn strategy(world: View, me: View) -> Value {
         "slots" => army_room(me),
         "priceLevel" => common::price_level(me),
     };
+    common::doctrine(&mut plan,world,me);
     share_phase(&mut orders, &plan, world, me, cycles_left());
 
     let count = |k: &str| bt.get(k).or(0.0);
@@ -473,11 +471,9 @@ fn strategy(world: View, me: View) -> Value {
     let (sentries, guns, ghosts, repairers) = (count("sentry"), count("gun"), count("ghost"), count("repairer"));
     let total = me.get("units").get("total").or(0.0);
     let spawning = |o: &Value| o.get("spawn").len();
-    // Maintain a small mining base first, no bigger than what our mines can use (common::miner_room: past that a miner
-    // stands idle); then rotate combat specialties instead of massing one dominant body. Three spawns is also the
-    // engine's normal cap.
-    // (the horde: three in ten units mine, the rest ride; more skirmishers and lancers to each screen than the founders
-    // field, so a mustered army reaches a capital's siege odds)
+    // A small mining base first, no bigger than our mines can use (common::miner_room), then rotate combat
+    // specialties. The horde: three in ten mine, the rest ride, with more skirmishers and lancers to each screen than
+    // the founders field, so a mustered army reaches a capital's siege odds.
     if miners < jmax(6.0, (total * 0.3).floor()) && miners < common::miner_room(me, &plan) {
         spawn(&mut orders, "miner", MINER, vec![]);
     }
@@ -570,7 +566,8 @@ fn strategy(world: View, me: View) -> Value {
 // The court waits for a complete planning allowance while its nearby army and mines keep working.
 fn local_strategy(world:View,me:View)->Value {
     let previous=mem::get(me.get("ramCapital"),0);
-    let plan=common::local_plan(world,me,&previous,12000.0);
+    let mut plan=common::local_plan(world,me,&previous,12000.0);
+    common::doctrine(&mut plan,world,me);
     let cpu=rts_cpu(me);
     let types=common::calls(world,&TYPES,cpu.get("income").num_or(0.0),
         cpu.path("available.control").num_or(f64::INFINITY)*0.8,me.path("units.byType"));
@@ -1009,12 +1006,10 @@ fn campaign_for(world: View, me: View, c: &Census, court: &mut Court, now: f64) 
     false
 }
 
-// Courting a partner: the faction a pact serves us best with is the one pressing our border (its units in our land,
-// our provinces next to its), then the strongest, and one whose land rings the campaign's target (the ring the court
-// closes around it); one that broke faith is shunned, and a runaway leader is courted only while its army stands in
-// our land. When one faction runs away with the world and two others are worth having, the Khan brokers a pact of
-// three (the Pax Mongolica). common::court spaces the asks (the game takes one proposal to the same faction every
-// 120 s), and a proposal gets 30 s for an answer before another court is asked.
+// Courting a partner: the faction pressing our border most (its units in our land, our provinces next to its), then
+// the strongest, and one whose land rings the campaign's target; one that broke faith is shunned, and a runaway
+// leader is courted only while its army stands in our land. Against a runaway, with two others worth having, the Khan
+// brokers a pact of three (the Pax Mongolica). common::court spaces the asks; a proposal gets 30 s for an answer.
 fn woo(orders: &mut Value, world: View, me: View, c: &Census, court: &mut Court, now: f64) {
     if now - court.num("wooedAt", -1e9) < 30.0 {
         return;
@@ -1295,10 +1290,8 @@ fn envoys_trade(orders: &mut Value, world: View, me: View, c: &Census, court: &m
     }
 }
 
-// A border province bought for its price (common::price, as the seller's program reckons it: never a capital, never
-// from a faction left with fewer than six provinces, never while we lead the world), the cheapest first, when the purse
-// holds it with 300◆ to spare and it's under 60% of the purse. The bid carries 3% over the price, since the seller's
-// share moves between our bid and its answer.
+// A border province bought for its price (common::price as the seller reckons it), the cheapest first, when the purse
+// holds it with 300◆ to spare and it's under 60% of the purse. The bid is 3% over, since the seller's share moves.
 fn buy_land(orders: &mut Value, world: View, me: View, purse: &mut f64) -> bool {
     let me_id = n(me.get("id"));
     if realm::leader(world).is_some_and(|l| n(l.get("id")) == me_id) {
@@ -1417,7 +1410,7 @@ fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
 
 // Defend with a fight (those the plan sends: common::defends); attack with a capture, since free land and rivals' towns
 // fall only to units capturing them.
-fn war_order(u: View, world: View, me: View) -> Option<Value> {
+fn war_order(u: View, world: View, me: View, slot: Option<Point>) -> Option<Value> {
     if common::received_ship(u,world,me) { return None; }
     let p = plan::of(me, u);
     let defend = common::defends(&p, u);
@@ -1441,7 +1434,13 @@ fn war_order(u: View, world: View, me: View) -> Option<Value> {
             return o;
         }
     }
-    let mut o = carry(orders::to(u, if defending { "fight" } else { "capture" }, target, world, me, ()), u, &p, me);
+    // a slot in the horde's crescent once it stands in the land it attacks (assault_slots)
+    let verb = if defending { "fight" } else { "capture" };
+    let routed = match slot.filter(|_| !defending && n(u.get("at")) == target) {
+        Some(at) => orders::to(u, verb, target, world, me, at),
+        None => orders::to(u, verb, target, world, me, ()),
+    };
+    let mut o = carry(routed, u, &p, me);
     if let Some(o) = &mut o {
         o.set("alert", if is_str(u.get("type"), "sentry") { 8 } else { 7 });
     }
@@ -1506,10 +1505,8 @@ impl ControlBudget {
     }
 }
 
-// The war units' turn, from a rotating start so each gets its turn when cycles run short. A call with room for a route
-// search and the orders after it takes the units abroad first: one of them may need the search (path::to), which
-// serves every unit sent the same way. A call handed less than one order's worth (the control lane ran short after
-// think) keeps its standing orders.
+// The war units' turn, from a rotating start. A call with room for a route search takes the units abroad first (one
+// search, path::to, serves every unit sent the same way); a call short of one order's worth keeps standing orders.
 fn march(units: View, world: View, me: View) {
     const CONTROL_RESERVE: f64 = 600.0;
     if me.get("rts").truthy() && cycles_left() < CONTROL_RESERVE {
@@ -1528,15 +1525,122 @@ fn march(units: View, world: View, me: View) {
     // the units abroad go to the front, the last one met first
     queue.reverse();
     queue.extend(home);
+    let mut slots: Option<Vec<(f64, Point)>> = None;
     let mut budget = ControlBudget::new(me);
     for u in queue {
         if !budget.admits(u, me) { break; }
+        // the crescent, once the call has room for it
+        let slots = slots.get_or_insert_with(|| if cycles_left() > budget.next + 2500.0 { crescent(units, world, me, u) } else { Vec::new() });
         let began = cycles_left();
-        if let Some(o) = war_order(u, world, me) {
+        let slot = slots.iter().find(|s| s.0 == n(u.get("id"))).map(|s| s.1);
+        if let Some(o) = war_order(u, world, me, slot) {
             if !ControlBudget::submit(o) { break; }
         }
         budget.finish(began);
     }
+}
+
+// The crescent in the land they attack: screens in front, skirmishers and sentries behind, repairers last, runners on
+// the wings.
+fn crescent(units: View, world: View, me: View, u: View) -> Vec<(f64, Point)> {
+    let rank = match u.get("type").str() {
+        "skirm" | "sentry" => 1,
+        "repairer" => 2,
+        "runner" => FLANK,
+        _ => 0,
+    };
+    let all: Vec<View> = units.iter().collect();
+    assault_slots(&all, world, &plan::of(me, u), rank)
+}
+// Cells between neighbours and between ranks; the flank squad's rank; cells short of the town while the foe holds.
+const SLOT_GAP: f64 = 0.7;
+const RANK_GAP: f64 = 1.0;
+const FLANK: usize = 9;
+const FORM_STANDOFF: f64 = 2.5;
+
+// The i-th of `count` slots in `rank` of a crescent centred on `anchor`, facing `facing`, `front` cells wide.
+fn slot(anchor: (f64, f64), facing: (f64, f64), rank: usize, i: usize, count: usize, front: f64) -> Point {
+    let (fx, fy) = facing;
+    let (sx, sy) = (-fy, fx);
+    let (u, v) = if rank == FLANK {
+        // two wings, three abreast
+        let (side, k) = (if i % 2 == 0 { 1.0 } else { -1.0 }, (i / 2) as f64);
+        (side * (front / 2.0 + 1.2 + (k % 3.0) * SLOT_GAP), 1.0 - (k / 3.0).floor() * SLOT_GAP)
+    } else {
+        let lateral = (i as f64 - (count as f64 - 1.0) / 2.0) * SLOT_GAP;
+        (lateral, -(rank as f64) * RANK_GAP + lateral * lateral / 8.0)
+    };
+    let (mut x, mut y) = (anchor.0 + sx * u + fx * v, anchor.1 + sy * u + fy * v);
+    let r = x.hypot(y);
+    if r > 7.5 { x *= 7.5 / r; y *= 7.5 / r; } // stay on the province's map
+    Point::new((x * 10.0).round() / 10.0, (y * 10.0).round() / 10.0)
+}
+
+// (id, slot) for units in the land `pl` attacks: FORM_STANDOFF short of the town until yours outnumber 1.3 to 1.
+fn assault_slots(units: &[View], world: View, pl: &Value, rank: usize) -> Vec<(f64, Point)> {
+    let attack = pl.get("attack").num_or(pl.get("target").num_or(-1.0));
+    let stage = pl.get("stage").num_or(-1.0);
+    if attack < 0.0 || stage < 0.0 || stage == attack { return Vec::new(); }
+    let mut here: Vec<View> = units.iter().copied()
+        .filter(|u| u.get("at").num() == attack && u.get("to").num_or(-1.0) < 0.0 && !u.get("air").truthy() && !u.path("rts.sea.ship").truthy())
+        .collect();
+    if here.is_empty() { return Vec::new(); }
+    let now = world.get("seconds").num_or(0.0);
+    let (ours, theirs) = common::front_strength(pl.get("front"), attack, stage, now)
+        .or_else(|| common::front_strength(&mem::get(here[0].get("ramUnit"), common::FRONT_PAGE), attack, stage, now))
+        .map_or((0.0, 0.0), |(o, t, _)| (o, t));
+    let standoff = if theirs > 0.0 && ours < theirs * 1.3 { FORM_STANDOFF } else { 0.5 };
+    let t = realm::toward(realm::index(world).get(attack), stage, 1.0);
+    let l = t.x.hypot(t.y);
+    if l.is_nan() || l <= 0.01 { return Vec::new(); }
+    let (x, y) = (t.x / l, t.y / l);
+    here.sort_by(|a, b| a.get("id").num().partial_cmp(&b.get("id").num()).unwrap_or(std::cmp::Ordering::Equal));
+    let count = here.len();
+    let front = (ours.max(count as f64) / 2.0).ceil().max(3.0) * SLOT_GAP; // about half the army abreast
+    here.iter().enumerate().map(|(i, u)| (u.get("id").num(), slot((x * standoff, y * standoff), (-x, -y), rank, i, count, front))).collect()
+}
+
+// Each unit's target, so a reflex call gangs up on the weakest rivals, at most `cap` on one; standing targets first.
+fn focus_fire(units: View, near: View, cap: usize) -> Vec<(f64, Option<View>)> {
+    let mut cands: Vec<(f64, f64, Vec<View>)> = Vec::with_capacity(units.len()); // (id, standing target, in reach)
+    let mut rivals: Vec<(f64, f64, usize, f64)> = Vec::new(); // (id, can hit it, on it, hp share)
+    for u in units.iter() {
+        let id = u.get("id").num();
+        let list: Vec<View> = near.key(id).iter().filter(|t| reflex::can_hit(u, *t)).collect();
+        for t in &list {
+            let tid = t.get("id").num();
+            match rivals.iter_mut().find(|r| r.0 == tid) {
+                Some(r) => r.1 += 1.0,
+                None => rivals.push((tid, 1.0, 0, t.get("hp").num_or(1.0) / t.get("hpMax").num_or(1.0).max(0.1))),
+            }
+        }
+        cands.push((id, u.get("hit").num_or(-1.0), list));
+    }
+    let score = |r: &(f64, f64, usize, f64)| r.3 - 0.04 * r.1;
+    let mut out: Vec<(f64, Option<View>)> = cands.iter().map(|c| (c.0, None)).collect();
+    for pass in 0..2 {
+        for (n, (_, hit, list)) in cands.iter().enumerate() {
+            if out[n].1.is_some() { continue; }
+            let pick = if pass == 0 {
+                list.iter().copied().find(|t| t.get("id").num() == *hit && rivals.iter().any(|r| r.0 == *hit && r.2 < cap))
+            } else {
+                let open = |t: &View| rivals.iter().find(|r| r.0 == t.get("id").num()).map(|r| (r.2 < cap, score(r)));
+                list.iter().copied().filter_map(|t| open(&t).map(|(room, s)| (t, room, s)))
+                    .min_by(|a, b| b.1.cmp(&a.1).then(a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal)))
+                    .map(|(t, _, _)| t)
+            };
+            if let Some(t) = pick {
+                let tid = t.get("id").num();
+                if let Some(r) = rivals.iter_mut().find(|r| r.0 == tid) { r.2 += 1; }
+                out[n].1 = Some(t);
+            }
+        }
+    }
+    out
+}
+
+fn rest_reflex(o: &mut Value, secs: f64) {
+    if matches!(o.get("hit"), Value::Num(_)) && !o.get("step").truthy() && !o.get("ability").truthy() { o.set("wake", secs); }
 }
 
 fn screen(units: View, world: View, me: View) {
@@ -1821,6 +1925,8 @@ fn reflex(units: View, near: View) -> Vec<Value> {
     } else {
         0.0
     };
+    // squad focus fire: the ground units gang up on few rivals, at most four on one (focus_fire)
+    let focus = if len > 1 && cycles_left() > 400.0 * len as f64 { focus_fire(units, near, 4) } else { Vec::new() };
     // Keep 3,200 cycles for a first unit turn, then twice the cost of the heaviest turn so far.
     let mut turn_cost = 3200.0_f64;
     for i in 0..len {
@@ -1828,7 +1934,8 @@ fn reflex(units: View, near: View) -> Vec<Value> {
             break;
         }
         let began = cycles_left();
-        let u = units.at(((start + i as f64) % len as f64) as usize);
+        let at = ((start + i as f64) % len as f64) as usize;
+        let u = units.at(at);
         let ns = near.key(n(u.get("id")));
         if !ns.truthy() {
             continue;
@@ -1862,6 +1969,11 @@ fn reflex(units: View, near: View) -> Vec<Value> {
             if s < score {
                 score = s;
                 best = Some(e);
+            }
+        }
+        if !flier {
+            if let Some(t) = focus.get(at).and_then(|f| f.1) {
+                best = Some(t);
             }
         }
         best=common::windup_target(u,ns,best);
@@ -1926,8 +2038,18 @@ fn reflex(units: View, near: View) -> Vec<Value> {
             }
         }
         common::steer_ground(u,ns,&mut out);
+        // a unit that only keeps striking sleeps 0.8 s; one with nothing in reach looks again in 0.6 s (the game
+        // wakes it sooner when its target goes or a shell is coming, and one with no target when it's hit)
+        rest_reflex(&mut out, 0.8);
+        // a rider closing on a rival still 2.5 cells off keeps walking 0.6 s before it looks again
+        if !out.get("wake").truthy() && n(u.get("range")) == 0.0 && hazard.is_none() && melee.is_none() && !out.get("ability").truthy()
+            && ns.iter().find(|e| e.get("rival").truthy() && !e.get("air").truthy()).is_some_and(|e| n(e.get("d")) > 2.5) {
+            out.set("wake", 0.6);
+        }
         if best.is_some() || out.get("step").truthy() || out.get("ability").truthy() {
             order(out);
+        } else if hazard.is_none() && melee.is_none() {
+            order(obj! { "id" => u.get("id"), "wake" => 0.6 });
         }
         turn_cost = turn_cost.max(2.0 * (began - cycles_left()));
     }

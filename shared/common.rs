@@ -291,10 +291,13 @@ fn ram(orders: &mut Value, ops: Vec<Value>) {
     }
 }
 
-// Release empty sources and land approaches stranded outside transfer range by town crowding.
-fn cargo_working(u: View) -> bool {
+// Release empty sources and land approaches stranded outside transfer range by town crowding. With [`fixes`], a load
+// waiting at a full depot other than the capital's town is free to go elsewhere.
+fn cargo_working(u: View, me: View) -> bool {
     let job=u.path("rts.cargo.job");
     if !job.truthy(){return false;}
+    let e=job.path("operation.unload");
+    if job.get("status").str()=="depot full"&&fixes(me)&&(e.get("p").num()!=me.get("capital").num()||e.get("dock").truthy()){return false;}
     if job.get("status").str()=="depot empty" || (job.get("status").str()=="approaching"
         && !u.path("rts.sea.ship").truthy() && u.get("doing").str()=="idle"
         && u.get("to").num_or(-1.0)<0.0 && u.get("way").is_empty()) {
@@ -311,7 +314,7 @@ fn cargo_working(u: View) -> bool {
 /// Miners unload locally. Haulers connect remote town depots to the capital or a dock.
 pub const LOGISTICS_MINER_FULL_RUNWAY: f64 = 5000.0;
 pub const LOGISTICS_MINER_FALLBACK_RUNWAY: f64 = 2600.0;
-pub const LOGISTICS_MINER_REMOTE_FALLBACK_RUNWAY: f64 = 3600.0;
+pub const LOGISTICS_MINER_REMOTE_FALLBACK_RUNWAY: f64 = 3400.0;
 
 fn miner_gather(u: View, world: View, me: View) -> Option<Value> {
     let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
@@ -339,18 +342,16 @@ fn logistics_miners(units: View, world: View, me: View) {
         use logistics::{Endpoint as E,cargo,transfer};
         let cap=me.get("capital").num();
         let mut transferred=false;
-        if let Some(u)=units.iter().take_while(|_|cycles_left()>LOGISTICS_MINER_FALLBACK_RUNWAY).find(|u|!u.path("rts.sea.ship").truthy()&&u.get("doing").str()!="gather"&&cargo(*u)>0.0&&!cargo_working(*u)) {
+        if let Some(u)=units.iter().take_while(|_|cycles_left()>LOGISTICS_MINER_FALLBACK_RUNWAY).find(|u|!u.path("rts.sea.ship").truthy()&&u.get("doing").str()!="gather"&&cargo(*u)>0.0&&!cargo_working(*u,me)) {
             let at=u.get("at").num();let dest=if logistics::land_route(world,me,at,cap).is_some(){E::town(cap)}else{E::town(at)};
             if let Some(o)=transfer(u,world,me,dest,false,None){order(o);transferred=true;}
         }
-        // An empty recovery miner still needs one local gather assignment. Do this only after
-        // the cargo retry finds no transfer, and never replace an established cargo job. One
-        // bounded plan-routed attempt can fill a remote slot when there is no local work; the SDK
-        // declines it if its route cannot leave a safe order reserve.
+        // After a cargo retry finds no transfer, an empty miner without a cargo job gets one local gather, or one
+        // plan-routed remote one the SDK declines if its route can't leave a safe order reserve.
         if !transferred && cycles_left()>LOGISTICS_MINER_FALLBACK_RUNWAY {
             let index=realm::index(world);let ours=me.get("id").num();let mut gathered=false;let mut remote=None;let mut closed=None;
             if let Some(u)=units.iter().take_while(|_|cycles_left()>1600.0).find(|u| {
-                if u.get("doing").str()=="gather" || u.path("rts.sea.ship").truthy() || cargo(*u)>0.0 || cargo_working(*u) {return false;}
+                if u.get("doing").str()=="gather" || u.path("rts.sea.ship").truthy() || cargo(*u)>0.0 || cargo_working(*u,me) {return false;}
                 if remote.is_none(){remote=Some(*u);}
                 let at=u.get("at").num();if closed==Some(at){return false;}
                 let p=index.get(at);
@@ -383,7 +384,7 @@ fn logistics_miners(units: View, world: View, me: View) {
         let doing=u.get("doing").str();
         if doing=="gather"&&!u.path("rts.cargo.job").truthy(){continue;}
         let n=cargo(u);let at=u.get("at").num();
-        if cargo_working(u) {continue;}
+        if cargo_working(u,me) {continue;}
         if n>0.0 && doing!="gather" {
             let dest=if logistics::land_route(world,me,at,cap).is_some(){E::town(cap)}else{E::town(at)};
             if let Some(o)=transfer(u,world,me,dest,false,None){order(o);}continue;
@@ -424,13 +425,13 @@ pub fn haul_cargo(units:View,world:View,me:View){
             // @end
             continue;
         }
-        if cargo_working(u){continue;}
+        if cargo_working(u,me){continue;}
         let at=u.get("at").num();
         if cargo(u)>0.0 {
             let saved=mem::get(u.get("ramUnit"),92);let mut dest=E{p:saved.get("p").num_or(cap),dock:saved.get("dock").truthy()};
-            if realm::index(world).get(dest.p).get("owner").num()!=me.get("id").num() || logistics::land_route(world,me,at,dest.p).is_none(){
+            if realm::index(world).get(dest.p).get("owner").num()!=me.get("id").num() || logistics::land_route(world,me,at,dest.p).is_none() || full(me,dest){
                 dest=E::town(cap);
-                if logistics::land_route(world,me,at,cap).is_none(){if let Some(d)=me.path("rts.logistics.depots").iter().find(|d|!d.get("dock").truthy()&&logistics::land_route(world,me,at,d.get("p").num()).is_some()){dest=E::town(d.get("p").num());}}
+                if logistics::land_route(world,me,at,cap).is_none(){if let Some(d)=me.path("rts.logistics.depots").iter().find(|d|!d.get("dock").truthy()&&!full(me,E::town(d.get("p").num()))&&logistics::land_route(world,me,at,d.get("p").num()).is_some()){dest=E::town(d.get("p").num());}}
             }
             if let Some(o)=transfer(u,world,me,dest,false,None){order(o);}continue;
         }
@@ -442,7 +443,7 @@ pub fn haul_cargo(units:View,world:View,me:View){
             let land=logistics::land_route(world,me,e.p,cap);
             let dest=if e.dock {
                 if land.is_none(){continue;}E::town(cap)
-            }else if me.path("techs.seaTraversal").truthy() && home.is_some() && Some(e.p)!=home && land.as_ref().is_none_or(|r|r.len()>=2) && world.path("logistics.docks").iter().any(|d|d.get("p").num()==e.p){E::dock(e.p)}
+            }else if me.path("techs.seaTraversal").truthy() && home.is_some() && Some(e.p)!=home && land.as_ref().is_none_or(|r|r.len()>=2) && world.path("logistics.docks").iter().any(|d|d.get("p").num()==e.p) && !full(me,E::dock(e.p)){E::dock(e.p)}
             else if land.is_some(){E::town(cap)}else{continue;};
             if let Some(route)=logistics::land_route(world,me,at,e.p){
                 // Value one trip, not the whole backlog. Otherwise a full remote mine can starve
@@ -518,7 +519,7 @@ fn freight_for(units:&[View],world:View,me:View) {
             .find(|d| d.get("p").num() == endpoint.get("p").num())
             .is_some_and(|d| sea::route(world, water, d.get("water").num()).is_some());
         if !reachable { order(logistics::cancel(u)); }
-        else if cargo_working(u) { continue; }
+        else if cargo_working(u,me) { continue; }
         let Some(home) = freight_home(world, me, water) else { continue };
         if cargo(u) > 0.0 {
             if let Some(o) = transfer(u, world, me, E::dock(home), false, None) { order(o); }
@@ -720,7 +721,7 @@ fn maintain_freighters(orders: &mut Value, world: View, me: View) {
 /// Return recovered cargo to the home dock, or approach a wreck visible to this faction.
 pub fn recover_ship(u:View,world:View,me:View)->bool{
     if !world.get("logistics").truthy(){return false;}
-    if cargo_working(u){return true;}
+    if cargo_working(u,me){return true;}
     if logistics::cargo(u)>0.0 {
         if let Some(home)=receiving_dock(world,me){if let Some(o)=logistics::transfer(u,world,me,logistics::Endpoint::dock(home),false,None){order(o);}}
         return true;
@@ -780,6 +781,21 @@ fn delivery_recovery(world:View,me:View)->Option<Value> {
     Some(out)
 }
 
+/// `me.lab`'s switch `k`, on unless a world turns it off.
+fn lab_on(me:View,k:&str)->bool{let v=me.get("lab").get(k);v.is_nullish()||v.truthy()}
+/// The fixes for three house bugs, unless a world turns them off (`me.lab.fixes`).
+pub fn fixes(me:View)->bool{lab_on(me,"fixes")}
+/// How the army fights: `me.lab.doctrine`, "seek" unless a world sets "mass" or "off".
+fn way(me:View)->&'static str{match me.path("lab.doctrine").str(){""=>"seek",d=>d}}
+/// Whether the SDK's `war` doctrine decides when the army goes ("seek" or "mass").
+pub fn war_on(me:View)->bool{matches!(way(me),"mass"|"seek")}
+pub fn doctrine(pl:&mut Value,world:View,me:View){if war_on(me){war::doctrine(pl,world,me,way(me)=="seek")}}
+fn march(o:&mut Value,w:View,me:View){if war_on(me)&&lab_on(me,"march"){war::drive_limit(o,w,me)}}
+/// Think's limit after a short slice: 24,000 cycles, or with [`fixes`] half again its recent peak when that's more.
+pub fn short_think(me:View)->f64{if fixes(me){(me.path("compute.thinkPeak").num_or(0.0)*1.5+2000.0).max(24000.0)}else{24000.0}}
+// With [`fixes`], a depot at 98% of its capacity takes no more cargo.
+fn full(me:View,e:logistics::Endpoint)->bool{fixes(me)&&me.path("rts.logistics.depots").iter().any(|d|d.get("p").num()==e.p&&d.get("dock").truthy()==e.dock&&d.get("cycles").num_or(0.0)>=d.get("capacity").num_or(f64::INFINITY)*0.98)}
+
 // During a severe cash shortage, remote upkeep can consume every refill before a capital crew can move.
 // Fund the existing capital jobs until receipts rebuild the bank, then let normal governance resume.
 pub fn capital_rescue_wait(world:View,me:View)->bool{
@@ -819,7 +835,7 @@ fn capital_delivery_rescue(world:View,me:View)->Option<Value>{
     if !matches!(limits,Value::Obj(_)){limits=Value::obj();}
     for lane in ["research","influence","fabrication","visuals","duel","challenge","armor","weapon","abilities","cloak","gate"]{limits.set(lane,0);}
     // Published quotes round some prices; retain a small margin for the selected crew's full bill.
-    limits.set("upkeep",(bill*1.02).ceil()+32.0);limits.set("think",24000);limits.set("control",22000);limits.set("drive",8000);limits.set("reflex",0);
+    limits.set("upkeep",(bill*1.02).ceil()+32.0);limits.set("think",short_think(me));limits.set("control",22000);limits.set("drive",8000);limits.set("reflex",0);
     Some(obj!{"compute"=>obj!{"cpu"=>obj!{"limits"=>limits,"reserve"=>obj!{},
         "upkeepOrder"=>vec!["miner","hauler","freighter"],"upkeepUnits"=>ids},
         "types"=>obj!{"miner"=>obj!{"cycles"=>if miners{6000}else{0},"every"=>2},
@@ -926,13 +942,14 @@ pub fn local_plan(world:View,me:View,previous:&Value,after:f64)->Value {
     let offset=(world.get("seconds").num_or(0.0)/3.0) as usize;
     let (mut attack,mut stage,mut need,mut best)=(-1.0,capital,0.0,f64::NEG_INFINITY);
     let (mut defend,mut threat,mut room,mut recruit)=(-1.0,0.0,0.0,2.0_f64);
-    let mut mines=Vec::new();let mut seen=Vec::new();
-    for i in 0..count.min(12)+3 {
-        if cycles_left()<after+2500.0 {break;}
+    let mut mines=Vec::new();let mut seen=Vec::new();let mut own=0;
+    // With [`fixes`] the window runs on until it holds 12 of your provinces: in a big world 12 in a row may hold none.
+    for i in 0..if fixes(me){count+3}else{count.min(12)+3} {
+        if cycles_left()<after+2500.0||own>=12 {break;}
         let p=match i {0=>by.get(capital),1=>by.get(old_stage),2=>by.get(old_attack),_=>provinces.at((offset+i-3)%count)};
         let id=p.get("id").num_or(-1.0);
         if id<0.0||p.get("owner").num_or(-1.0)!=ours||seen.contains(&id){continue;}
-        seen.push(id);
+        seen.push(id);if i>2{own+=1;}
         let enemy=rivals(p);
         if (defend!=capital&&enemy>threat)||(id==capital&&enemy>0.0){defend=id;threat=enemy;}
         for (k,value) in p.get("mines").iter().enumerate().take(8) {
@@ -988,10 +1005,9 @@ pub fn local_plan(world:View,me:View,previous:&Value,after:f64)->Value {
 /// into the fog, so it ranks below any land in sight but a well-held capital.
 pub const UNSEEN: f64 = -4.0;
 
-/// A target's worth: cores first; free land is cheap to take; town defenders and a capital cost; restive land, rebels
-/// and a runaway leader's land invite attack; land deep in another faction's faith costs its zeal ÷ 15, since it
-/// keeps winning its founder favour and revolts back after you take it. Land you've never seen scores [`UNSEEN`],
-/// and a figure you can't read counts as none, so the score is always a number.
+/// A target's worth: cores first; free land is cheap; town defenders and a capital cost; restive land, rebels and a
+/// runaway leader's land invite attack; land deep in another faith costs its zeal ÷ 15, since it revolts back. Land
+/// never seen scores [`UNSEEN`]; a figure you can't read counts as none.
 pub fn score(world: View, me: View, q: View) -> f64 {
     if !q.get("owner").is_num() {
         return UNSEEN;
@@ -1049,11 +1065,9 @@ pub fn rally(world: View, me: View, list: Vec<View>) -> Vec<View> {
     }
 }
 
-/// Whether your army can hold on to province `q` once it takes it: it's on your land border or over a mountain
-/// pass, or over the sea or through the air where a ship of yours keeps station on the crossing (`sea::station`).
-/// RAM, and with it the plan, crosses to another landmass only near a ship of yours, so an army that takes land over
-/// the water with no ship there stands idle on it. `ships`: whether you field ships at all (the default program and
-/// the house programs don't); without, it looks for none.
+/// Whether your army can hold province `q` once it takes it: on your land border or over a mountain pass, or over
+/// sea or air where a ship of yours keeps station (`sea::station`): RAM and the plan cross water only near a ship.
+/// `ships`: whether you field ships at all; without, it looks for none.
 pub fn can_hold(world: View, me: View, ships: bool) -> impl Fn(View) -> bool {
     let me_id = me.get("id").num();
     let by_id = realm::index(world);
@@ -1094,10 +1108,9 @@ thread_local! {
     static PARTNER: RefCell<Option<(View, Rc<Vec<f64>>)>> = const { RefCell::new(None) };
 }
 
-/// Land a pact partner holds though you can't see who holds it: the provinces a "your pact partner's" refusal
-/// named (`me.refused` holds the last second's), and those your last plan kept in its `partner` list, while they
-/// stay out of sight (out of sight, the owner you have is the one you saw last). An order to capture or raid there is refused every second you send it, so leave
-/// them off your targets ([`frontier`]); [`survey`] keeps the list in the plan so it outlasts the refusal.
+/// Land a pact partner holds though you can't see who holds it: provinces a "your pact partner's" refusal named
+/// (`me.refused`) and those in your last plan's `partner` list, while out of sight. Orders to capture or raid there
+/// are refused, so leave them off your targets ([`frontier`]).
 pub fn partner_land(world: View, me: View) -> Rc<Vec<f64>> {
     if let Some(x) = PARTNER.with(|c| c.borrow().as_ref().filter(|(w, _)| w.same(&world)).map(|(_, v)| v.clone())) {
         return x;
@@ -1209,9 +1222,8 @@ pub fn fighters(me: View) -> f64 {
     (n(u.get("total"))-workers-u.path("byType.hauler").num_or(0.0)-u.path("byType.freighter").num_or(0.0)-u.path("doing.study").num_or(0.0)).max(0.0)
 }
 
-/// Whether a siege of `q` is hopeless: its garrison needs more capturers ([`SIEGE_ODDS`] each) than you have fighters
-/// ([`fighters`]), so your units there would die without taking it. A siege that came to this, its defenders
-/// reinforced or your army worn down, is given up: the army goes elsewhere until it's big enough.
+/// Whether a siege of `q` is hopeless: its garrison needs more capturers ([`SIEGE_ODDS`] each) than you have
+/// [`fighters`]. Such a siege is given up until the army is big enough.
 pub fn hopeless(me: View, q: View) -> bool {
     town_defenders(q) * SIEGE_ODDS > fighters(me)
 }
@@ -1222,10 +1234,9 @@ pub fn pick(targets: &[View], last: f64) -> Option<View> {
     targets.iter().copied().find(|q| last >= 0.0 && q.get("id").num() == last).or_else(|| targets.first().copied().filter(View::truthy))
 }
 
-/// How many ground combat units stand at province `stage` or in `attack`.
-/// Workers, scouts, ships and aircraft do not count. Units of two combat types muster together. 0 while fewer than `need` of your units of
-/// any type stand there (no pass over the units then). think only: put it in the plan as `ready`, and [`muster`]
-/// sends the plan's units in once it reaches `need`.
+/// How many ground combat units stand at province `stage` or in `attack`, not workers, scouts, ships or aircraft; two
+/// combat types muster together. 0 while fewer than `need` of yours stand there. think only: put it in the plan as
+/// `ready`, and [`muster`] sends the plan's units in once it reaches `need`.
 pub fn ready(world: View, me: View, stage: f64, attack: f64, need: f64) -> f64 {
     let by_id = realm::index(world);
     let me_id = me.get("id").num();
@@ -1257,15 +1268,10 @@ pub fn ready(world: View, me: View, stage: f64, attack: f64, need: f64) -> f64 {
 }
 
 /// The plan most strategies start from: `{ mines, attack, stage, need, joint, defend, threat, home, fresh }`.
-/// mines: open slots (`realm::open_mines`); attack: the target (an ally's siege on your list comes first: you split
-/// its CPU); stage: where to muster (`realm::from`); need: how many to muster ([`muster_for`]); joint: the ally you join;
-/// defend/threat (and picket/guard): the invaded province, how many invaders, and who goes ([`defense`]); home: your
-/// capital; fresh: the second, rounded down to 15, so the plan changes and is written again (`plan::share` writes
-/// only a change) and your units can tell a plan that stands from land cut off from it (`plan::check`); partner:
-/// unseen land the game said a pact partner holds ([`partner_land`]), left off the targets. The last plan (in capital
-/// RAM) keeps the target sticky. Targets that need more than about 60% of your fighters wait while others are on
-/// the list. If none can be captured yet, a larger ground force may assault a visible rival first.
-/// `per_slot` is how deep to stack miners (2 is the usual).
+/// mines: open slots; attack: the target (an ally's siege first); stage: where to muster (`realm::from`); need:
+/// [`muster_for`]; joint: the ally you join; defend, threat, picket, guard: [`defense`]; fresh: the second rounded
+/// down to 15, so units tell it from land cut off; partner: [`partner_land`]. The last target is sticky. Targets
+/// needing over 60% of your fighters wait. `per_slot`: miners a slot (2 is the usual).
 pub fn survey(world: View, me: View, targets: &[View], per_slot: f64) -> Value {
     let last = mem::get(me.get("ramCapital"), 0).get("attack").num_or(-1.0);
     let me_id = me.get("id").num();
@@ -1344,13 +1350,9 @@ pub fn survey(world: View, me: View, targets: &[View], per_slot: f64) -> Value {
 /// The most units a plan names to guard a province ([`defense`]): a bigger threat calls everyone.
 pub const GUARD_MAX: f64 = 24.0;
 
-/// Sets the plan's defence against the invaders in your land (`realm::invaded`, which leaves out units there under a
-/// deal and puts your capital first): `threat`, how many there are, and who goes. Everyone defends (`defend`, the
-/// province) when it's your capital, or when two for each invader and one more would take most of your fighters (or
-/// more than [`GUARD_MAX`]). Otherwise those two for each and one more go, nearest first (those fighting there,
-/// those standing there, those next to it, then by distance): `picket` is the province and `guard` their ids (chosen
-/// again every 15 s: `guardAt`), and the rest of the army keeps to the plan. Units abroad carry the plan without its
-/// picket, so they keep on. [`defends`] reads it for a unit.
+/// Sets the plan's defence against invaders in your land (`realm::invaded`): `threat`, how many, and who goes.
+/// Everyone (`defend`) at your capital, or when two for each invader and one more is most of your fighters or over
+/// [`GUARD_MAX`]. Otherwise those nearest: `picket` the province, `guard` their ids (again every 15 s: `guardAt`).
 pub fn defense(world: View, me: View, plan: &mut Value) {
     let inv = realm::invaded(world, me);
     plan.set("threat", inv.n);
@@ -1463,7 +1465,7 @@ pub fn front_snapshot(plan: &mut Value, world: View, me: View) {
     if row.to_json().len() <= 62 { plan.set("front", row); }
 }
 
-const FRONT_PAGE: u32 = 93;
+pub const FRONT_PAGE: u32 = 93;
 
 /// Carry the SDK core plan and one page of combat totals. Page 93 belongs to this snapshot.
 pub fn carry(u: View, pl: &Rc<Value>, me: View) -> Option<Vec<Value>> {
@@ -1478,7 +1480,7 @@ pub fn carry(u: View, pl: &Rc<Value>, me: View) -> Option<Vec<Value>> {
     ops
 }
 
-fn front_strength(row: &Value, attack: f64, stage: f64, now: f64) -> Option<(f64, f64, f64)> {
+pub fn front_strength(row: &Value, attack: f64, stage: f64, now: f64) -> Option<(f64, f64, f64)> {
     if !matches!(row, Value::Arr(_)) || row.len() != 6 || row.at(0).num_or(-1.0) != attack || row.at(1).num_or(-1.0) != stage { return None; }
     let age = now - row.at(5).num_or(f64::NEG_INFINITY);
     let (ours, theirs, home) = (row.at(2).num(), row.at(3).num(), row.at(4).num());
@@ -1486,12 +1488,12 @@ fn front_strength(row: &Value, attack: f64, stage: f64, now: f64) -> Option<(f64
         && ours >= 0.0 && theirs >= 0.0 && home >= 0.0).then_some((ours, theirs, home))
 }
 
-/// The army's turn at the front, before a ground unit takes the plan's attack (or `target`): `Some(order)` overrides it (`None`
-/// inside: keep standing). Abroad in the target, a hurt unit outweighed [`FALL_BACK_ODDS`] to one falls back to the
-/// stage. At the stage, while yours in the target are outweighed that much and those at the stage with them fall
-/// short of [`PUSH_ODDS`] times the rivals there, it holds the stage: reinforcements gather into one wave instead of
-/// walking in one by one. `None` leaves the unit to the plan.
+/// The army's turn at the front, before a ground unit takes the plan's attack: `Some(order)` overrides it (`None`
+/// inside: stand). In the target, a hurt unit outweighed [`FALL_BACK_ODDS`] to one falls back to the stage. At the
+/// stage, while yours in the target are outweighed that much and with those at the stage fall short of [`PUSH_ODDS`]
+/// times the rivals, it holds, so reinforcements go in as one wave. `None` leaves the unit to the plan.
 pub fn front(u: View, world: View, me: View, pl: &Value) -> Option<Option<Value>> {
+    if war_on(me) {return war::front(u,world,me,pl);}
     let attack = pl.get("attack").num_or(pl.get("target").num_or(-1.0));
     let stage = pl.get("stage").num_or(-1.0);
     if attack < 0.0 || stage < 0.0 || stage == attack || u.path("build.wings").num_or(0.0) > 0.0 || u.path("rts.sea.ship").truthy() {
@@ -1530,10 +1532,9 @@ fn add(out: &mut Vec<Value>, u: View, o: Option<Value>, ops: Option<Vec<Value>>)
     out.push(x);
 }
 
-/// Each unit gathers at its plan's `stage` until `need` units are there (or the plan's `ready` says enough of every
-/// type stand there), then all go in on its `attack` with `verb`; once some are committed, the rest follow. The
-/// attack routes along the plan's field when it leads there (`path::along`). A target that has become a pact
-/// partner's land sends its units back to the stage. Units in your land carry the plan for when they leave it
+/// Each unit gathers at its plan's `stage` until `need` units are there (or the plan's `ready` says so), then all go
+/// in on its `attack` with `verb`, along the plan's field when it leads there (`path::along`); once some are in, the
+/// rest follow. A target now a pact partner's sends its units back to the stage. Units in your land carry the plan
 /// (`orders::carry`). `pls`: each unit's plan.
 pub fn muster(units: &[View], world: View, me: View, verb: &str, pls: &[Rc<Value>]) -> Vec<Value> {
     let attack_of = |pl: &Value| pl.get("attack").num_or(-1.0);
@@ -1725,10 +1726,9 @@ pub fn price_level(v: View) -> f64 {
     }
 }
 
-/// What the house's own buildings take from the upkeep lane each second, in cycles: a building's build cost
-/// (`buildCost`, before prices) at today's price level over `rts.structureCosts.maintenancePeriod` seconds, and a
-/// plant's energy ports (`energyCost`) over `plantMaintenancePeriod`, a site's in proportion to the work done on it.
-/// The lane pays them before any unit.
+/// What the house's buildings take from the upkeep lane each second, before any unit, in cycles: `buildCost` at
+/// today's price level over `rts.structureCosts.maintenancePeriod` seconds, and a plant's `energyCost` over
+/// `plantMaintenancePeriod`, a site's in proportion to its work done.
 pub fn building_upkeep(me: View) -> f64 {
     let id = me.get("id").num_or(-1.0);
     me.path("rts.structures").iter()
@@ -1786,22 +1786,52 @@ pub fn fabrication_room(me: View) -> Option<f64> {
 
 // ---- spawning ----
 
-/// How many more units your cycles can keep with upkeep within `share` of your income (0.4 is the usual), under your
-/// unit limit (units you hired out count toward it while they're away). Past your cap (CPU RTS) each unit's upkeep
-/// is multiplied by units ÷ cap, so from there the count grows with the square root of income. A unit's upkeep is
-/// last second's average, or `me.costs.upkeep`.
+/// Units the cap counts: in CPU RTS `me.units.army` (those not mining or carrying cargo), else all.
+pub fn army(me: View) -> f64 {
+    let u = me.get("units");
+    u.get("army").num_or(n(u.get("total")))
+}
+
+/// How many more units your income can keep with upkeep within `share` of it ([`spend_share`]), under your unit limit
+/// (hired-out units count). Past the cap each army unit's upkeep is multiplied by army ÷ cap.
 pub fn room(me: View, share: f64) -> f64 {
     let u = me.get("units");
     let total = n(u.get("total"));
+    let work = (total - army(me)).max(0.0);
+    let rate = u.get("upkeepRate").or(1.0);
     let upkeep = n(me.get("costs").get("upkeep"));
     let last = me.path("rts.cpu.last.upkeep");
-    let each = if last.truthy() && total != 0.0 { upkeep.max(unit_upkeep(me) / total / u.get("upkeepRate").or(1.0)) } else { upkeep };
-    let budget = n(me.get("compute").get("cycles")) * share;
-    let flat = (budget / each).floor();
+    let each = if last.truthy() && total != 0.0 { upkeep.max(unit_upkeep(me) / (work + (total - work) * rate)) } else { upkeep };
+    // CPU RTS: smoothed income, cargo included
+    let cpu = me.path("rts.cpu");
+    let income = [cpu.get("avg").num_or(0.0), cpu.get("income").num_or(0.0)].into_iter().find(|x| *x > 0.0).unwrap_or(n(me.get("compute").get("cycles")));
+    let budget = income * spend_share(me, share);
+    let free = budget / each - work;
     let cap = n(u.get("cap"));
     let max = u.get("max");
-    let keep = if !max.truthy() || flat <= cap { flat } else { (budget * cap / each).sqrt().floor() };
-    (if max.truthy() { n(max) } else { cap }).min(keep) - total - n(u.get("queued")) - u.get("hiredOut").or(0.0)
+    let keep = work + if !max.truthy() || free <= cap { free } else { (free * cap).sqrt() };
+    (if max.truthy() { n(max) } else { cap }).min(keep.floor()) - total - n(u.get("queued")) - u.get("hiredOut").or(0.0)
+}
+
+/// Upkeep's share of income: `share`. A world's `me.lab.spend` can let it rise to [`SPEND_FULL`] as the CPU RTS bank
+/// fills from 25% to 75% ("rise"), or do so only after a second that paid every drive, armor and weapon charge
+/// ("paid": no `me.rts.cpu.unpaid`).
+pub fn spend_share(me: View, share: f64) -> f64 {
+    let cpu = me.path("rts.cpu");
+    let capacity = cpu.get("capacity").num_or(0.0);
+    let spend = me.path("lab.spend").str();
+    if capacity <= 0.0 || !matches!(spend, "rise" | "paid") || (spend == "paid" && cpu.get("unpaid").truthy()) {
+        return share;
+    }
+    let full = cpu.get("bank").num_or(0.0) / capacity;
+    share + (SPEND_FULL - share).max(0.0) * ((full - 0.25) / 0.5).clamp(0.0, 1.0)
+}
+pub const SPEND_FULL: f64 = 0.7;
+
+/// Room for more fighters: the cap's allowance for the army, or more while [`room`] allows.
+pub fn army_room(me: View, share: f64) -> f64 {
+    let u = me.get("units");
+    (n(u.get("cap")) - army(me) - n(u.get("queued")) - u.get("hiredOut").or(0.0)).max(room(me, share))
 }
 
 /// How [`recruit`] spends: `reserve` ◆ to keep (0), `limits` the most of a type, `builds` the body each type is
@@ -1899,6 +1929,8 @@ fn insolvent_wait(world: View) -> f64 {
 const UPKEEP_LIMIT: f64 = 0.8;
 /// Seconds of army upkeep the bank should hold before research and influence spend at full rate.
 const UPKEEP_BUFFER: f64 = 60.0;
+/// Upkeep debt, in seconds of income, past which only workers spawn.
+const DEBT_SECS: f64 = 5.0;
 
 struct RunningCost {
     unit: View,
@@ -1909,13 +1941,15 @@ struct Economy {
     units: Vec<RunningCost>,
     count: f64,
     cap: f64,
+    work: f64,
     body: f64,
     art: f64,
     built:f64,
 }
 impl Economy {
     fn demand(&self, count: f64, body: f64, art: f64) -> f64 {
-        body * (count / self.cap).max(1.0) + art
+        let army = (count - self.work).max(0.0);
+        body * (self.work.min(count) + army * (army / self.cap).max(1.0)) / count.max(1.0) + art
     }
     fn total(&self) -> f64 {
         self.demand(self.count, self.body, self.art)
@@ -1944,17 +1978,16 @@ impl BodyPrices {
 fn body_upkeep(me: View, build: View, modules: f64) -> f64 { BodyPrices::new(me).body(build,modules) }
 
 fn economy(world: View, me: View, after:f64) -> Option<Economy> {
-    // The view prices each body, but does not map types to artwork. Use the dearest declared body as a
-    // conservative artwork allowance; observed upkeep also includes weapon art and flight burn. Divide by
-    // PAID units: dividing by the whole army during a brownout makes its idle units appear nearly free.
-    // A recruitment review may defer spawns, but must leave the completed plan and policy payable to return.
+    // Artwork isn't mapped to types: allow the dearest declared body's. Observed upkeep includes weapon art and
+    // flight burn; divide it by PAID units, or a brownout's idle units look free. A review may defer spawns only.
     let tail=after;
     if cycles_left()<tail+1200.0 {return None;}
     let prices=BodyPrices::new(me);
     let ours=me.get("id").num();
     let art = me.path("costs.draw").entries().map(|(_, v)| v.num_or(0.0)).fold(0.0, f64::max);
     let cap = me.path("units.cap").num_or(16.0).max(1.0);
-    let mut e = Economy { units: Vec::new(), count: 0.0, cap, body: 0.0, art: 0.0, built:0.0 };
+    let work = (me.path("units.total").num_or(0.0) - army(me)).max(0.0);
+    let mut e = Economy { units: Vec::new(), count: 0.0, cap, work, body: 0.0, art: 0.0, built:0.0 };
     for site in me.path("rts.structures").iter(){
         if cycles_left()<tail+1200.0{return None;}
         if site.get("owner").num_or(-1.0)==ours && site.get("state").str()!="ruin" && site.get("hp").num_or(0.0)>0.0{e.built+=upkeep_of(me,site);}
@@ -1970,8 +2003,7 @@ fn economy(world: View, me: View, after:f64) -> Option<Economy> {
     e.count = e.units.len() as f64;
     let paid = (me.path("units.total").num_or(0.0) - me.path("units.stalled").num_or(0.0)).max(1.0);
     let observed = (me.path("rts.cpu.last.upkeep").num_or(0.0)-e.built).max(0.0) / paid;
-    let rate = (e.units.len() as f64 / cap).max(1.0);
-    let mean = if e.units.is_empty() { 0.0 } else { e.body * rate / e.units.len() as f64 + art };
+    let mean = if e.units.is_empty() { 0.0 } else { (e.demand(e.count, e.body, 0.0)) / e.count + art };
     let extra = (observed - mean).max(0.0);
     for u in &mut e.units { u.art += extra; }
     e.art += extra * e.units.len() as f64;
@@ -1981,7 +2013,8 @@ fn economy(world: View, me: View, after:f64) -> Option<Economy> {
 fn recovery_economy(world: View, me: View) -> Economy {
     let cap = me.path("units.cap").num_or(16.0).max(1.0);
     let count = me.path("units.total").num_or(0.0);
-    let rate = (count / cap).max(1.0);
+    let work = (count - army(me)).max(0.0);
+    let rate = (work + (count - work) * ((count - work) / cap).max(1.0)) / count.max(1.0);
     let paid = (count - me.path("units.stalled").num_or(0.0)).max(1.0);
     let art = me.path("costs.draw").entries().map(|(_, v)| v.num_or(0.0)).fold(0.0, f64::max);
     // Use paid units' mean upkeep; reprice after retirement.
@@ -1993,7 +2026,7 @@ fn recovery_economy(world: View, me: View) -> Economy {
         .filter(|u| u.get("owner").num_or(-1.0) == me.get("id").num())
         .enumerate().filter(|(i, _)| (*i + count as usize - start) % (count as usize).max(1) < 96)
         .map(|(_, unit)| RunningCost { unit, body, art }).collect();
-    Economy { cap, count, body: body * count, art: art * count, units, built:0.0 }
+    Economy { cap, count, work, body: body * count, art: art * count, units, built:0.0 }
 }
 
 // A large house source can leave a brand-new classic faction too little fuel for its whole planner. Publish one
@@ -2029,12 +2062,13 @@ pub fn recovery_rent(out:&mut Value,me:View){
 pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
     if cycles_left()>800.0 && capital_rescue_wait(world,me){return obj!{};}
     if cycles_left()>7000.0 {
-        if let Some(mut out)=capital_delivery_rescue(world,me){recovery_rent(&mut out,me);if world.get("logistics").truthy(){out.set("acceptLocals",false);}return out;}
+        if let Some(mut out)=capital_delivery_rescue(world,me){recovery_rent(&mut out,me);march(&mut out,world,me);if world.get("logistics").truthy(){out.set("acceptLocals",false);}return out;}
     }
     let finish=|mut out:Value|{
         if !out.is_empty() && world.get("logistics").truthy(){out.set("acceptLocals",false);}
         fit_refill_reserves(&mut out,me);
         recovery_rent(&mut out,me);
+        march(&mut out,world,me);
         out
     };
     if let Some(out)=super::energy::infrastructure_turn(world,me){return finish(out);}
@@ -2068,7 +2102,7 @@ fn govern_with_room(world: View, me: View, share: f64, strategy: impl FnOnce() -
     if cycles_left()<800.0 {return obj!{};}
     if me.path("rts.cpu").truthy() && cycles_left()<6000.0 {
         return obj!{"compute"=>obj!{"cpu"=>obj!{
-            "limits"=>obj!{"think"=>24000,"control"=>0.5,"upkeep"=>0.65,
+            "limits"=>obj!{"think"=>short_think(me),"control"=>0.5,"upkeep"=>0.65,
                 "research"=>0,"influence"=>0,"fabrication"=>0,"visuals"=>0,
                 "reflex"=>0.15,"duel"=>0.08,"challenge"=>0.02,"drive"=>if world.get("logistics").truthy(){8000.0}else{0.08},
                 "armor"=>0.05,"weapon"=>0.08,"abilities"=>0,"cloak"=>0,"gate"=>0},
@@ -2153,7 +2187,7 @@ fn govern_units(world: View, me: View, share: f64, strategy: impl FnOnce() -> Va
             let short=unit_upkeep(me)>income*0.65 && me.path("rts.cpu.bank").num_or(0.0)<income*4.0;
             let since=if short {old.get("s").num_or(now).min(now)} else {now};
             ram(&mut out, mem::put(RECOVERY_PAGE, &obj! { "r" => true, "s" => since }, "local", None, 1).unwrap_or_default());
-            let over_cap=me.path("units.total").num_or(0.0)>me.path("units.cap").num_or(512.0);
+            let over_cap=army(me)>me.path("units.cap").num_or(512.0);
             if short && (over_cap || now-since>=INSOLVENT_WAIT) {
                 let mut retire=Vec::new();
                 for u in world.get("units").iter().filter(|u|u.get("owner").num()==me.get("id").num()) {
@@ -2215,6 +2249,7 @@ fn govern_base(world: View, me: View, share: f64, strategy: impl FnOnce() -> Val
         ram(&mut orders, mem::free(RECOVERY_PAGE, 1, None));
     }
     if orders.get("spawn").is_empty() { return orders; }
+    let owed = me.path("rts.cpu.debt").num_or(0.0) > income * DEBT_SECS;
     if cycles_left() < 5000.0 + me.path("units.total").num_or(0.0) * 100.0 {
         orders.set("spawn", Value::arr());
         return orders;
@@ -2239,7 +2274,8 @@ fn govern_base(world: View, me: View, share: f64, strategy: impl FnOnce() -> Val
         // through a gap between cargo loads.
         let demand = e.demand(count + 1.0, body + b, art + a) + built;
         let carried = !patient(world) || demand <= income * 0.5 || bank >= demand * UPKEEP_BUFFER * 0.5;
-        if demand <= income * share && carried {
+        let worker = matches!(sp.get("type").str(), "miner" | "hauler" | "freighter");
+        if demand <= income * spend_share(me, share) && carried && (worker || !owed) {
             count += 1.0; body += b; art += a;
             let mut recruit = sp.clone();
             if !sp.get("name").truthy() {
@@ -2285,7 +2321,9 @@ fn body_upkeep_value(me: View, build: &Value, modules: f64) -> f64 {
 
 /// Clears optional spending and leaves miner controller cycles when a map scan cannot fit.
 pub fn recovery(world: View, me: View) -> Value {
-    recover(world, me, me.path("units.stalled").num_or(0.0) > 0.0)
+    let mut o=recover(world, me, me.path("units.stalled").num_or(0.0) > 0.0);
+    march(&mut o,world,me);
+    o
 }
 
 /// Recovery while the army is short of cycles (`stalled`): the full review when it fits, else the cheap policy.
@@ -2297,7 +2335,7 @@ fn recover(world: View, me: View, stalled: bool) -> Value {
         let old=mem::get(me.get("ramCapital"),RECOVERY_PAGE);
         let since=if stalled {old.get("s").num_or(now).min(now)}else{now};
         ram(&mut orders, mem::put(RECOVERY_PAGE, &obj! { "r" => true,"s"=>since }, "local", None, 1).unwrap_or_default());
-        let over_cap=me.path("units.total").num_or(0.0)>me.path("units.cap").num_or(512.0);
+        let over_cap=army(me)>me.path("units.cap").num_or(512.0);
         if stalled && ((over_cap && now-since>=RECOVERY_WAIT)
             || (now-since>=insolvent_wait(world) && me.path("rts.cpu.bank").num_or(0.0)<me.path("rts.cpu.income").num_or(20000.0)*4.0)) {
             let mut retire=Vec::new();
@@ -2410,7 +2448,7 @@ fn recover_with(world: View, me: View, e: &Economy, shortage: bool) -> Value {
         if let Some(&(i, _)) = ranked.iter().find(|(i, _)| e.units[*i].unit.get("type").str() == "miner") { protected.push(i); }
     }
     let income = me.path("rts.cpu.income").num_or(20000.0).max(1.0);
-    let over_cap = e.count > e.cap;
+    let over_cap = e.count - e.work > e.cap;
     if shortage && now - since >= if over_cap { RECOVERY_WAIT } else { insolvent_wait(world) } {
         let (mut count, mut body, mut art) = (e.count, e.body, e.art);
         let mut disband = Vec::new();
@@ -2523,12 +2561,11 @@ impl Default for Budget<'_> {
     }
 }
 
-/// Set compute splits, type schedules, rental spending and research.
-/// Think uses 1.6 times its recent peak, between 15% and 60% of income with units, or 85% without units.
-/// Units receive upkeep, drawing costs and `opts.code`; research receives the remainder up to `opts.research`.
-/// Spare ◆ beyond two unit prices and 100 rent cloud cycles at the unit cap or when more than 600 remain.
-/// Research follows `opts.techs` and their prerequisites. Crossing techs lead when no frontier is reachable by land.
-/// Skip offers above CPU capacity unless all are too large, then choose the cheapest. Keep research already underway.
+/// Set compute splits, type schedules, rental spending and research. Think gets 1.6 times its recent peak, 15% to 60%
+/// of income with units (85% without). Units get upkeep, drawing and `opts.code`; research the rest up to
+/// `opts.research`. Spare ◆ past two unit prices and 100 rents cloud cycles at the unit cap or past 600. Research
+/// follows `opts.techs` and their prerequisites, crossing techs first when no land frontier is in reach, keeps what's
+/// underway, and skips offers above CPU capacity unless all are, then takes the cheapest.
 pub fn budget(orders: &mut Value, world: View, me: View, opts: &Budget) {
     let c = me.get("compute");
     let u = me.get("units");
@@ -2616,15 +2653,10 @@ pub const DUEL_LIMIT: f64 = 0.25;
 pub const DUEL_RESERVE: f64 = 0.08;
 pub const DUEL_FLOOR: f64 = 3000.0;
 
-/// Fits a house program's CPU policy to what its bank can pay. Think's limit becomes a share of income (a fraction
-/// up to 1, cycles past that), so it grows with the faction even in a second whose think ran out and set no new
-/// policy: the policy's own limit, or half again think's recent peak when that's more. Duels get at least
-/// [`DUEL_LIMIT`] of income a second, and while units fight or capture [`DUEL_RESERVE`] of it ([`DUEL_FLOOR`]
-/// cycles at least) kept for them: each province where your units are attacked answers its own duel a second, and
-/// prices (upkeep, power, abilities) would otherwise spend the bank down to the other lanes' reserves first. A duel
-/// lost unanswered lands at full strength. The reserves together keep at most a third of the bank now, the duel's
-/// first: a reserve the bank can't cover leaves every other lane nothing, and unit calls run dry. With fewer than 4
-/// units research waits: on the floor's income a second can't pay think, research and a body.
+/// Fits a CPU policy to the bank. Think's limit: the policy's, half again think's peak, or `me.lab.think` of income,
+/// whichever is most. Duels get [`DUEL_LIMIT`] of income, and [`DUEL_RESERVE`] (at least [`DUEL_FLOOR`]) while units
+/// fight, since a duel lost unanswered lands in full. Reserves keep at most a third of the bank, the duel's first.
+/// Under 4 units research waits.
 pub fn fit_cpu(policy: &mut Value, me: View) {
     let c = me.path("rts.cpu");
     if !c.truthy() {
@@ -2636,7 +2668,8 @@ pub fn fit_cpu(policy: &mut Value, me: View) {
     }
     let income = n(c.get("income")).max(1.0);
     let amount = |v: f64| if v <= 1.0 { v * income } else { v };
-    let want = amount(policy.get("limits").get("think").num_or(0.0)).max(1.5 * n(me.get("compute").get("thinkPeak")));
+    let want = amount(policy.get("limits").get("think").num_or(0.0)).max(1.5 * n(me.get("compute").get("thinkPeak")))
+        .max(me.path("lab.think").num_or(0.0) * income);
     policy.entry("limits").set("think", if want <= income { (want / income * 1000.0).ceil() / 1000.0 } else { want.ceil() });
     if amount(policy.get("limits").get("duel").num_or(0.0)) < DUEL_LIMIT * income {
         policy.entry("limits").set("duel", DUEL_LIMIT);
@@ -2713,10 +2746,9 @@ pub fn worth(b: &Value) -> f64 {
     v + k * secs(h) / 10.0 + pw.get("mw").num_or(0.0) * secs(pw) / 8.0
 }
 
-/// What the default rule asks for your provinces `ids` from faction `buyer`, or infinity when it won't sell them:
-/// [`LAND_PRICE`] ◆ a core plus half that a mine slot, times scarcity (1 + 4 ÷ the provinces you'd keep) and the
-/// buyer's size (1 + 4 × its share of the world). Never your capital, never to the leader, and never below
-/// [`MIN_LAND`] provinces. A buyer prices a bid with the seller's entry in `world.factions` as `me`.
+/// What the default rule asks for provinces `ids` from faction `buyer` (infinity: no sale): [`LAND_PRICE`] ◆ a core
+/// plus half that a mine slot, times 1 + 4 ÷ the provinces you'd keep and 1 + 4 × the buyer's share of the world.
+/// Never your capital, never to the leader, never below [`MIN_LAND`] provinces. A buyer passes the seller as `me`.
 pub fn price(world: View, me: View, ids: &[f64], buyer: f64) -> f64 {
     if ids.is_empty() {
         return 0.0;
@@ -2739,14 +2771,12 @@ pub fn price(world: View, me: View, ids: &[f64], buyer: f64) -> f64 {
     (worth * (1.0 + 4.0 / keep) * (1.0 + 4.0 * f.get("share").or(0.0)) + 0.5).floor()
 }
 
-/// The default rule for deal `m` in your inbox: yes when what you'd get is worth at least what you'd give
-/// ([`value`], with your land at [`price`]), and only when your bank holds every ◆ you'd give (all of a stream) and
-/// the units you'd get fit under your unit limit. A tech you hold, or that isn't in `techs` (what you research), is
-/// worth nothing to you, and so are passage, sight and relay rights you hold from the same faction for more than
-/// another minute: it buys none of them twice. It sells no passage to a faction whose units stand in your land, unless it renews passage
-/// that faction has from you (passage ends the moment its holder attacks). It takes no mine lease or incoming
-/// passage that would protect a target of your saved plan, standing capture orders or active siege.
-/// With `world` undefined it sells no land and no passage.
+/// The default rule for deal `m` in your inbox: yes when what you'd get is worth at least what you'd give ([`value`],
+/// your land at [`price`]), your bank holds every ◆ you'd give (all of a stream) and the units you'd get fit your unit
+/// limit. A tech you hold or don't research (`techs`) is worth nothing, and so are rights you hold from that faction
+/// for another minute. No passage to a faction with units in your land, unless it renews one (passage ends when its
+/// holder attacks). No mine lease or incoming passage that shelters your plan's target, capture orders or siege.
+/// Without `world`, no land and no passage.
 pub fn fair(m: View, me: View, world: View, techs: &[&str]) -> bool {
     let (give, ask) = (m.get("give"), m.get("ask"));
     let from = m.get("from").num();
@@ -2822,11 +2852,9 @@ pub fn fair(m: View, me: View, world: View, techs: &[&str]) -> bool {
     land < f64::INFINITY && value(&get) >= value(&ask.value()) - lands.len() as f64 * 120.0 + land
 }
 
-/// Answers the inbox: a deal when [`fair`] says yes (`techs`: what you research) and the deals it took before it this
-/// second leave the ◆ it asks for and room for the units it brings (each is checked against the whole bank, and
-/// two that both fit alone may not fit together), a pact when `pact(m)` says yes and nobody in it, you included, is
-/// in a pact already (a faction belongs to one pact at a time, so the game would refuse it), at most one a second;
-/// plain messages are marked read. A short CPU RTS call leaves unreviewed messages for a later turn.
+/// Answers the inbox: a deal when [`fair`] says yes (`techs`: what you research) and the deals taken before it this
+/// second leave its ◆ and room for its units; a pact when `pact(m)` says yes and nobody in it is in a pact already,
+/// at most one a second; plain messages are marked read. A short CPU RTS call leaves the rest for a later turn.
 pub fn answer(orders: &mut Value, me: View, world: View, pact: impl Fn(View) -> bool, techs: &[&str]) {
     let limited=me.path("rts.cpu").truthy();
     let tail=6000.0+100.0*orders.get("ram").len() as f64;
@@ -2907,11 +2935,10 @@ thread_local! {
     static ASKED: RefCell<Option<(View, Value)>> = const { RefCell::new(None) };
 }
 
-/// Back-off for asking one faction again and again (pact proposals, gifts): calls `ask(orders)` and returns true
-/// when `to` may be asked now, else false. An ask counts as answered once you share a pact with `to`. Each wait is
-/// stretched by a random 1 to 1.6, drawn at the ask, so asks don't fall on a clock and none comes sooner than
-/// `every` (the game takes a pact proposal to the same faction once every `RULES.pact.askGap` seconds). The record
-/// lives in capital RAM from page 232 (up to 8 pages: `{ factionId: [lastAsk, unanswered, stretch] }`). think only.
+/// Back-off for asking one faction again and again (pact proposals, gifts): calls `ask(orders)` and returns true when
+/// `to` may be asked now. A shared pact answers an ask. Each wait is stretched by a random 1 to 1.6, never under
+/// `every` (the game takes one pact proposal to a faction each `RULES.pact.askGap` seconds). The record is in capital
+/// RAM from page 232 (up to 8 pages: `{ factionId: [lastAsk, unanswered, stretch] }`). think only.
 pub fn court(orders: &mut Value, world: View, me: View, to: f64, ask: impl FnOnce(&mut Value), opts: &Court) -> bool {
     let now = n(world.get("seconds"));
     let mut asked = ASKED.with(|a| a.borrow().as_ref().filter(|(w, _)| w.same(&world)).map(|(_, v)| v.clone()));
@@ -3206,9 +3233,8 @@ pub const PRIMES: [[f64; 3]; 23] = [
 pub const NOISE: [&str; 8] = ["....", "#...", ".#..", "..#.", "...#", "#..#", ".##.", "#.#."];
 
 /// For `challenge(foe, max)`: a random category at the biggest size `max` allows (`{ factor: bits, subset: numbers,
-/// path: grid side }`: what your duel bank buys, and what's fair to the defender), as the secret the game builds the
-/// problem from: `{ kind: "factor", p, q }`, `{ kind: "subset", xs, pick }` or `{ kind: "path", grid }` (a staircase
-/// way through, walls from [`NOISE`] everywhere else, no bigger than the call's cycles allow). Null lets the game pick.
+/// path: grid side }`), as the secret the game builds the problem from: `{ kind: "factor", p, q }`, `{ kind:
+/// "subset", xs, pick }` or `{ kind: "path", grid }` (a staircase way, walls from [`NOISE`]). Null lets the game pick.
 pub fn challenge(_foe: View, max: View) -> Value {
     let kinds: Vec<&str> = ["factor", "subset", "path"].into_iter().filter(|k| n(max.get(k)) >= if *k == "factor" { 8.0 } else { 4.0 }).collect();
     if kinds.is_empty() {

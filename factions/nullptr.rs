@@ -107,10 +107,10 @@ fn mods(me: View, kind: &str) -> Vec<&'static str> {
     out
 }
 
-// Room for more units: up to the allowance, then past it while their upkeep stays under 40% of income (common::room).
+// Room for more units: up to the army allowance, then past it while their upkeep stays under 50% of income
+// (common::army_room).
 fn army_room(me: View) -> f64 {
-    let u = me.get("units");
-    jmax(n(u.get("cap")) - n(u.get("total")) - n(u.get("queued")) - u.get("hiredOut").or(0.0), common::room(me, 0.4))
+    common::army_room(me, 0.5)
 }
 
 // Reserve fabrication CPU locally while constructing the spawn list. The engine processes spawns in order, so checking
@@ -333,9 +333,9 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     Some(field)
 }
 
-fn think_emergency() -> Value {
+fn think_emergency(me: View) -> Value {
     obj! { "compute" => obj! { "cpu" => obj! {
-            "limits" => obj! { "think" => 24000, "control" => 0.5, "upkeep" => 0.65,
+            "limits" => obj! { "think" => common::short_think(me), "control" => 0.5, "upkeep" => 0.65,
                 "research" => 0, "influence" => 0, "fabrication" => 0, "visuals" => 0,
                 "reflex" => 0.15, "duel" => 0.08, "challenge" => 0.02,
                 "drive" => 0.08, "armor" => 0, "weapon" => 0.08,
@@ -444,7 +444,7 @@ fn think(world: View, me: View) -> Value {
     }
     if cycles_left() < 3900.0 {
         if common::capital_rescue_wait(world,me){return obj!{};}
-        return think_emergency();
+        return think_emergency(me);
     }
     // Do not let a profitable cargo crew remain worker-only while a full planner waits for a rare high-burst second.
     if productive_reentry(me) { return think_reentry(me); }
@@ -473,7 +473,7 @@ fn think(world: View, me: View) -> Value {
         }
         orders
     });
-    if !think_room(&orders, 0.0) { return think_emergency(); }
+    if !think_room(&orders, 0.0) { return think_emergency(me); }
     orders
 }
 
@@ -579,9 +579,10 @@ fn strategy(world: View, me: View) -> Value {
         "slots" => army_room(me),
         "priceLevel" => common::price_level(me),
     };
+    common::doctrine(&mut plan,world,me);
     common::share(&mut orders, &plan, world, me);
     if rts.truthy() && cycles_left() < 7000.0 {
-        let mut recovery = if cycles_left() < 3000.0 { think_emergency() } else { think_recovery(me) };
+        let mut recovery = if cycles_left() < 3000.0 { think_emergency(me) } else { think_recovery(me) };
         recovery.set("memo", "Recovering production");
         return recovery;
     }
@@ -714,7 +715,8 @@ fn strategy(world: View, me: View) -> Value {
 // A short callback refreshes a nearby front without reopening the global spy and army census.
 fn local_strategy(world:View,me:View)->Value {
     let previous=mem::get(me.get("ramCapital"),0);
-    let plan=common::local_plan(world,me,&previous,12000.0);
+    let mut plan=common::local_plan(world,me,&previous,12000.0);
+    common::doctrine(&mut plan,world,me);
     let cpu=rts_cpu(me);
     let type_calls=common::calls(world,&TYPES,cpu.get("income").num_or(0.0),
         cpu.path("available.control").num_or(f64::INFINITY)*0.8,me.path("units.byType"));

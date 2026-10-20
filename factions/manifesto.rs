@@ -661,6 +661,7 @@ fn strategy_with_upkeep(world: View, me: View,upkeep:f64) -> Value {
     if let Some(f) = field {
         survey.set("field", f);
     }
+    common::doctrine(&mut survey,world,me);
     if lean {plan::share(&mut orders,&survey,me);} else {common::share(&mut orders, &survey, world, me);}
 
     let pressure = invaded_n;
@@ -684,7 +685,7 @@ fn strategy_with_upkeep(world: View, me: View,upkeep:f64) -> Value {
         me,
         &mix,
         |t, k| unit_name(me, t, k),
-        &common::Recruit { reserve: 0.0, limits: &limits, builds: &builds, upkeep: upkeep.max(0.45) },
+        &common::Recruit { reserve: 0.0, limits: &limits, builds: &builds, upkeep: upkeep.max(0.55) },
     );
     // The Red Army fights in ranks once research allows: every third recruit a rifleman, every third armored.
     let techs = me.get("techs");

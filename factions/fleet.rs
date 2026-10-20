@@ -252,9 +252,8 @@ fn rival_in(q: View, me: View) -> f64 {
     n
 }
 
-/// Whether the army can hold on to province `q` once it takes it (common::can_hold, cheaper): it's on our land border
-/// or over a pass, or it's the landing the fleet planned last second and a junk of ours keeps station off it (on the
-/// water the plan named, or one next to it), so the capital's orders cross to the marines there.
+/// Whether the army can hold province `q` once taken (common::can_hold, cheaper): on our land border or over a pass,
+/// or the landing planned last second with a junk of ours on station off it.
 fn fleet_hold(world: View, me: View) -> impl Fn(View) -> bool {
     let me_id = me.get("id").num();
     let by_id = realm::index(world);
@@ -366,10 +365,9 @@ fn seen_threats(world: View, me: View, since: f64) -> Threats {
     t
 }
 
-// Grow the force while upkeep stays within the income share.
+// Grow the force up to the army allowance, then while upkeep stays within half of income (common::army_room).
 fn army_room(me: View) -> f64 {
-    let u = me.get("units");
-    max(u.get("cap").num() - u.get("total").num() - u.get("queued").num() - u.get("hiredOut").or(0.0), common::room(me, 0.4))
+    common::army_room(me, 0.5)
 }
 
 fn add_spawn(orders: &mut Value, me: View, ty: &str, build: Value, modules: &[&str]) -> bool {
@@ -831,6 +829,7 @@ fn strategy(world: View, me: View, hunting: &mut Option<bool>) -> Value {
         "policy" => obj! { "extraction" => 0.42, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true },
         "provinces" => Value::arr(),
     };
+    common::doctrine(&mut plan,world,me);
     common::share(&mut orders, &plan, world, me);
 
     // Preserve fabrication until a useful field unit is affordable.
@@ -1021,7 +1020,8 @@ fn strategy(world: View, me: View, hunting: &mut Option<bool>) -> Value {
 // Keep a supplied land front and the standing naval assignments while the full map review cannot fit.
 fn local_strategy(world:View,me:View,start:f64)->Value {
     let previous=mem::get(me.get("ramCapital"),0);
-    let plan=common::local_plan(world,me,&previous,14000.0);
+    let mut plan=common::local_plan(world,me,&previous,14000.0);
+    common::doctrine(&mut plan,world,me);
     let cpu=me.path("rts.cpu");
     let types=common::calls(world,&[
         ("miner",6000.0,6.0),("runner",5000.0,4.0),("lancer",4200.0,4.0),
@@ -1421,6 +1421,16 @@ fn sentry(units: View, world: View, me: View) -> Value {
         return Value::arr();
     }
     let pl = plan::for_units(me, units, View::undefined());
+    // under the war doctrine they go with the army
+    if common::war_on(me) && pl.get("defend").num_or(-1.0) < 0.0 && pl.get("warn").num_or(-1.0) < 0.0 && pl.get("target").num_or(-1.0) >= 0.0 {
+        for turn in 0..units.len() {
+            if cycles_left() < 2200.0 {
+                break;
+            }
+            march(nth(units, turn, world), &pl, world, me, false);
+        }
+        return Value::Undef;
+    }
     let at = if num(pl.get("defend")) >= 0.0 {
         pl.get("defend")
     } else if num(pl.get("warn")) >= 0.0 {
@@ -1724,8 +1734,8 @@ fn armor_modules(me: View, module: &'static str) -> Vec<&'static str> {
     if me.path("rts.licenses").iter().any(|l| l.str() == module) { vec!["hull", module] } else { vec!["hull"] }
 }
 
-/// A local sea wreck pays for a new one-hold corsair's fabrication and round trip. This only uses wrecks already
-/// observed by the faction and keeps the same travel and expiry estimates as `common::salvage_target`.
+/// Whether a sea wreck seen nearby pays for a new one-hold corsair and its round trip (`common::salvage_target`'s
+/// travel and expiry estimates).
 fn paying_recovery_wreck(world: View, me: View, hold: f64) -> bool {
     let home=shore_water(world,me.get("capital").num());
     if home<0.0 || hold<=0.0 { return false; }
@@ -1741,9 +1751,8 @@ fn paying_recovery_wreck(world: View, me: View, hold: f64) -> bool {
     })
 }
 
-/// One junk a second at most, toward the fleet the plan needs: a picket for every crossing and the next landing, then
-/// warjunks, then up to two corsairs when visible cargo can pay for a raid. A valuable nearby sea wreck can reserve
-/// one cargo corsair before the ordinary fleet priorities. True when one was ordered.
+/// One junk a second at most: a picket for every crossing and the next landing, then warjunks, then up to two
+/// corsairs when visible cargo pays for a raid; a valuable sea wreck nearby comes first. True when one was ordered.
 fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_ships: f64, threatened: bool) -> bool {
     let techs = me.get("techs");
     let has = |t: &str| techs.get(t).truthy();
@@ -1761,8 +1770,7 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
     let income = me.get("rts").get("cpu").get("income").or(0.0);
     // Income and a crossing, escort or target bound hull recruitment.
     let fleet_max = max(3.0, (income / 20000.0).floor()).min(12.0);
-    // (two junks put to sea whatever the army; past them, a soldier ashore for every two junks, since the land is what
-    // feeds the yard)
+    // (two junks whatever the army; past them, a soldier ashore for every two junks: the land feeds the yard)
     let junks = pickets + war + corsairs + carriers;
     let ashore = common::fighters(me) - junks;
     if junks >= fleet_max || (threatened && junks >= 2.0) || (junks >= 2.0 && ashore < 1.0 + (junks / 2.0).floor()) {
