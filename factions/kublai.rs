@@ -1395,6 +1395,24 @@ fn turn(units: View, i: usize, world: View) -> View {
 }
 
 fn miner(units: View, world: View, me: View) {
+    // A cold short call keeps local cargo work and leaves remote plan reads for a funded turn.
+    if world.get("logistics").truthy() && cycles_left() < 6000.0
+        && cycles_left() > common::LOGISTICS_MINER_REMOTE_FALLBACK_RUNWAY {
+        let mut read: f64 = 0.0;
+        for u in units.iter().take(8).take_while(|_| cycles_left() > 3300.0) {
+            if plan::known(me,u).is_some() { continue; }
+            let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
+            if bytes.is_bytes() && bytes.len()>=2 {
+                let b=bytes.bytes();read=read.max(4.0*f64::from(u16::from_le_bytes([b[0],b[1]])));
+            }
+        }
+        if read > 0.0 && cycles_left() < read + 2600.0 {
+            let local=common::LOGISTICS_MINER_REMOTE_FALLBACK_RUNWAY-100.0;
+            let held=(cycles_left()-local).max(0.0);
+            with_cycle_reserve(held, || common::recover_miners(units,world,me));
+            return;
+        }
+    }
     if common::recover_miners(units, world, me) { return; }
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {

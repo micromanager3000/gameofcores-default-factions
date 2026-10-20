@@ -331,16 +331,6 @@ fn miner_gather(u: View, world: View, me: View) -> Option<Value> {
 	orders::gather(u,world,me)
 }
 
-// Price the cold plan before using the same SDK assignment as a full callback.
-fn miner_short_gather(u: View, world: View, me: View) -> Option<Value> {
-	let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
-	let read=if plan::known(me,u).is_none() && bytes.is_bytes() && bytes.len()>=2 {
-		let b=bytes.bytes();4.0*f64::from(u16::from_le_bytes([b[0],b[1]]))
-	}else{0.0};
-	if cycles_left()<read+1000.0 {return None;}
-	orders::gather(u,world,me)
-}
-
 fn logistics_miners(units: View, world: View, me: View) {
 	// Full local assignment reads cargo and route state for each body.  Below this runway the
 	// bounded delivery retry can still free a loaded miner without losing the callback.
@@ -374,7 +364,7 @@ fn logistics_miners(units: View, world: View, me: View) {
 			}
 			if !gathered && cycles_left()>LOGISTICS_MINER_REMOTE_FALLBACK_RUNWAY {
 				if let Some(u)=remote {
-					if let Some(o)=miner_short_gather(u,world,me){order(o);}
+					if let Some(o)=orders::gather(u,world,me){order(o);}
 				}
 			}
 		}
