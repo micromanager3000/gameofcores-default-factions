@@ -493,3 +493,24 @@ fn generic_escorts_follow_the_program_catalogue_when_houses_change_seats() {
         }
     }
 }
+
+#[test]
+fn an_idle_frontier_unit_returns_for_new_orders_after_its_old_attack_is_fulfilled() {
+    for carried in [false,true] {
+        let (mut unit,mut world,mut me)=stale_local_args(244.0);
+        me.set("capital",1);
+        let mut provinces=world.get("provinces").items().to_vec();
+        provinces[2].set("owner",6);provinces[3].set("owner",6);
+        world.set("provinces",provinces);
+        let plan=obj!{"attack"=>0,"stage"=>0,"defend"=>-1,"need"=>2,"at"=>1};
+        if carried {
+            me.entry("ramProvince").set("0",obj!{});
+            unit.set("ramUnit",obj!{"0"=>obj!{"bytes"=>Value::Bytes(plan::pack(&plan))}});
+        } else {
+            me.entry("ramProvince").set("0",pages(&plan));
+        }
+        let order=stale_order(unit,world,me).expect("the owned capital has a land route");
+        assert_eq!(order.get("do").str(),"fight","carried={carried}: {order:?}");
+        assert_eq!(order.get("target").num(),1.0,"a fulfilled attack must not repeat capture orders on owned land");
+    }
+}

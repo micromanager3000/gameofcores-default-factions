@@ -911,6 +911,12 @@ fn war_order(u: View, units: View, world: View, me: View) -> Option<Value> {
         if let Some(o) = stale_local_attack(u, units, world, me, &p) {
             return Some(o);
         }
+        if !defending && u.get("doing").str()=="idle" && u.get("to").num_or(-1.0)<0.0
+            && u.get("at").num()!=me.get("capital").num() && plan::age(&p,world).unwrap_or(0.0)>120.0
+            && !realm::index(world).at(u.get("at")).get("units").entries().any(|(owner,count)|
+                count.num_or(0.0)>0.0 && owner.parse::<f64>().is_ok_and(|owner|realm::is_rival(world,me,owner))) {
+            return orders::to(u,"fight",me.get("capital").num(),world,me,());
+        }
     }
     if target.is_nan() || target < 0.0 {
         return orders::to(u, "fight", n(me.get("capital")), world, me, ());
