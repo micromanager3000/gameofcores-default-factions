@@ -2048,11 +2048,12 @@ pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Valu
     work()
 }
 
-/// During a cash shortage, reserve promises must fit automatic income, excluding smoothed cargo receipts and rented cycles.
-/// Wealthy houses and worlds without cargo keep their existing reserve policy.
+/// Cargo recovery keeps reserve promises within automatic income, excluding smoothed receipts and rented cycles.
+/// Other wealthy policies and worlds without cargo keep their existing reserves.
 pub fn fit_refill_reserves(out:&mut Value,me:View){
     let cpu=me.path("rts.cpu");let income=cpu.get("income").num_or(0.0);let bank=cpu.get("bank").num_or(0.0);
-    if !me.path("rts.logistics").truthy() || income<=0.0 || bank>=income*4.0 || !out.get("compute").get("cpu").truthy(){return;}
+    if !me.path("rts.logistics").truthy() || income<=0.0
+        || (bank>=income*4.0 && out.get("memo").str()!="Recovering production") || !out.get("compute").get("cpu").truthy(){return;}
     let refill=(income-me.path("rts.logistics.deliveryRate").num_or(0.0)-me.path("compute.rented").num_or(0.0)).max(0.0);
     let room=(refill*0.5).min(bank/3.0);let reserve=out.entry("compute").entry("cpu").entry("reserve");
     let total=if let Value::Obj(r)=&*reserve{

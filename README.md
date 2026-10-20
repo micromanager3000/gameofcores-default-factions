@@ -78,6 +78,7 @@ Both the Rust package and the Node exporter produce the same source; `npm test` 
 Every house supports physical CPU cargo when `world.logistics` is present.
 Miners unload locally, ground carriers connect depots, and freighters carry cargo between docks.
 Loaded haulers bypass a full depot when they can reach the capital overland.
+During recovery, reserve promises fit automatic income even after a recent cargo delivery.
 Carriers leave exhausted depots with partial loads and prioritize useful delivery trips.
 Quiet Fleet recovers visible wreck cargo and returns it through the capital's dock.
 It retires an empty corsair when no worthwhile target or nearby wreck remains.

@@ -27,3 +27,17 @@ fn wealth_and_non_logistics_worlds_preserve_the_authored_reserves(){
         common::fit_refill_reserves(&mut out,args[0]);assert_eq!(out,before);
     }
 }
+
+#[test]
+fn recovery_after_a_recent_delivery_still_reserves_only_automatic_refills(){
+    let me=obj!{"compute"=>obj!{"rented"=>0},"rts"=>obj!{"cpu"=>obj!{"income"=>100000,"bank"=>600000},
+        "logistics"=>obj!{"deliveryRate"=>88000}}};
+    let args=views(&[me]);let mut out=refill_reserve_policy();out.set("memo","Recovering production");
+    let before=out.clone();common::fit_refill_reserves(&mut out,args[0]);
+    let cpu=out.get("compute").get("cpu");let reserve=cpu.get("reserve");
+    assert!(reserve.get("upkeep").num()+reserve.get("control").num()<=6000.0,
+        "the recent cargo balance cannot promise future deliveries while recovery is active");
+    assert_eq!(cpu.get("limits"),before.get("compute").get("cpu").get("limits"));
+    assert_eq!(cpu.get("upkeepUnits"),before.get("compute").get("cpu").get("upkeepUnits"));
+    assert_eq!(out.get("compute").get("types"),before.get("compute").get("types"));
+}
