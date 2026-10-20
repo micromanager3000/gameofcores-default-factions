@@ -2031,13 +2031,14 @@ pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Valu
     if cycles_left()>7000.0 {
         if let Some(mut out)=capital_delivery_rescue(world,me){recovery_rent(&mut out,me);if world.get("logistics").truthy(){out.set("acceptLocals",false);}return out;}
     }
-    let work=||{
-        let mut out=govern_with_room(world,me,share,strategy);
+    let finish=|mut out:Value|{
         if !out.is_empty() && world.get("logistics").truthy(){out.set("acceptLocals",false);}
         fit_refill_reserves(&mut out,me);
         recovery_rent(&mut out,me);
         out
     };
+    if let Some(out)=super::energy::infrastructure_turn(world,me){return finish(out);}
+    let work=||finish(govern_with_room(world,me,share,strategy));
     if me.path("rts.cpu").truthy()&&cycles_left()>7000.0 {
         return with_cycle_reserve(5000.0,work);
     }
@@ -2073,7 +2074,7 @@ fn govern_with_room(world: View, me: View, share: f64, strategy: impl FnOnce() -
                 "armor"=>0.05,"weapon"=>0.08,"abilities"=>0,"cloak"=>0,"gate"=>0},
             "reserve"=>obj!{},"upkeepOrder"=>vec!["miner"]}}};
     }
-    if let Some(orders)=super::energy::infrastructure_turn(world,me) {return orders;}
+
     if let Some(orders) = classic_bootstrap(world, me) { return orders; }
     if resting(world, me) {
         return upkeep_bridge(me);
@@ -2194,7 +2195,7 @@ fn govern_base(world: View, me: View, share: f64, strategy: impl FnOnce() -> Val
     if was.get("r").truthy() {
         // A failed think's peak is a lower bound. Raise a short allowance before retrying the planner.
         // Cap admission at income so a house's bounded lean path can still run after income falls.
-        let need = income.min((me.path("compute.thinkPeak").num_or(0.0) * 1.25 + 6000.0).max(18000.0));
+        let need = (income.min((me.path("compute.thinkPeak").num_or(0.0) * 1.25 + 6000.0).max(18000.0))-cycles_reserved()).max(6000.0);
         if cycles_left().min(me.path("rts.cpu.available.think").num_or(f64::INFINITY)) < need {
             return recovery(world, me);
         }
