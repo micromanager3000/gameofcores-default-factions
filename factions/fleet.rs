@@ -1417,7 +1417,7 @@ fn spire(units: View, world: View, me: View) {
 }
 
 fn sentry(units: View, world: View, me: View) -> Value {
-    if short(me, 2500.0, 1200.0) {
+    if short(me, 3200.0, 1200.0) {
         return Value::arr();
     }
     let pl = plan::for_units(me, units, View::undefined());
