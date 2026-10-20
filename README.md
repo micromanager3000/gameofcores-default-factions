@@ -151,7 +151,7 @@ Recruitment reviews wait until the CPU policy and callback return can fit.
 Its guns can refresh their portable plan when a new route cannot fit.
 Kublai sizes court reviews to the visible map and army.
 Its wings and guns price cold plan reads before decoding them.
-Remote recovery miners price their cold plan before assigning a nearby mine.
+Recovery miners price cold plan reads before using the SDK's normal routes.
 Nations funds a complete cold aircraft turn before changing its flight orders.
 A requested Templar retry includes the governor's work before the planner.
 Shared escorts follow the program's unit catalogue when programs change seats. The Fleet keeps its dedicated navy.
