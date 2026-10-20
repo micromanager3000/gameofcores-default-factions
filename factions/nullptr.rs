@@ -142,7 +142,7 @@ fn spawn_build(orders: &mut Value, ty: &str, body: impl FnOnce()->Value, modules
 // still inside a rival's walls.
 const TYPES: [(&str, f64, f64); 10] = [
     ("miner", 5000.0, 1.0),
-    ("ghost", 5000.0, 1.0),
+    ("ghost", 8000.0, 1.0),
     ("wing", 4200.0, 2.0),
     ("screen", 6000.0, 1.0),
     ("runner", 6000.0, 1.0),
@@ -1762,7 +1762,7 @@ mod nullptr_ext {
     pub fn spies(units: View, world: View, me: View) {
         let rts = me.get("rts").truthy();
         // Leave room for a spy's terrain checks, RAM notes and final order.
-        if rts && cycles_left() < 3400.0 {
+        if rts && cycles_left() < 5500.0 {
             return;
         }
         let by_id = realm::index(world);

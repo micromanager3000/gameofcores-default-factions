@@ -136,6 +136,7 @@ Aircraft controllers use visible `me.rts.air.contacts` entries to intercept riva
 
 Think shares convoy locations and combat estimates through plan RAM. Ground units carry combat estimates on unit page 93 and discard them after 120 seconds. Convoy guards use locations observed within the last 12 seconds.
 Arjuna's idle frontier troops return for new orders after a fulfilled attack becomes stale.
+Null Pointer's spies keep standing orders when a complete turn cannot fit.
 Shared escorts follow the program's unit catalogue when programs change seats. The Fleet keeps its dedicated navy.
 
 In worlds with town walls, offensive artillery uses `capture` orders to damage them.

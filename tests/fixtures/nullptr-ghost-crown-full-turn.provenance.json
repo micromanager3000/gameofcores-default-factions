@@ -1,0 +1,29 @@
+{
+  "scope": "Own simulated public default programs only. This is the actual failed ghost callback from the C3 continuation of a development world, not player or production data.",
+  "engineRevision": "90f1f8323767cbbb8de102a48b2d2aa88f3130fb",
+  "factionSourceSha256": "0f8eff95f7d9b32773b2fa73e72512259aa68db1fe3a96b230bad78887e4ffab",
+  "sdkSha256": "cc29620eea08423a8d46f7cc1029319cef81aaa91bc2c5ad324a042fe10fd509",
+  "seed": 307,
+  "tick": 109394,
+  "faction": 6,
+  "function": "ghost",
+  "observedFuel": 4920,
+  "baselineUsed": 4920,
+  "baselineError": "ran out of cycles",
+  "argsSha256": "1ab426c5eb893a3766020cedeb801682b16687218be5c79370af1618498b9076",
+  "authoredChanges": [],
+  "regressionExpectations": {
+    "observedFuel4920": "Return successfully and preserve standing orders.",
+    "normalRequestedCycles": 8000,
+    "recordedRamReadCycles": 80,
+    "normalGuestFuel": 7920,
+    "normalExpectedOrder": {
+      "id": 806,
+      "cloak": true
+    },
+    "preservedUsefulBudgets": [
+      6000,
+      7000
+    ]
+  }
+}
