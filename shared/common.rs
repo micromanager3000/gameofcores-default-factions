@@ -424,6 +424,11 @@ pub fn haul_cargo(units:View,world:View,me:View){
             // @end
             continue;
         }
+        // A full shore depot must not strand a load that can reach the capital overland.
+        if u.path("rts.cargo.job.status").str()=="depot full" && cargo(u)>0.0 {
+            if let Some(o)=transfer(u,world,me,E::town(cap),false,None){order(o);}
+            continue;
+        }
         if cargo_working(u){continue;}
         let at=u.get("at").num();
         if cargo(u)>0.0 {
