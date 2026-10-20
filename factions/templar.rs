@@ -1783,9 +1783,10 @@ fn reflex(units: View, near: View) -> Vec<Value> {
                 o.set("hold", true);
             }
         }
+        let naval=common::naval_reflex(u,ns,&mut o,&mut left,&mut ability_left);
         bank_left = left;
         o.set("power", obj! { "drive" => drive, "armor" => armor, "weapon" => weapon });
-        if best.is_some() || step || o.get("ability").truthy() || o.get("deploy").truthy() {
+        if naval || best.is_some() || step || o.get("ability").truthy() || o.get("deploy").truthy() {
             order(o);
         }
         turn_cost = turn_cost.max(1.5 * (began - cycles_left()));

@@ -2244,7 +2244,8 @@ fn reflex(units: View, near: View) -> Value {
             o.set("ability", "scan");
         }
         if modules.has_str("cloak") { o.set("cloak", cloaking); }
-        if armed || driving || armored || o.get("cloak").truthy() || o.get("ability").truthy() {
+        let naval=common::naval_reflex(u,ns,&mut o,&mut pool.bank,&mut pool.abilities);
+        if naval || armed || driving || armored || o.get("cloak").truthy() || o.get("ability").truthy() {
             order(o);
         }
         turn_cost = turn_cost.max((began - cycles_left()) * 1.5);

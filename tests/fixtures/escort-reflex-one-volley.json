@@ -1,0 +1,166 @@
+[
+  [
+    {
+      "id": 1,
+      "owner": 0,
+      "type": "escort",
+      "range": 1,
+      "hp": 5,
+      "hpMax": 5,
+      "focus": 2,
+      "rts": {
+        "sea": {
+          "ship": true,
+          "water": 0,
+          "head": {
+            "x": 1,
+            "y": 0
+          },
+          "course": {
+            "chase": 2,
+            "keep": 3
+          }
+        },
+        "bank": 100000,
+        "priceLevel": 1,
+        "budget": {
+          "abilities": 630,
+          "reflex": 30000,
+          "weapon": 0,
+          "drive": 0,
+          "armor": 0,
+          "cloak": 0
+        },
+        "abilityIn": {
+          "broadside": 0
+        },
+        "cargo": {
+          "cycles": 0
+        },
+        "modules": [],
+        "readyIn": 0,
+        "windupTarget": null,
+        "driveScale": 1,
+        "power": {
+          "weapon": 0,
+          "drive": 0,
+          "armor": 0
+        }
+      },
+      "doing": "fight",
+      "at": 0,
+      "reach": 6,
+      "air": false,
+      "pos": {
+        "p": 0,
+        "x": 0,
+        "y": 0
+      },
+      "local": {
+        "p": 0,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 4,
+      "owner": 0,
+      "type": "escort",
+      "range": 1,
+      "hp": 5,
+      "hpMax": 5,
+      "focus": 2,
+      "rts": {
+        "sea": {
+          "ship": true,
+          "water": 0,
+          "head": {
+            "x": 1,
+            "y": 0
+          },
+          "course": {
+            "chase": 2,
+            "keep": 3
+          }
+        },
+        "bank": 100000,
+        "priceLevel": 1,
+        "budget": {
+          "abilities": 630,
+          "reflex": 30000,
+          "weapon": 0,
+          "drive": 0,
+          "armor": 0,
+          "cloak": 0
+        },
+        "abilityIn": {
+          "broadside": 0
+        },
+        "cargo": {
+          "cycles": 0
+        },
+        "modules": [],
+        "readyIn": 0,
+        "windupTarget": null,
+        "driveScale": 1,
+        "power": {
+          "weapon": 0,
+          "drive": 0,
+          "armor": 0
+        }
+      },
+      "doing": "fight",
+      "at": 0,
+      "reach": 6,
+      "air": false,
+      "pos": {
+        "p": 0,
+        "x": 0,
+        "y": 0
+      },
+      "local": {
+        "p": 0,
+        "x": 0,
+        "y": 0
+      }
+    }
+  ],
+  {
+    "1": [
+      {
+        "id": 2,
+        "owner": 1,
+        "rival": true,
+        "air": false,
+        "range": 1,
+        "d": 3,
+        "dx": 0,
+        "dy": 3,
+        "rts": {
+          "sea": {
+            "ship": true,
+            "water": 0
+          }
+        }
+      }
+    ],
+    "4": [
+      {
+        "id": 2,
+        "owner": 1,
+        "rival": true,
+        "air": false,
+        "range": 1,
+        "d": 3,
+        "dx": 0,
+        "dy": 3,
+        "rts": {
+          "sea": {
+            "ship": true,
+            "water": 0
+          }
+        }
+      }
+    ]
+  }
+]

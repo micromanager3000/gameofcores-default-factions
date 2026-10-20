@@ -147,6 +147,10 @@ Nations funds a complete cold aircraft turn before changing its flight orders.
 A requested Templar retry includes the governor's work before the planner.
 Shared escorts follow the program's unit catalogue when programs change seats. The Fleet keeps its dedicated navy.
 
+Templar and Nations escorts can turn nearby rival ships onto their beam and fire a funded broadside.
+They preserve paid gunfire and share the bank and ability cycles left after other combat actions.
+Loaded ships keep their cargo route.
+
 In worlds with town walls, offensive artillery uses `capture` orders to damage them.
 Guns already deployed at the target keep firing at its walls.
 Defense and worlds saved before walls use `fight` orders.
