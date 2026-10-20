@@ -872,8 +872,10 @@ fn chancery(orders: &mut Value, world: View, me: View, plan: &Value, clock: &mut
 
     // the census of the border, for the court's weightier decisions (a step short of cycles leaves its timer for the
     // next second: `due` isn't asked until the cycles are there)
-    let weigh = cycles_left() > 16000.0 && due(clock, "weigh", 10.0, now);
-    let deal = cycles_left() > 14000.0 && purse > 150.0 && due(clock, "deal", 25.0, now);
+    let census_room = 16000.0 + 80.0 * world.get("provinces").len() as f64
+        + 60.0 * world.get("units").len() as f64;
+    let weigh = cycles_left() > census_room && due(clock, "weigh", 10.0, now);
+    let deal = cycles_left() > census_room && purse > 150.0 && due(clock, "deal", 25.0, now);
     if weigh || deal {
         let mut c = census(world, me, court.num("campaign", -1.0));
         if weigh {
@@ -1582,7 +1584,7 @@ fn gun(units: View, world: View, me: View) {
         if rts {
             let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
             let read=if bytes.is_bytes() && bytes.len()>=2 {
-                let b=bytes.bytes();2.0*f64::from(u16::from_le_bytes([b[0],b[1]]))
+                let b=bytes.bytes();4.0*f64::from(u16::from_le_bytes([b[0],b[1]]))
             }else{0.0};
             if cycles_left()<1800.0+read {break;}
         }
@@ -1661,8 +1663,14 @@ fn wing(units: View, world: View, me: View) {
     }
     // A cold plan and its first route need more than the legacy 2,200-cycle floor. Keep the standing sortie until a
     // funded turn can finish it; recovery above already handles zero-fabrication calls.
-    if me.get("rts").truthy() && cycles_left() < 2500.0 {
-        return;
+    if me.get("rts").truthy() {
+        let read = units.iter().filter_map(|u| {
+            let bytes = me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
+            if bytes.is_bytes() && bytes.len() >= 2 {
+                let b = bytes.bytes(); Some(4.0 * f64::from(u16::from_le_bytes([b[0], b[1]])))
+            } else { None }
+        }).fold(0.0, f64::max);
+        if cycles_left() < 2500.0 + read { return; }
     }
     let pl = plan::for_units(me, units, world);
     // The loop below cannot issue an order with less runway; skip its map index too.

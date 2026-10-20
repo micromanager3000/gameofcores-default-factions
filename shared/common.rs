@@ -364,7 +364,7 @@ fn logistics_miners(units: View, world: View, me: View) {
 			}
 			if !gathered && cycles_left()>LOGISTICS_MINER_REMOTE_FALLBACK_RUNWAY {
 				if let Some(u)=remote {
-					if let Some(o)=orders::gather(u,world,me){order(o);}
+					if let Some(o)=miner_gather(u,world,me){order(o);}
 				}
 			}
 		}

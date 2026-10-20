@@ -498,7 +498,7 @@ fn think_need(world: View, me: View) -> f64 {
 fn think(world: View, me: View) -> Value {
     if cycles_left()<800.0 {return obj!{};}
     // A short callback only opens the next allowance; standing unit schedules continue.
-    if me.path("rts.cpu").truthy() && cycles_left() < 6000.0 {
+    if me.path("rts.cpu").truthy() && cycles_left() < 10000.0 {
         if common::capital_rescue_wait(world,me){return obj!{};}
         return obj! { "compute" => obj! { "cpu" => obj! {
             "limits" => obj! { "think" => 24000, "control" => 0.5, "upkeep" => 0.65,

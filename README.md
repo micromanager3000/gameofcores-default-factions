@@ -142,9 +142,16 @@ Think shares convoy locations and combat estimates through plan RAM. Ground unit
 Arjuna's idle frontier troops return for new orders after a fulfilled attack becomes stale.
 Null Pointer's spies keep standing orders when a complete turn cannot fit.
 They check the cost of reading a rival's plan before decoding it.
+Null Pointer's idle ground troops can capture clear neutral land after their old target falls.
+They preserve active orders and local defense, and carry the new advance in unit RAM.
+Its route planner checks the full map scan before opening a new search.
 A short Atlantis think returns its completed policy before pricing another recruit.
+The shortest Atlantis calls restore the next allowance before constructing a recovery plan.
 Recruitment reviews wait until the CPU policy and callback return can fit.
 Its guns can refresh their portable plan when a new route cannot fit.
+Kublai sizes court reviews to the visible map and army.
+Its wings and guns price cold plan reads before decoding them.
+Remote recovery miners use the same plan check as their normal assignment.
 Nations funds a complete cold aircraft turn before changing its flight orders.
 A requested Templar retry includes the governor's work before the planner.
 Shared escorts follow the program's unit catalogue when programs change seats. The Fleet keeps its dedicated navy.

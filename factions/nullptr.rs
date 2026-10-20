@@ -284,6 +284,15 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     if to.is_nan() || to < 0.0 {
         return None;
     }
+    let now = world.get("seconds").or(0.0).floor();
+    let last = mem::get(me.get("ramCapital"), 0);
+    let kept = if last.truthy() && last.get("field").truthy() && matches!(last.get("field").get("to"), Value::Num(x) if *x == to) {
+        Some(last.get("field").clone())
+    } else {
+        None
+    };
+    if kept.as_ref().is_some_and(|k| now - vor0(k.get("at")) < 10.0)
+        || cycles_left() < 300.0 * world.get("provinces").len() as f64 + after { return kept; }
     let by_id = realm::index(world);
     let ok = path::friendly(world, me);
     let me_id = me.get("id");
@@ -312,18 +321,6 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     }
     if !apart && path::home(world, me, n(me.get("capital")), to).is_some() {
         return None;
-    }
-    let now = world.get("seconds").or(0.0).floor();
-    let last = mem::get(me.get("ramCapital"), 0);
-    let kept = if last.truthy() && last.get("field").truthy() && matches!(last.get("field").get("to"), Value::Num(x) if *x == to) {
-        Some(last.get("field").clone())
-    } else {
-        None
-    };
-    if let Some(k) = &kept {
-        if now - vor0(k.get("at")) < 10.0 {
-            return kept;
-        }
     }
     if cycles_left() < 300.0 * world.get("provinces").len() as f64 + after {
         return kept;
@@ -888,9 +885,36 @@ fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
 
 // Defend with a fight (those the plan sends: common::defends); attack with a capture, since free land and rivals' towns
 // fall only to units capturing them.
+fn cleared_front(u: View, world: View, me: View, p: &Value) -> Option<Value> {
+    if u.get("doing").str() != "idle" || u.get("to").num_or(-1.0) >= 0.0
+        || plan::age(p, world).unwrap_or(0.0) <= 120.0 || common::defends(p, u) >= 0.0
+        || u.path("build.strength").num_or(0.0) <= 0.0 || u.path("build.wings").truthy()
+        || u.path("rts.sea.ship").truthy() || cycles_left() < 2500.0 { return None; }
+    let by = realm::index(world);
+    let ours = me.get("id").num();
+    if by.get(p.get("attack").num_or(-1.0)).get("owner").num_or(-2.0) != ours { return None; }
+    let here = by.at(u.get("at"));
+    let clear = |q: View| q.get("units").entries().all(|(f, n)|
+        n.num_or(0.0) <= 0.0 || f.parse::<f64>().is_ok_and(|f| f == ours));
+    if !clear(here) { return None; }
+    let neutral = |q: View| q.truthy() && q.get("visible").truthy() && q.get("owner").num_or(-2.0) == -1.0
+        && clear(q) && !q.get("leased").iter().any(|l| l.get("to").num_or(-1.0) == ours);
+    let target = if neutral(here) { Some(here) } else if here.get("owner").num_or(-2.0) == ours {
+        here.get("adj").iter().take(8).map(|id| by.at(id)).filter(|q| neutral(*q))
+            .max_by(|a, b| a.get("cores").num_or(0.0).total_cmp(&b.get("cores").num_or(0.0)))
+    } else { None }?;
+    let mut out = orders::to(u, "capture", target.get("id").num(), world, me, ())?;
+    let local = obj! {"attack"=>target.get("id"),"stage"=>u.get("at"),"defend"=>-1,
+        "need"=>2,"threat"=>0,"at"=>world.get("seconds")};
+    out.set("ram", vec![obj! {"write"=>0,"bytes"=>plan::pack(&local)}]);
+    out.set("alert", 7);
+    Some(out)
+}
+
 fn war_order(u: View, world: View, me: View) -> Option<Value> {
     if common::received_ship(u,world,me) { return None; }
     let p = plan::of(me, u);
+    if let Some(out) = cleared_front(u, world, me, &p) { return Some(out); }
     let defend = common::defends(&p, u);
     let defending = defend >= 0.0;
     let target = if defending { defend } else { vn(p.get("attack")) };

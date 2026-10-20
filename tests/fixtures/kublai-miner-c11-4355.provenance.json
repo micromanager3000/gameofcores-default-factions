@@ -1,0 +1,17 @@
+{
+  "scope": "Exact callback arguments captured from authored public default programs in rejected C11 simulator worlds. These are regression inputs; they are not fresh acceptance results or human player observations.",
+  "engineRevision": "2f5c1c8364f98b3549a1298974ee222c3f94e2be",
+  "factionBaselineRevision": "f4d8cffc23b2d26f436855d944054a7f1d3c08ba",
+  "meterRate": 64,
+  "fixture": "kublai-miner-c11-4355.json",
+  "program": "kublai",
+  "function": "miner",
+  "recordedAllowance": 4355,
+  "tick": 118575,
+  "fixtureSha256": "703c6ea23fa7675fa2f262f0815331e78b6f490785e54e50bc4c0fbe0ce9775f",
+  "captureSha256": "335643ddd0fa93645cff56fc93416ee1cca1aca3c81220fa35caddbd4155a0ba",
+  "sourceSha256": "e23cf6a86a73a02858e7f9fde1533197096cbe8033aba1ab139bab6e4fe5cc0d",
+  "worlds": [
+    "day-149101-r0"
+  ]
+}
