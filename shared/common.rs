@@ -655,10 +655,9 @@ pub fn received_ship(u: View, world: View, me: View) -> bool {
     true
 }
 
-/// An armed escort for a house that ships cargo by sea, and a second once it ships more or a raider shows. The
-/// Quiet Fleet (seat 4) sails its own navy.
+/// Add convoy escorts unless the program has the Fleet's dedicated warjunk controller.
 fn maintain_escorts(orders: &mut Value, world: View, me: View) {
-    if !world.get("logistics").truthy() || cycles_left() < 5000.0 || me.get("seat").num_or(-1.0) == 4.0 { return; }
+    if !world.get("logistics").truthy() || cycles_left() < 5000.0 || me.path("types.warjunk").truthy() { return; }
     let techs = me.get("techs");
     if !techs.get("seaTraversal").truthy() || !techs.get("ranged").truthy() || me.path("rts.sea.ports").is_empty() { return; }
     let have = me.path("units.byType");

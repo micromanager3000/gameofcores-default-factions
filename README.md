@@ -134,6 +134,7 @@ Arjuna pursues Flight after mining, Dash and Ranged. A funded recovery crew can 
 Aircraft controllers use visible `me.rts.air.contacts` entries to intercept rival wings. They use `me.rts.air.decks` to board their own afloat decks while cooling. During recovery, each fielded aircraft type gets 2,400 controller cycles every third second. Recovery gives fabrication zero, so the controllers land aircraft while production waits.
 
 Think shares convoy locations and combat estimates through plan RAM. Ground units carry combat estimates on unit page 93 and discard them after 120 seconds. Convoy guards use locations observed within the last 12 seconds.
+Shared escorts follow the program's unit catalogue when programs change seats. The Fleet keeps its dedicated navy.
 
 In worlds with town walls, offensive artillery uses `capture` orders to damage them.
 Guns already deployed at the target keep firing at its walls.

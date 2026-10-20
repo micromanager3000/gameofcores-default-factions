@@ -468,3 +468,28 @@ fn artillery_already_at_the_enemy_town_switches_its_standing_fight_to_the_walls(
             "a gun already at the siege keeps its deployment");}
     }
 }
+
+#[test]
+fn generic_escorts_follow_the_program_catalogue_when_houses_change_seats() {
+    for seat in [0,4,7] {
+        for fleet in [false,true] {
+            let mut fixture=productive_local_fixture();
+            fixture[0].set("seconds",3);
+            fixture[1].set("seat",seat);
+            fixture[1].entry("units").entry("byType").set("freighter",1);
+            fixture[1].entry("techs").set("seaTraversal",true);
+            fixture[1].entry("techs").set("ranged",true);
+            fixture[1].entry("rts").entry("sea").set("ports",arr![0]);
+            fixture[1].entry("rts").set("licenses",arr!["hull"]);
+            fixture[1].set("build",obj! {"points"=>10,"wingRange"=>0,
+                "max"=>obj! {"hp"=>5,"speed"=>5,"strength"=>5,"carry"=>4,"vision"=>5,"range"=>2,"wings"=>0,"stealth"=>0},
+                "standard"=>obj! {"hp"=>2,"speed"=>2,"strength"=>2,"carry"=>2,"vision"=>2,"range"=>0,"wings"=>0,"stealth"=>0},
+                "price"=>obj! {"hp"=>1,"speed"=>1,"strength"=>1,"carry"=>1,"vision"=>1,"range"=>2,"wings"=>3,"stealth"=>2}});
+            if fleet {fixture[1].entry("types").set("warjunk",obj! {"name"=>"Warjunk"});}
+            let args=views(&fixture);
+            let orders=common::govern(args[0],args[1],0.4,||obj! {});
+            let escort=orders.get("spawn").items().iter().any(|s|s.get("type").str()=="escort");
+            assert_eq!(escort,!fleet,"seat={seat}, dedicated fleet={fleet}: {orders:?}");
+        }
+    }
+}
