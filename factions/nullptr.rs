@@ -149,7 +149,7 @@ const TYPES: [(&str, f64, f64); 10] = [
     ("skirm", 6000.0, 1.0),
     ("lancer", 6000.0, 2.0),
     ("sentry", 6000.0, 1.0),
-    ("gun", 6000.0, 1.0),
+    ("gun", 8000.0, 1.0),
     ("repairer", 5000.0, 1.0),
 ];
 
@@ -1070,63 +1070,70 @@ fn lancer(units: View, world: View, me: View) {
 }
 
 fn gun(units: View, world: View, me: View) {
-    // Route planning can exhaust a low scaled callback before a single gun reaches its loop guard.
-    if me.get("rts").truthy() && cycles_left() < 2500.0 { return; }
-    let rts = me.get("rts").truthy();
+    // Admission includes cold plan reads, routing, order submission and the return.
+    if me.get("rts").truthy() && cycles_left() < 3200.0 { return; }
+    let mut budget = ControlBudget::new(me);
     for i in 0..units.len() {
-        if rts && cycles_left() < 2200.0 {
-            break;
-        }
+        if !budget.has_room(me) { break; }
         let u = turn(units, i, world);
-        let p = plan::of(me, u);
-        let defend = Value::Num(common::defends(&p, u));
-        let target = if vn(&defend) >= 0.0 { &defend } else { p.get("attack") };
-        let r = u.get("rts");
-        let set_up = r.get("deployed").truthy() || r.get("deploying").truthy();
-        let pack_up = || obj! { "id" => u.get("id"), "deploy" => false, "alert" => 8 };
-        // A deployed gun cannot move. If its strategic target moved, first pack it into the same order that begins the
-        // new route; never set up simply because an order exists while it is still travelling from its spawn.
-        if target.is_undef() || vn(target) < 0.0 {
-            if set_up {
-                order(pack_up());
-            }
-            continue;
+        let began = cycles_left();
+        if !budget.admits(u, world, me) { continue; }
+        gun_turn(u, world, me);
+        budget.finish(began);
+    }
+}
+
+fn gun_turn(u: View, world: View, me: View) {
+    let p = plan::of(me, u);
+    let defend = Value::Num(common::defends(&p, u));
+    let target = if vn(&defend) >= 0.0 { &defend } else { p.get("attack") };
+    let r = u.get("rts");
+    let set_up = r.get("deployed").truthy() || r.get("deploying").truthy();
+    let pack_up = || obj! { "id" => u.get("id"), "deploy" => false, "alert" => 8 };
+    // A deployed gun cannot move. If its strategic target moved, first pack it into the same order that begins the
+    // new route; never set up simply because an order exists while it is still travelling from its spawn.
+    if target.is_undef() || vn(target) < 0.0 {
+        if set_up {
+            order(pack_up());
         }
-        let stage = p.get("stage");
-        let under_pressure = is_str(u.get("why"), "attacked") && set_up;
-        if under_pressure && vn(stage) >= 0.0 && !same_v(u.get("at"), stage) {
-            match orders::to(u, "move", vn(stage), world, me, ()) {
-                Some(mut retreat) => {
-                    retreat.set("deploy", false);
-                    retreat.set("alert", 8);
-                    order(retreat);
+        return;
+    }
+    let stage = p.get("stage");
+    let under_pressure = is_str(u.get("why"), "attacked") && set_up;
+    if under_pressure && vn(stage) >= 0.0 && !same_v(u.get("at"), stage) {
+        match orders::to(u, "move", vn(stage), world, me, ()) {
+            Some(mut retreat) => {
+                retreat.set("deploy", false);
+                retreat.set("alert", 8);
+                order(retreat);
+            }
+            None => order(pack_up()),
+        }
+        return;
+    }
+    let verb=common::siege_verb(world,me,vn(target),vn(&defend)>=0.0);
+    let o = carry(orders::to(u, verb, vn(target), world, me, ()), u, &p, me);
+    if set_up {
+        if !same_v(u.get("at"), target) || n(u.get("to")) >= 0.0 {
+            match o {
+                Some(mut o) => {
+                    o.set("deploy", false);
+                    o.set("alert", 8);
+                    order(o);
                 }
                 None => order(pack_up()),
             }
-            continue;
-        }
-        let o = carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me);
-        if set_up {
-            if !same_v(u.get("at"), target) || n(u.get("to")) >= 0.0 {
-                match o {
-                    Some(mut o) => {
-                        o.set("deploy", false);
-                        o.set("alert", 8);
-                        order(o);
-                    }
-                    None => order(pack_up()),
-                }
-            }
-            continue;
-        }
-        // Only a gun already standing in the target province may set up. `to < 0` tells arrival from a route whose
-        // first leg has not started.
-        if same_v(u.get("at"), target) && n(u.get("to")) < 0.0 {
-            order(obj! { "id" => u.get("id"), "deploy" => true, "alert" => 8 });
-        } else if let Some(mut o) = o {
-            o.set("alert", 8);
-            order(o);
-        }
+        } else if let Some(o)=o { order(o); }
+        return;
+    }
+    // Only a gun already standing in the target province may set up. `to < 0` tells arrival from a route whose
+    // first leg has not started.
+    if same_v(u.get("at"), target) && n(u.get("to")) < 0.0 {
+        let mut setup=o.unwrap_or_else(||obj! {"id"=>u.get("id")});
+        setup.set("deploy",true);setup.set("alert",8);order(setup);
+    } else if let Some(mut o) = o {
+        o.set("alert", 8);
+        order(o);
     }
 }
 

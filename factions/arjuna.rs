@@ -1031,7 +1031,8 @@ fn gun(units: View, world: View, me: View) {
             }
             continue;
         }
-        let o = carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me);
+        let verb=common::siege_verb(world,me,vn(target),vn(&defend)>=0.0);
+        let o = carry(orders::to(u, verb, vn(target), world, me, ()), u, &p, me);
         if set_up {
             if !same_v(u.get("at"), target) || n(u.get("to")) >= 0.0 {
                 match o {
@@ -1042,13 +1043,14 @@ fn gun(units: View, world: View, me: View) {
                     }
                     None => order(pack_up()),
                 }
-            }
+            } else if let Some(o)=o { order(o); }
             continue;
         }
         // Only a gun already standing in the target province may set up. `to < 0` tells arrival from a route whose
         // first leg has not started.
         if same_v(u.get("at"), target) && n(u.get("to")) < 0.0 {
-            order(obj! { "id" => u.get("id"), "deploy" => true, "alert" => 8 });
+            let mut setup=o.unwrap_or_else(||obj! {"id"=>u.get("id")});
+            setup.set("deploy",true);setup.set("alert",8);order(setup);
         } else if let Some(mut o) = o {
             o.set("alert", 8);
             order(o);

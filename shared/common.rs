@@ -636,6 +636,13 @@ fn guard_shipping_for(units:&[View],original:Option<View>,world:View,me:View) {
     }
 }
 
+/// Artillery hits hostile town walls with a capture order. Defense and older worlds keep fighting.
+pub fn siege_verb(world:View,me:View,target:f64,defend:bool)->&'static str {
+    if !world.get("walls").truthy() || defend {return "fight";}
+    let owner=realm::index(world).get(target).get("owner").num_or(-1.0);
+    if owner==me.get("id").num() || realm::is_ally(me,owner) {"fight"}else{"capture"}
+}
+
 /// A hired or bought hull can inherit a land controller name. Keep its cargo job, or give it a sea job.
 pub fn received_ship(u: View, world: View, me: View) -> bool {
     if !u.path("rts.sea.ship").truthy() { return false; }
@@ -1051,9 +1058,7 @@ pub fn rally(world: View, me: View, list: Vec<View>) -> Vec<View> {
 
 /// Whether your army can hold on to province `q` once it takes it: it's on your land border or over a mountain
 /// pass, or over the sea or through the air where a ship of yours keeps station on the crossing (`sea::station`).
-/// RAM, and with it the plan, crosses to another landmass only near a ship of yours, so an army that takes land over
-/// the water with no ship there stands idle on it. `ships`: whether you field ships at all (the default program and
-/// the house programs don't); without, it looks for none.
+/// RAM crosses water near a friendly ship. `ships` enables checking your hulls for that connection.
 pub fn can_hold(world: View, me: View, ships: bool) -> impl Fn(View) -> bool {
     let me_id = me.get("id").num();
     let by_id = realm::index(world);
@@ -1174,8 +1179,7 @@ pub fn sway_targets(world: View, me: View) -> Vec<View> {
 
 // ---- the plan ----
 
-/// A siege moves only while its capturers in the town's ring number this many for each defender there
-/// (`RULES.siegeOdds`).
+/// Capturer odds in worlds saved before town walls. Current planners also use them as a conservative force estimate.
 pub const SIEGE_ODDS: f64 = 3.0;
 
 /// Visible owner defenders in the capture ring. Older observations count the whole province garrison.
@@ -1183,8 +1187,7 @@ pub fn town_defenders(q: View) -> f64 {
     q.get("townGarrison").num_or(q.get("garrison").or(0.0))
 }
 
-/// Gather two capturers for free land. For a rival, use visible town defenders plus two reinforcements.
-/// Capitals need at least four capturers. Older observations fall back to the whole province's garrison.
+/// A conservative assault size: two for free land, more for visible defenders, at least four for a capital.
 pub fn muster_for(q: View) -> f64 {
     if !q.truthy() {
         return 0.0;
@@ -1209,9 +1212,7 @@ pub fn fighters(me: View) -> f64 {
     (n(u.get("total"))-workers-u.path("byType.hauler").num_or(0.0)-u.path("byType.freighter").num_or(0.0)-u.path("doing.study").num_or(0.0)).max(0.0)
 }
 
-/// Whether a siege of `q` is hopeless: its garrison needs more capturers ([`SIEGE_ODDS`] each) than you have fighters
-/// ([`fighters`]), so your units there would die without taking it. A siege that came to this, its defenders
-/// reinforced or your army worn down, is given up: the army goes elsewhere until it's big enough.
+/// Reject a target when its visible defenders exceed the planner's conservative numerical threshold.
 pub fn hopeless(me: View, q: View) -> bool {
     town_defenders(q) * SIEGE_ODDS > fighters(me)
 }
@@ -1272,9 +1273,7 @@ pub fn survey(world: View, me: View, targets: &[View], per_slot: f64) -> Value {
     let partner = partner_land(world, me);
     let mut kept: Vec<View> = targets.iter().copied().filter(|q| !partner.contains(&q.get("id").num()) && !hopeless(me, *q)).collect();
     let mut breaches: Vec<(f64, f64)> = Vec::new();
-    // Capture odds decide when a siege progresses. Capture orders also fight through the house's reflexes.
-    // With no capture available, require six ground fighters and a 50% numerical advantage plus two reserves.
-    // Six covers a capital's four capturers with two replacements; aircraft and workers cannot supply them.
+    // Without an affordable target, require six ground fighters and a 50% advantage plus two reserves.
     let seen = world.get("units");
     if kept.is_empty() && seen.is_arr() && cycles_left() > 7000.0 + seen.len() as f64 * 60.0 {
         let mut ground = 0.0;

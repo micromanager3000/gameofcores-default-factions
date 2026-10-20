@@ -1066,22 +1066,27 @@ fn artillery(units: View, world: View, me: View) {
         } else {
             me.get("capital").num()
         };
+        let verb=common::siege_verb(world,me,target,common::defends(&p,u)>=0.0);
         let travelling = u.get("at").num() != target || number(u.get("to")) >= 0.0;
         if travelling {
             // A deployed gun has zero movement. Pack it in the same order that gives
             // it the new route, including when the target changed under its feet.
-            let o = carry(orders::to(u, "fight", target, world, me, ()), u, &p, me);
+            let o = carry(orders::to(u, verb, target, world, me, ()), u, &p, me);
             if o.is_some() || r.get("deployed").truthy() || r.get("deploying").truthy() {
                 let mut o = o.unwrap_or_else(|| obj! { "id" => u.get("id") });
                 o.set("deploy", false);
                 o.set("power", obj! { "drive" => 260, "armor" => 180, "weapon" => 650 });
                 if !ControlBudget::submit(o) { break; }
             }
-        } else if !r.get("deployed").truthy() && !r.get("deploying").truthy() {
-            // The destination is reached: spend the one-second setup time, then let
-            // reflex choose shell targets. Do not plant guns at their home province.
-            if !ControlBudget::submit(obj! { "id" => u.get("id"), "deploy" => true,
-                "power" => obj! { "drive" => 120, "armor" => 180, "weapon" => 650 } }) { break; }
+        } else {
+            let setup_needed=!r.get("deployed").truthy() && !r.get("deploying").truthy();
+            let update=orders::to(u,verb,target,world,me,());
+            if setup_needed || update.is_some() {
+                let mut setup=update.unwrap_or_else(||obj! {"id"=>u.get("id")});
+                if setup_needed {setup.set("deploy",true);}
+                setup.set("power",obj! {"drive"=>120,"armor"=>180,"weapon"=>650});
+                if !ControlBudget::submit(setup) { break; }
+            }
         }
         budget.finish(began);
     }

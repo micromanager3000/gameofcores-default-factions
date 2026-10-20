@@ -506,7 +506,7 @@ enum PlannerAdmission { Full, Raise(Value), Lean }
 fn planner_map_need(world: View, me: View) -> f64 {
     let base=if me.path("units.total").num_or(0.0)<20.0 {15000.0}else{20000.0};
     // Frontier ranking, survey, roads and shared-plan publication each revisit the map.
-    base+400.0*world.get("provinces").len() as f64+100.0*world.get("units").len() as f64
+    base+500.0*world.get("provinces").len() as f64+200.0*world.get("units").len() as f64
 }
 
 // Repair a planner allowance before opening the map and market. A capped call runs a separate local pass.
@@ -1972,7 +1972,7 @@ fn sentry(units: View, world: View, me: View) -> Value {
         let mut o = if defend < 0.0 && committed {
             match common::front(u, world, me, &pl) {
                 Some(o) => o,
-                None => orders::to(u, if u.get("type").str() == "spire" || owner == me.get("id").num() { "fight" } else { "capture" }, at, world, me, ()),
+                None => orders::to(u, if owner == me.get("id").num() { "fight" } else if u.get("type").str() == "spire" { common::siege_verb(world,me,at,false) } else { "capture" }, at, world, me, ()),
             }
         } else {
             orders::hold(u, Point::new(0.0, 0.0), world, me, Some(at))

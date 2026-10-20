@@ -1345,22 +1345,28 @@ fn artillery(units: View, world: View, me: View) {
         } else {
             me.get("capital").value()
         };
+        let verb=common::siege_verb(world,me,vnum(&target),common::defends(&p,u)>=0.0);
         let travelling = !eqv(u.get("at"), &target) || num(u.get("to")) >= 0.0;
         if travelling {
             if !budget.route(u, vnum(&target), world, me) { continue; }
             // A deployed gun has zero movement. Pack it in the same order that gives
             // it the new route, including when the target changed under its feet.
-            let o = carry(orders::to(u, "fight", vnum(&target), world, me, ()), u, &p, me);
+            let o = carry(orders::to(u, verb, vnum(&target), world, me, ()), u, &p, me);
             if o.is_some() || r.get("deployed").truthy() || r.get("deploying").truthy() {
                 let mut o = o.unwrap_or_else(|| obj! { "id" => u.get("id") });
                 o.set("deploy", false);
                 o.set("power", obj! { "drive" => 260, "armor" => 180, "weapon" => 650 });
                 order(o);
             }
-        } else if !r.get("deployed").truthy() && !r.get("deploying").truthy() {
-            // The destination is reached: spend the one-second setup time, then let
-            // reflex choose shell targets. Do not plant guns at their home province.
-            order(obj! { "id" => u.get("id"), "deploy" => true, "power" => obj! { "drive" => 120, "armor" => 180, "weapon" => 650 } });
+        } else {
+            let setup_needed=!r.get("deployed").truthy() && !r.get("deploying").truthy();
+            let update=orders::to(u,verb,vnum(&target),world,me,());
+            if setup_needed || update.is_some() {
+                let mut setup=update.unwrap_or_else(||obj! {"id"=>u.get("id")});
+                if setup_needed {setup.set("deploy",true);}
+                setup.set("power",obj! {"drive"=>120,"armor"=>180,"weapon"=>650});
+                order(setup);
+            }
         }
         budget.finish(began, true);
     }

@@ -172,3 +172,29 @@ fn a_local_kublai_army_develops_the_core_it_just_held() {
     let out=super::local_strategy(args[0],args[1]);
     assert!(out.get("spawn").items().iter().any(|s|s.get("type").str()=="miner"));
 }
+
+#[test]
+fn artillery_orders_strike_walls_only_during_an_offensive_siege() {
+    for (walls,defending,want) in [(false,false,"fight"),(true,false,"capture"),(true,true,"fight")] {
+        let fixture=wall_artillery_fixture("gun",walls,defending,false,false);
+        let args=views(&fixture);
+        super::gun(args[0],args[1],args[2]);
+        let orders=emitted();
+        assert!(orders.iter().any(|o|o.get("do").str()==want && o.get("target").num()==1.0),
+            "walls={walls}, defending={defending}: {orders:?}");
+    }
+}
+
+#[test]
+fn artillery_already_at_the_enemy_town_switches_its_standing_fight_to_the_walls() {
+    for deployed in [false,true] {
+        let fixture=wall_artillery_fixture("gun",true,false,true,deployed);
+        let args=views(&fixture);
+        super::gun(args[0],args[1],args[2]);
+        let orders=emitted();
+        assert!(orders.iter().any(|o|o.get("do").str()=="capture" && o.get("target").num()==1.0),
+            "deployed={deployed}: {orders:?}");
+        if deployed {assert!(!orders.iter().any(|o|matches!(o.get("deploy"),Value::Bool(false))),
+            "a gun already at the siege keeps its deployment");}
+    }
+}

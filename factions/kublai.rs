@@ -1600,6 +1600,7 @@ fn gun(units: View, world: View, me: View) {
             }
             continue;
         }
+        let verb=common::siege_verb(world,me,vn(target),vn(&defend)>=0.0);
         let stage = p.get("stage");
         let under_pressure = is_str(u.get("why"), "attacked") && set_up;
         if under_pressure && vn(stage) >= 0.0 && !same_v(u.get("at"), stage) {
@@ -1617,7 +1618,7 @@ fn gun(units: View, world: View, me: View) {
         if set_up {
             if !same_v(u.get("at"), target) || n(u.get("to")) >= 0.0 {
                 if !can_route { break; }
-                match carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me) {
+                match carry(orders::to(u, verb, vn(target), world, me, ()), u, &p, me) {
                     Some(mut o) => {
                         o.set("deploy", false);
                         o.set("alert", 8);
@@ -1625,16 +1626,17 @@ fn gun(units: View, world: View, me: View) {
                     }
                     None => order(pack_up()),
                 }
-            }
+            } else if let Some(o)=orders::to(u,verb,vn(target),world,me,()) { order(o); }
             continue;
         }
         // Only a gun already standing in the target province may set up. `to < 0` tells arrival from a route whose
         // first leg has not started.
         if same_v(u.get("at"), target) && n(u.get("to")) < 0.0 {
-            order(obj! { "id" => u.get("id"), "deploy" => true, "alert" => 8 });
+            let mut setup=orders::to(u,verb,vn(target),world,me,()).unwrap_or_else(||obj! {"id"=>u.get("id")});
+            setup.set("deploy",true);setup.set("alert",8);order(setup);
         } else {
             if !can_route { break; }
-            if let Some(mut o) = carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me) {
+            if let Some(mut o) = carry(orders::to(u, verb, vn(target), world, me, ()), u, &p, me) {
                 o.set("alert", 8);
                 order(o);
             }
