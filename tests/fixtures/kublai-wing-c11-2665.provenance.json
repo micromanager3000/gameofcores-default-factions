@@ -1,0 +1,17 @@
+{
+  "scope": "Exact callback arguments captured from authored public default programs in rejected C11 simulator worlds. These are regression inputs; they are not fresh acceptance results or human player observations.",
+  "engineRevision": "2f5c1c8364f98b3549a1298974ee222c3f94e2be",
+  "factionBaselineRevision": "f4d8cffc23b2d26f436855d944054a7f1d3c08ba",
+  "meterRate": 64,
+  "fixture": "kublai-wing-c11-2665.json",
+  "program": "kublai",
+  "function": "wing",
+  "recordedAllowance": 2665,
+  "tick": 86175,
+  "fixtureSha256": "3fa9aef7eaf0ecdd49c2af29ed1d8b7c34b1bfb77b7eeb47108d8286972c1b0f",
+  "captureSha256": "0bc864b1ed4965067dbfebe439ae5ca27de6e47ca4de96f7e0fa014f4fc61f10",
+  "sourceSha256": "e23cf6a86a73a02858e7f9fde1533197096cbe8033aba1ab139bab6e4fe5cc0d",
+  "worlds": [
+    "six-149131-r0"
+  ]
+}

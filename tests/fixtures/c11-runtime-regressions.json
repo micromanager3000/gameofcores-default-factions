@@ -1,0 +1,136 @@
+{
+  "scope": "All unique non-puzzle callback arguments captured in the 14 completed rejected C11 worlds. Duplicate first-six-hour/day captures share one fixture. Numerical balance criteria remain separate.",
+  "cases": [
+    {
+      "fixture": "kublai-wing-c11-2946.json",
+      "program": "kublai",
+      "function": "wing",
+      "recordedAllowance": 2946,
+      "tick": 77970,
+      "fixtureSha256": "a914a033d54ef0dbe46126549a53cfe758d1079a7d5696c6fd69a39688a96e28",
+      "captureSha256": "1a6d6a6ad55dcac960a9585a87bebb01e948e229c6c8d5ded1e5a4ad8e725ca3",
+      "sourceSha256": "e23cf6a86a73a02858e7f9fde1533197096cbe8033aba1ab139bab6e4fe5cc0d",
+      "worlds": [
+        "day-149101-r0",
+        "six-149101-r0"
+      ]
+    },
+    {
+      "fixture": "kublai-gun-c11-3400.json",
+      "program": "kublai",
+      "function": "gun",
+      "recordedAllowance": 3400,
+      "tick": 118395,
+      "fixtureSha256": "ab8d3a71fb474828f8f0db013d1cac84e33086532ce55c1843cabc3f25e9ff11",
+      "captureSha256": "b1f3694ac76d487c0534523aaead0ec7be60788358a52ba6615f36af75452ac4",
+      "sourceSha256": "e23cf6a86a73a02858e7f9fde1533197096cbe8033aba1ab139bab6e4fe5cc0d",
+      "worlds": [
+        "day-149101-r0"
+      ]
+    },
+    {
+      "fixture": "kublai-miner-c11-4355.json",
+      "program": "kublai",
+      "function": "miner",
+      "recordedAllowance": 4355,
+      "tick": 118575,
+      "fixtureSha256": "703c6ea23fa7675fa2f262f0815331e78b6f490785e54e50bc4c0fbe0ce9775f",
+      "captureSha256": "335643ddd0fa93645cff56fc93416ee1cca1aca3c81220fa35caddbd4155a0ba",
+      "sourceSha256": "e23cf6a86a73a02858e7f9fde1533197096cbe8033aba1ab139bab6e4fe5cc0d",
+      "worlds": [
+        "day-149101-r0"
+      ]
+    },
+    {
+      "fixture": "nullptr-think-c11-45784.json",
+      "program": "nullptr",
+      "function": "think",
+      "recordedAllowance": 45784,
+      "tick": 222484,
+      "fixtureSha256": "00cb73e400a62ea4a3cad4b2b138ac73a25304b2c941df5d7a4406837d87e8fc",
+      "captureSha256": "800df8c474287e16f7c78c7201bda72151ecdf5ef316da5635aabe3075e91d83",
+      "sourceSha256": "b23360498e91b651b2334f10ae8a3953406159ed34b329d55bd97207991cb7e8",
+      "worlds": [
+        "day-149101-r0"
+      ]
+    },
+    {
+      "fixture": "kublai-think-c11-48106.json",
+      "program": "kublai",
+      "function": "think",
+      "recordedAllowance": 48106,
+      "tick": 94290,
+      "fixtureSha256": "ff4d247268e2f4ee5875b5f5f3724dcfe0dcf88e0a6c47153e8fa1e9a3e0eeb2",
+      "captureSha256": "8687acfe08445deed18c06fcb817c3461766d267b205ed89abae975a92d157ea",
+      "sourceSha256": "e23cf6a86a73a02858e7f9fde1533197096cbe8033aba1ab139bab6e4fe5cc0d",
+      "worlds": [
+        "six-149101-r3"
+      ]
+    },
+    {
+      "fixture": "kublai-wing-c11-2669.json",
+      "program": "kublai",
+      "function": "wing",
+      "recordedAllowance": 2669,
+      "tick": 40230,
+      "fixtureSha256": "be202b44525d2d253437d397ddc3f968b3efe894922c9e317487a5331b0c177f",
+      "captureSha256": "585fbb579e65b55feba39d1ccca0b5adf71da6b82f86cd7ca7854664f656d6ed",
+      "sourceSha256": "e23cf6a86a73a02858e7f9fde1533197096cbe8033aba1ab139bab6e4fe5cc0d",
+      "worlds": [
+        "six-149111-r3"
+      ]
+    },
+    {
+      "fixture": "kublai-think-c11-70687.json",
+      "program": "kublai",
+      "function": "think",
+      "recordedAllowance": 70687,
+      "tick": 54555,
+      "fixtureSha256": "0fa32f99d0c4d48c9f722444c3c0c9d96890b1b2ea4796e340795208a65504b3",
+      "captureSha256": "e763f5660129b7db982910b011810ea40f20bee7b4d1185297b1b296108c9045",
+      "sourceSha256": "e23cf6a86a73a02858e7f9fde1533197096cbe8033aba1ab139bab6e4fe5cc0d",
+      "worlds": [
+        "six-149111-r3"
+      ]
+    },
+    {
+      "fixture": "atlantis-think-c11-7867.json",
+      "program": "atlantis",
+      "function": "think",
+      "recordedAllowance": 7867,
+      "tick": 48630,
+      "fixtureSha256": "f262d1d9a4458a1aeabdeb7087e9c1445d80fe9cc38d2f691c3ee731d4e35786",
+      "captureSha256": "bbd6bc77e54a6fa97af9cd629f1a30482f959902c17678d8153a50cef2b03c1c",
+      "sourceSha256": "4ef1975559bfff19c7f6a366c2adbdbab6a7a81fcf0735a84d5e46954101e74c",
+      "worlds": [
+        "six-149119-r3"
+      ]
+    },
+    {
+      "fixture": "kublai-think-c11-46495.json",
+      "program": "kublai",
+      "function": "think",
+      "recordedAllowance": 46495,
+      "tick": 55410,
+      "fixtureSha256": "aff33103133947306d2185ff3704966d1b769702bf1c73e006b1aa1c3bc82732",
+      "captureSha256": "650e4e99bd5fd5d06cb506e4bc49112d45026131cd7c3734b490716c82680810",
+      "sourceSha256": "e23cf6a86a73a02858e7f9fde1533197096cbe8033aba1ab139bab6e4fe5cc0d",
+      "worlds": [
+        "six-149131-r0"
+      ]
+    },
+    {
+      "fixture": "kublai-wing-c11-2665.json",
+      "program": "kublai",
+      "function": "wing",
+      "recordedAllowance": 2665,
+      "tick": 86175,
+      "fixtureSha256": "3fa9aef7eaf0ecdd49c2af29ed1d8b7c34b1bfb77b7eeb47108d8286972c1b0f",
+      "captureSha256": "0bc864b1ed4965067dbfebe439ae5ca27de6e47ca4de96f7e0fa014f4fc61f10",
+      "sourceSha256": "e23cf6a86a73a02858e7f9fde1533197096cbe8033aba1ab139bab6e4fe5cc0d",
+      "worlds": [
+        "six-149131-r0"
+      ]
+    }
+  ]
+}

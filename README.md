@@ -79,6 +79,7 @@ Buildings and plants count against the army's share of income, since the upkeep 
 Research and influence slow down while the bank holds under 60 seconds of the army's upkeep.
 The upkeep lane may always spend at least 80% of income a second.
 A house disbands units for want of cycles only after 90 seconds short, a few at a time, until upkeep fits in 80% of income.
+Brief cargo receipts keep the recovery timer while units remain unpaid. Normal planning clears it once every unit is paid.
 Over its unit cap, or in a world without cargo, it cuts sooner and deeper, to 55% of income.
 
 ## Export a program
@@ -92,12 +93,16 @@ Exports fit the game's 512 KiB source limit. Players can copy and change the exp
 The program compiles against the public game SDK. All faction helpers count toward source RAM.
 The game provides 3,360 free RAM pages to every faction, covering the included preset source and the grid planner.
 Compiled instructions are metered normally.
+Quiet Fleet leaves standing infantry orders in place when a short call cannot afford its plan lookup.
+Compute of Nations checks its return budget between optional market jobs and keeps completed work.
 Shared code fenced `// @house` … `// @end` goes into the house programs only. The default program leaves out the sea
 escorts this way, but carries the same power grid planner as the founders.
 Both the Rust package and the Node exporter produce the same source; `npm test` checks every program.
 
 Every house supports physical CPU cargo when `world.logistics` is present.
 Miners unload locally, ground carriers connect depots, and freighters carry cargo between docks.
+Loaded haulers bypass a full depot when they can reach the capital overland.
+During recovery, reserve promises fit automatic income even after a recent cargo delivery.
 Carriers leave exhausted depots with partial loads and prioritize useful delivery trips.
 Quiet Fleet recovers visible wreck cargo and returns it through the capital's dock.
 It retires an empty corsair when no worthwhile target or nearby wreck remains.
@@ -155,5 +160,32 @@ Arjuna pursues Flight after mining, Dash and Ranged. A funded recovery crew can 
 Aircraft controllers use visible `me.rts.air.contacts` entries to intercept rival wings. They use `me.rts.air.decks` to board their own afloat decks while cooling. During recovery, each fielded aircraft type gets 2,400 controller cycles every third second. Recovery gives fabrication zero, so the controllers land aircraft while production waits.
 
 Think shares convoy locations and combat estimates through plan RAM. Ground units carry combat estimates on unit page 93 and discard them after 120 seconds. Convoy guards use locations observed within the last 12 seconds.
+Arjuna's idle frontier troops return for new orders after a fulfilled attack becomes stale.
+Null Pointer's spies keep standing orders when a complete turn cannot fit.
+They check the cost of reading a rival's plan before decoding it.
+Null Pointer's idle ground troops can capture clear neutral land after their old target falls.
+They preserve active orders and local defense, and carry the new advance in unit RAM.
+Its route planner checks the full map scan before opening a new search.
+A short Atlantis think returns its completed policy before pricing another recruit.
+The shortest Atlantis calls restore the next allowance before constructing a recovery plan.
+Recruitment reviews wait until the CPU policy and callback return can fit.
+Its guns can refresh their portable plan when a new route cannot fit.
+Kublai sizes court reviews to the visible map and army.
+Its wings and guns price cold plan reads before decoding them.
+Its short miner calls preserve local recovery work before opening an expensive cold plan.
+Nations funds a complete cold aircraft turn before changing its flight orders.
+A requested Templar retry includes the governor's work before the planner.
+Shared escorts follow the program's unit catalogue when programs change seats. The Fleet keeps its dedicated navy.
+
+Templar and Nations escorts can turn nearby rival ships onto their beam and fire a funded broadside.
+They preserve paid gunfire and share the bank and ability cycles left after other combat actions.
+Loaded ships keep their cargo route.
+Aligned volleys and reloads preserve the current sailing course.
+Nations handles land contacts before naval aiming within the same reflex allowance.
+Fleet and Nations defer reflex pool setup when the allowance cannot fund their first turn.
+
+In worlds with town walls, offensive artillery uses `capture` orders to damage them.
+Guns already deployed at the target keep firing at its walls.
+Defense and worlds saved before walls use `fight` orders.
 
 Run the authored house fixtures with `node tools/test-strategies.mjs ../gameofcores`. They exercise exported programs against that checkout's SDK.

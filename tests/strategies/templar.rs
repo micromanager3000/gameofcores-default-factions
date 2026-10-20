@@ -156,3 +156,29 @@ fn logistics_miner_keeps_a_bounded_cargo_retry_below_the_c4_full_assignment_runw
     assert!(super::common::LOGISTICS_MINER_FALLBACK_RUNWAY < 4500.0,
         "the recovery miner allocation can still reach its one local gather fallback");
 }
+
+#[test]
+fn artillery_orders_strike_walls_only_during_an_offensive_siege() {
+    for (walls,defending,want) in [(false,false,"fight"),(true,false,"capture"),(true,true,"fight")] {
+        let fixture=wall_artillery_fixture("artillery",walls,defending,false,false);
+        let args=views(&fixture);
+        super::artillery(args[0],args[1],args[2]);
+        let orders=emitted();
+        assert!(orders.iter().any(|o|o.get("do").str()==want && o.get("target").num()==1.0),
+            "walls={walls}, defending={defending}: {orders:?}");
+    }
+}
+
+#[test]
+fn artillery_already_at_the_enemy_town_switches_its_standing_fight_to_the_walls() {
+    for deployed in [false,true] {
+        let fixture=wall_artillery_fixture("artillery",true,false,true,deployed);
+        let args=views(&fixture);
+        super::artillery(args[0],args[1],args[2]);
+        let orders=emitted();
+        assert!(orders.iter().any(|o|o.get("do").str()=="capture" && o.get("target").num()==1.0),
+            "deployed={deployed}: {orders:?}");
+        if deployed {assert!(!orders.iter().any(|o|matches!(o.get("deploy"),Value::Bool(false))),
+            "a gun already at the siege keeps its deployment");}
+    }
+}

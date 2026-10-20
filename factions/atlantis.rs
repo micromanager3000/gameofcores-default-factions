@@ -302,6 +302,8 @@ fn payable(mut orders: Value, me: View) -> Value {
 // under the new CPU policy: what think spent and the other lanes' reserves come off the bank first. A spawn it can't
 // pay is only an error, so it waits a second. start: cycles_left() when think began.
 fn affordable(mut orders: Value, me: View, start: f64) -> Value {
+    // Return the completed policy before pricing another recruit.
+    if rts(me) && cycles_left()<4000.0 {orders.set("spawn",Value::arr());return orders;}
     orders = payable(orders, me);
     let c = me.get("rts").get("cpu");
     let policy = orders.get("compute").get("cpu").clone();
@@ -510,6 +512,7 @@ fn think(world: View, me: View) -> Value {
     // Recovery's map and unit scans also need fuel when income falls sharply.
     // A policy-only turn lets the next call recover without repeating those scans.
     if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
+        return common::govern(world, me, 0.4, || {
         let income = me.path("rts.cpu.income").num_or(20000.0).max(1.0);
         let mut types = obj! {};
         for ty in me.get("types").keys() { types.set(ty, obj! { "share" => 0, "every" => 8 }); }
@@ -529,10 +532,11 @@ fn think(world: View, me: View) -> Value {
         let mut recovery = mem::get(me.get("ramCapital"), 244);
         if !matches!(recovery, Value::Obj(_)) { recovery = obj! {}; }
         recovery.set("r", true);
-        return common::govern(world, me, 0.4, || obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
+        obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
             "ram" => mem::put(244, &recovery, "local", None, 1).unwrap_or_default(),
             "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0,
-            "memo" => "Recovering production" });
+            "memo" => "Recovering production" }
+        });
     }
     common::govern(world, me, 0.4, || strategy(world, me))
 }
@@ -644,7 +648,7 @@ fn strategy(world: View, me: View) -> Value {
         mix_set(&mut mix,"aeronaut",0.12);
     }
     let pick = |a: (bool, &'static str), b: (bool, &'static str)| -> Vec<&'static str> { [a, b].into_iter().filter(|x| x.0).map(|x| x.1).collect() };
-    if !lean || common::unit_upkeep(me)<=income*0.4 {match choose_spawn(me, &mix, common::miner_room(me, &survey)) {
+    if !lean || (cycles_left()+cycles_reserved()>20000.0 && common::unit_upkeep(me)<=income*0.4) {match choose_spawn(me, &mix, common::miner_room(me, &survey)) {
         Some("miner") => spawn_one(&mut orders, me, "miner", miner_body(), &[]),
         Some("line") => spawn_one(&mut orders, me, "line", line_body(), &[]),
         Some("bulwark") => spawn_one(&mut orders, me, "bulwark", line_body(), &pick((has("armor"), "armor"), (has("dash"), "dash"))),
@@ -1067,22 +1071,27 @@ fn artillery(units: View, world: View, me: View) {
         } else {
             me.get("capital").num()
         };
+        let verb=common::siege_verb(world,me,target,common::defends(&p,u)>=0.0);
         let travelling = u.get("at").num() != target || number(u.get("to")) >= 0.0;
         if travelling {
             // A deployed gun has zero movement. Pack it in the same order that gives
             // it the new route, including when the target changed under its feet.
-            let o = carry(orders::to(u, "fight", target, world, me, ()), u, &p, me);
+            let o = carry(orders::to(u, verb, target, world, me, ()), u, &p, me);
             if o.is_some() || r.get("deployed").truthy() || r.get("deploying").truthy() {
                 let mut o = o.unwrap_or_else(|| obj! { "id" => u.get("id") });
                 o.set("deploy", false);
                 o.set("power", obj! { "drive" => 260, "armor" => 180, "weapon" => 650 });
                 if !ControlBudget::submit(o) { break; }
             }
-        } else if !r.get("deployed").truthy() && !r.get("deploying").truthy() {
-            // The destination is reached: spend the one-second setup time, then let
-            // reflex choose shell targets. Do not plant guns at their home province.
-            if !ControlBudget::submit(obj! { "id" => u.get("id"), "deploy" => true,
-                "power" => obj! { "drive" => 120, "armor" => 180, "weapon" => 650 } }) { break; }
+        } else {
+            let setup_needed=!r.get("deployed").truthy() && !r.get("deploying").truthy();
+            let update=orders::to(u,verb,target,world,me,());
+            if setup_needed || update.is_some() {
+                let mut setup=update.unwrap_or_else(||obj! {"id"=>u.get("id")});
+                if setup_needed {setup.set("deploy",true);}
+                setup.set("power",obj! {"drive"=>120,"armor"=>180,"weapon"=>650});
+                if !ControlBudget::submit(setup) { break; }
+            }
         }
         budget.finish(began);
     }

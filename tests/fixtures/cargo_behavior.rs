@@ -193,3 +193,25 @@ fn a_funded_miner_routes_remote_work_without_replacing_existing_gather_jobs() {
     assert_eq!(out[0].get("id").num(),2.0);
     assert_eq!(out[0].get("target").num(),1.0);
 }
+
+#[test]
+fn a_loaded_hauler_at_a_full_depot_uses_a_reachable_capital_instead_of_waiting_forever() {
+    for reachable in [true,false] {
+        let (mut world,mut me,mut units)=approach_case();
+        let mut home=world.get("provinces").at(0).clone();home.set("id",1);
+        home.set("owner",if reachable {1}else{7});home.set("adj",arr![0]);
+        item(world.entry("provinces"),0).set("adj",arr![1]);world.entry("provinces").push(home);
+        me.set("capital",1);
+        let u=item(&mut units,0);
+        u.entry("rts").entry("cargo").set("job",obj!{"status"=>"depot full",
+            "operation"=>obj!{"unload"=>obj!{"p"=>0,"dock"=>true}},"remaining"=>20000});
+        let orders=cargo_orders(world,me,units);
+        if reachable {
+            assert_eq!(orders.len(),1,"the full load gets one replacement delivery: {orders:?}");
+            assert_eq!(orders[0].get("cargo").get("unload"),&obj!{"p"=>1,"dock"=>false});
+            assert_eq!(orders[0].get("via"),&arr![1]);
+        } else {
+            assert!(orders.is_empty(),"keep the cargo job when the capital cannot be reached");
+        }
+    }
+}

@@ -155,7 +155,7 @@ pub fn air_recovery(units: View, me: View) -> bool {
 /// preserve a cooling stop, and use the carried plan again after cooling. Wings remain part of the body.
 pub fn fly(units: View, world: View, me: View) {
     if air_recovery(units,me) {return;}
-    if cycles_left()<2400.0 {
+    if cycles_left()<3500.0 {
         for u in units.iter().take_while(|_| cycles_left()>400.0) {
             let a=u.path("rts.air");
             if a.get("aloft").truthy() && a.get("heat").num_or(0.0)>=45.0 {
@@ -205,7 +205,7 @@ pub fn fly(units: View, world: View, me: View) {
             if !coming_home { order(obj! {"id"=>u.get("id"),"land"=>true}); }
         }
     }
-    if cycles_left() < 2400.0 { return; }
+    if cycles_left() < 3500.0 { return; }
     let plan = plan::for_units(me, units, world);
     let goal = ["defend", "target", "attack"].iter().map(|k|plan.get(k)).find(|v|v.num().is_finite()&&v.num()>=0.0);
     let Some(goal) = goal else { return };
@@ -351,9 +351,9 @@ fn logistics_miners(units: View, world: View, me: View) {
         if !transferred && cycles_left()>LOGISTICS_MINER_FALLBACK_RUNWAY {
             let index=realm::index(world);let ours=me.get("id").num();let mut gathered=false;let mut remote=None;let mut closed=None;
             if let Some(u)=units.iter().take_while(|_|cycles_left()>1600.0).find(|u| {
+                let at=u.get("at").num();if closed==Some(at){return false;}
                 if u.get("doing").str()=="gather" || u.path("rts.sea.ship").truthy() || cargo(*u)>0.0 || cargo_working(*u,me) {return false;}
                 if remote.is_none(){remote=Some(*u);}
-                let at=u.get("at").num();if closed==Some(at){return false;}
                 let p=index.get(at);
                 let open=p.get("owner").num_or(-1.0)==ours && p.get("mines").iter().enumerate().any(|(k,v)|v.num_or(0.0)>0.0&&realm::worker(p,k as f64)==ours&&p.get("staff").at(k).num_or(0.0)<2.0);
                 if !open{closed=Some(at);}open
@@ -424,6 +424,11 @@ pub fn haul_cargo(units:View,world:View,me:View){
             received_ship(u,world,me);
             // @end
             continue;
+        }
+        // A full shore depot must not strand a load that can reach the capital overland. One that can't, with
+        // [`fixes`], tries another depot below.
+        if u.path("rts.cargo.job.status").str()=="depot full" && cargo(u)>0.0 {
+            if let Some(o)=transfer(u,world,me,E::town(cap),false,None){order(o);continue;}
         }
         if cargo_working(u,me){continue;}
         let at=u.get("at").num();
@@ -637,6 +642,64 @@ fn guard_shipping_for(units:&[View],original:Option<View>,world:View,me:View) {
     }
 }
 
+/// Artillery hits hostile town walls with a capture order. Defense and older worlds keep fighting.
+pub fn siege_verb(world:View,me:View,target:f64,defend:bool)->&'static str {
+    if !world.get("walls").truthy() || defend {return "fight";}
+    let owner=realm::index(world).get(target).get("owner").num_or(-1.0);
+    if owner==me.get("id").num() || realm::is_ally(me,owner) {"fight"}else{"capture"}
+}
+
+/// Add an affordable broadside. Unloaded combat ships can stop briefly to aim a ready volley.
+/// Aligned shots and reloads leave the existing course in place.
+pub fn naval_reflex(u:View, near:View, out:&mut Value, bank:&mut f64, abilities:&mut f64)->bool {
+    let s=u.path("rts.sea");
+    if !s.get("ship").truthy() || u.get("range").num_or(0.0)<=0.0 || s.get("dived").truthy()
+        || out.get("ability").truthy() || cycles_left()<5000.0
+        || u.path("rts.abilityIn.broadside").num_or(0.0)>0.0 {return false;}
+    let level=price_level(u);
+    if bank.min(*abilities)<450.0*level || near.iter().filter(|t|t.get("rival").truthy()).count()>=8 {return false;}
+    let (mut possible,mut useful)=([0_u32;2],[0_u32;2]);
+    let mut target:Option<View>=None;
+    let mut contacts=0_u32;
+    for t in near.iter() {
+        if cycles_left()<3000.0 {return false;}
+        if !t.get("rival").truthy() || t.get("air").truthy() || t.path("rts.sea.water").num_or(-1.0)<0.0
+            || t.path("rts.sea.dived").truthy() {continue;}
+        let d=t.get("d").num_or(99.0);
+        if d>6.2 {continue;}
+        contacts+=1;
+        let bearing=sea::bearing(u,t);
+        let side=usize::from(bearing.side=="starboard");
+        if bearing.off<=47.0 {possible[side]+=1;}
+        let chosen=t.get("range").num_or(0.0)>0.0 || u.get("focus").num_or(-1.0)==t.get("id").num();
+        if !chosen || d>5.8 {continue;}
+        let (x,y)=(t.get("dx").num_or(0.0),t.get("dy").num_or(0.0));
+        let masked=near.iter().any(|f| !f.get("rival").truthy() && !f.get("truce").truthy()
+            && f.path("rts.sea.water").num_or(-1.0)>=0.0 && !f.get("air").truthy()
+            && f.get("d").num_or(99.0)>0.05 && f.get("d").num_or(99.0)<d
+            && f.get("dx").num_or(0.0)*x+f.get("dy").num_or(0.0)*y>0.0
+            && (x*f.get("dy").num_or(0.0)-y*f.get("dx").num_or(0.0)).abs()<d);
+        if masked {continue;}
+        if bearing.off<=43.0 {useful[side]+=1;}
+        if target.is_none_or(|old|d<old.get("d").num_or(99.0)){target=Some(t);}
+    }
+    let best=usize::from(useful[1]>useful[0]);
+    for side in [best,1-best] {
+        let cost=(300.0+150.0*f64::from(possible[side]))*level;
+        if useful[side]>0 && cost<=*bank && cost<=*abilities {
+            *bank-=cost;*abilities-=cost;out.set("ability","broadside");
+            out.set("side",if side==1 {"starboard"}else{"port"});return true;
+        }
+    }
+    let aim_cost=(300.0+150.0*f64::from(contacts))*level;
+    if let Some(t)=target.filter(|t| logistics::cargo(u)<=0.0 && !u.path("rts.cargo.job").truthy()
+        && bank.min(*abilities)>=aim_cost && sea::bearing(u,*t).off>43.0) {
+        let b=sea::beam(u,t);out.set("face",obj!{"x"=>b.x,"y"=>b.y});
+        out.set("step",Value::Null);out.set("hold",false);return true;
+    }
+    false
+}
+
 /// A hired or bought hull can inherit a land controller name. Keep its cargo job, or give it a sea job.
 pub fn received_ship(u: View, world: View, me: View) -> bool {
     if !u.path("rts.sea.ship").truthy() { return false; }
@@ -649,10 +712,9 @@ pub fn received_ship(u: View, world: View, me: View) -> bool {
     true
 }
 
-/// An armed escort for a house that ships cargo by sea, and a second once it ships more or a raider shows. The
-/// Quiet Fleet (seat 4) sails its own navy.
+/// Add convoy escorts unless the program has the Fleet's dedicated warjunk controller.
 fn maintain_escorts(orders: &mut Value, world: View, me: View) {
-    if !world.get("logistics").truthy() || cycles_left() < 5000.0 || me.get("seat").num_or(-1.0) == 4.0 { return; }
+    if !world.get("logistics").truthy() || cycles_left() < 5000.0 || me.path("types.warjunk").truthy() { return; }
     let techs = me.get("techs");
     if !techs.get("seaTraversal").truthy() || !techs.get("ranged").truthy() || me.path("rts.sea.ports").is_empty() { return; }
     let have = me.path("units.byType");
@@ -1187,8 +1249,7 @@ pub fn sway_targets(world: View, me: View) -> Vec<View> {
 
 // ---- the plan ----
 
-/// A siege moves only while its capturers in the town's ring number this many for each defender there
-/// (`RULES.siegeOdds`).
+/// Capturer odds in worlds saved before town walls. Current planners also use them as a conservative force estimate.
 pub const SIEGE_ODDS: f64 = 3.0;
 
 /// Visible owner defenders in the capture ring. Older observations count the whole province garrison.
@@ -1196,8 +1257,7 @@ pub fn town_defenders(q: View) -> f64 {
     q.get("townGarrison").num_or(q.get("garrison").or(0.0))
 }
 
-/// Gather two capturers for free land. For a rival, use visible town defenders plus two reinforcements.
-/// Capitals need at least four capturers. Older observations fall back to the whole province's garrison.
+/// A conservative assault size: two for free land, more for visible defenders, at least four for a capital.
 pub fn muster_for(q: View) -> f64 {
     if !q.truthy() {
         return 0.0;
@@ -1222,8 +1282,8 @@ pub fn fighters(me: View) -> f64 {
     (n(u.get("total"))-workers-u.path("byType.hauler").num_or(0.0)-u.path("byType.freighter").num_or(0.0)-u.path("doing.study").num_or(0.0)).max(0.0)
 }
 
-/// Whether a siege of `q` is hopeless: its garrison needs more capturers ([`SIEGE_ODDS`] each) than you have
-/// [`fighters`]. Such a siege is given up until the army is big enough.
+/// Whether a siege of `q` is hopeless: its visible town defenders times [`SIEGE_ODDS`] outnumber your [`fighters`]
+/// (a conservative force estimate). Such a target waits until the army is big enough.
 pub fn hopeless(me: View, q: View) -> bool {
     town_defenders(q) * SIEGE_ODDS > fighters(me)
 }
@@ -1278,9 +1338,7 @@ pub fn survey(world: View, me: View, targets: &[View], per_slot: f64) -> Value {
     let partner = partner_land(world, me);
     let mut kept: Vec<View> = targets.iter().copied().filter(|q| !partner.contains(&q.get("id").num()) && !hopeless(me, *q)).collect();
     let mut breaches: Vec<(f64, f64)> = Vec::new();
-    // Capture odds decide when a siege progresses. Capture orders also fight through the house's reflexes.
-    // With no capture available, require six ground fighters and a 50% numerical advantage plus two reserves.
-    // Six covers a capital's four capturers with two replacements; aircraft and workers cannot supply them.
+    // Without an affordable target, require six ground fighters and a 50% advantage plus two reserves.
     let seen = world.get("units");
     if kept.is_empty() && seen.is_arr() && cycles_left() > 7000.0 + seen.len() as f64 * 60.0 {
         let mut ground = 0.0;
@@ -2060,30 +2118,36 @@ pub fn recovery_rent(out:&mut Value,me:View){
 
 /// Runs the house strategy with economic recovery; classic worlds keep normal planning.
 pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
-    if cycles_left()>800.0 && capital_rescue_wait(world,me){return obj!{};}
-    if cycles_left()>7000.0 {
-        if let Some(mut out)=capital_delivery_rescue(world,me){recovery_rent(&mut out,me);march(&mut out,world,me);if world.get("logistics").truthy(){out.set("acceptLocals",false);}return out;}
-    }
-    let finish=|mut out:Value|{
-        if !out.is_empty() && world.get("logistics").truthy(){out.set("acceptLocals",false);}
-        fit_refill_reserves(&mut out,me);
-        recovery_rent(&mut out,me);
-        march(&mut out,world,me);
-        out
+    let wide=me.path("rts.cpu").truthy()&&cycles_left()>50000.0;
+    let work=|| {
+        if cycles_left()>800.0 && capital_rescue_wait(world,me){return obj!{};}
+        if cycles_left()>7000.0 {
+            if let Some(mut out)=capital_delivery_rescue(world,me){recovery_rent(&mut out,me);march(&mut out,world,me);if world.get("logistics").truthy(){out.set("acceptLocals",false);}return out;}
+        }
+        let finish=|mut out:Value|{
+            if !out.is_empty() && world.get("logistics").truthy(){out.set("acceptLocals",false);}
+            fit_refill_reserves(&mut out,me);
+            recovery_rent(&mut out,me);
+            march(&mut out,world,me);
+            out
+        };
+        if let Some(out)=super::energy::infrastructure_turn(world,me){return finish(out);}
+        let late=||finish(govern_with_room(world,me,share,strategy));
+        if !wide&&me.path("rts.cpu").truthy()&&cycles_left()>7000.0 {return with_cycle_reserve(5000.0,late);}
+        late()
     };
-    if let Some(out)=super::energy::infrastructure_turn(world,me){return finish(out);}
-    let work=||finish(govern_with_room(world,me,share,strategy));
-    if me.path("rts.cpu").truthy()&&cycles_left()>7000.0 {
-        return with_cycle_reserve(5000.0,work);
+    if wide {
+        return with_cycle_reserve(8000.0,work);
     }
     work()
 }
 
-/// During a cash shortage, reserve promises must fit automatic income, excluding smoothed cargo receipts and rented cycles.
-/// Wealthy houses and worlds without cargo keep their existing reserve policy.
+/// Cargo recovery keeps reserve promises within automatic income, excluding smoothed receipts and rented cycles.
+/// Other wealthy policies and worlds without cargo keep their existing reserves.
 pub fn fit_refill_reserves(out:&mut Value,me:View){
     let cpu=me.path("rts.cpu");let income=cpu.get("income").num_or(0.0);let bank=cpu.get("bank").num_or(0.0);
-    if !me.path("rts.logistics").truthy() || income<=0.0 || bank>=income*4.0 || !out.get("compute").get("cpu").truthy(){return;}
+    if !me.path("rts.logistics").truthy() || income<=0.0
+        || (bank>=income*4.0 && out.get("memo").str()!="Recovering production") || !out.get("compute").get("cpu").truthy(){return;}
     let refill=(income-me.path("rts.logistics.deliveryRate").num_or(0.0)-me.path("compute.rented").num_or(0.0)).max(0.0);
     let room=(refill*0.5).min(bank/3.0);let reserve=out.entry("compute").entry("cpu").entry("reserve");
     let total=if let Value::Obj(r)=&*reserve{
@@ -2185,7 +2249,7 @@ fn govern_units(world: View, me: View, share: f64, strategy: impl FnOnce() -> Va
             let now=world.get("seconds").num_or(0.0);
             let old=mem::get(me.get("ramCapital"),RECOVERY_PAGE);
             let short=unit_upkeep(me)>income*0.65 && me.path("rts.cpu.bank").num_or(0.0)<income*4.0;
-            let since=if short {old.get("s").num_or(now).min(now)} else {now};
+            let since=if short || me.path("units.stalled").num_or(0.0)>0.0 {old.get("s").num_or(now).min(now)} else {now};
             ram(&mut out, mem::put(RECOVERY_PAGE, &obj! { "r" => true, "s" => since }, "local", None, 1).unwrap_or_default());
             let over_cap=army(me)>me.path("units.cap").num_or(512.0);
             if short && (over_cap || now-since>=INSOLVENT_WAIT) {
@@ -2245,7 +2309,7 @@ fn govern_base(world: View, me: View, share: f64, strategy: impl FnOnce() -> Val
     }
     // A short strategy can itself have chosen recovery; its positive miner allocation must survive this wrapper.
     if orders.get("memo").str() == "Recovering production" { return orders; }
-    if was.get("r").truthy() {
+    if was.get("r").truthy() && me.path("units.stalled").num_or(0.0)==0.0 {
         ram(&mut orders, mem::free(RECOVERY_PAGE, 1, None));
     }
     if orders.get("spawn").is_empty() { return orders; }
@@ -2389,7 +2453,7 @@ fn recover_with(world: View, me: View, e: &Economy, shortage: bool) -> Value {
     let mut orders = recovery_policy(me);
     let now = world.get("seconds").num_or(0.0);
     let old = mem::get(me.get("ramCapital"), RECOVERY_PAGE);
-    let since = if shortage { old.get("s").num_or(now).min(now) } else { now };
+    let since = if shortage || me.path("units.stalled").num_or(0.0)>0.0 { old.get("s").num_or(now).min(now) } else { now };
     ram(&mut orders, mem::put(RECOVERY_PAGE, &obj! { "r" => true, "s" => since }, "local", None, 1).unwrap_or_default());
     let ours = me.get("id").num();
     // Price mining rights once per province.

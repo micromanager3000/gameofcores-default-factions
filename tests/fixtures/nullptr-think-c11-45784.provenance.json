@@ -1,0 +1,17 @@
+{
+  "scope": "Exact callback arguments captured from authored public default programs in rejected C11 simulator worlds. These are regression inputs; they are not fresh acceptance results or human player observations.",
+  "engineRevision": "2f5c1c8364f98b3549a1298974ee222c3f94e2be",
+  "factionBaselineRevision": "f4d8cffc23b2d26f436855d944054a7f1d3c08ba",
+  "meterRate": 64,
+  "fixture": "nullptr-think-c11-45784.json",
+  "program": "nullptr",
+  "function": "think",
+  "recordedAllowance": 45784,
+  "tick": 222484,
+  "fixtureSha256": "00cb73e400a62ea4a3cad4b2b138ac73a25304b2c941df5d7a4406837d87e8fc",
+  "captureSha256": "800df8c474287e16f7c78c7201bda72151ecdf5ef316da5635aabe3075e91d83",
+  "sourceSha256": "b23360498e91b651b2334f10ae8a3953406159ed34b329d55bd97207991cb7e8",
+  "worlds": [
+    "day-149101-r0"
+  ]
+}

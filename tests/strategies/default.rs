@@ -144,10 +144,10 @@ fn a_fresh_planner_allowance_includes_return_cycles_once_and_copied_policies_do_
     let first=shared::common::govern(args[0],args[1],0.5,||obj! {"compute"=>obj! {"cpu"=>obj! {
         "limits"=>obj! {"think"=>20000,"upkeep"=>0.8},"reserve"=>obj! {},"upkeepOrder"=>vec!["miner"]}}});
     let policy=first.get("compute").get("cpu");
-    assert_eq!(policy.get("limits").get("think").num(),25000.0);
+    assert_eq!(policy.get("limits").get("think").num(),28000.0,"20,000 planner cycles plus the 8,000-cycle governor return reserve");
     fixture[0].set("seconds",31);fixture[1].entry("units").set("stalled",2);
     fixture[1].entry("rts").entry("cpu").set("limits",policy.get("limits").clone());
     let args=views(&fixture);
     let next=shared::common::govern(args[0],args[1],0.5,||panic!("between planning beats"));
-    assert_eq!(next.get("compute").get("cpu").get("limits").get("think").num(),25000.0);
+    assert_eq!(next.get("compute").get("cpu").get("limits").get("think").num(),28000.0,"a copied policy must not add the return reserve again");
 }

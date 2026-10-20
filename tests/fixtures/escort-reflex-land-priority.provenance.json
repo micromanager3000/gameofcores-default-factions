@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "scope": "Authored contact fixture with six land guns and two armed surface escorts. Land gun orders that the preceding public Nations program could fund must survive added naval work. A full funded turn must also fire both affordable volleys. No private player state is used.",
+  "derivedFrom": "escort-reflex-two-volley.json",
+  "argsSha256": "6b6f3239b7cc16324f0f61b6bf5421e136f2e265536a610f7253fb4feda5ff3d",
+  "referenceComparisonManifestSha256": "ea1717a20400a94c437378e7148e9d9d52618bb6245cc43432a505aae5960f6a",
+  "minimumLandPreservationFuel": 7000,
+  "fullNavalFuel": 32000
+}

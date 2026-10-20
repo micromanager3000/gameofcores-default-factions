@@ -142,14 +142,14 @@ fn spawn_build(orders: &mut Value, ty: &str, body: impl FnOnce()->Value, modules
 // still inside a rival's walls.
 const TYPES: [(&str, f64, f64); 10] = [
     ("miner", 5000.0, 1.0),
-    ("ghost", 5000.0, 1.0),
+    ("ghost", 8000.0, 1.0),
     ("wing", 4200.0, 2.0),
     ("screen", 6000.0, 1.0),
     ("runner", 6000.0, 1.0),
     ("skirm", 6000.0, 1.0),
     ("lancer", 6000.0, 2.0),
     ("sentry", 6000.0, 1.0),
-    ("gun", 6000.0, 1.0),
+    ("gun", 8000.0, 1.0),
     ("repairer", 5000.0, 1.0),
 ];
 
@@ -284,6 +284,15 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     if to.is_nan() || to < 0.0 {
         return None;
     }
+    let now = world.get("seconds").or(0.0).floor();
+    let last = mem::get(me.get("ramCapital"), 0);
+    let kept = if last.truthy() && last.get("field").truthy() && matches!(last.get("field").get("to"), Value::Num(x) if *x == to) {
+        Some(last.get("field").clone())
+    } else {
+        None
+    };
+    if kept.as_ref().is_some_and(|k| now - vor0(k.get("at")) < 10.0)
+        || cycles_left() < 300.0 * world.get("provinces").len() as f64 + after { return kept; }
     let by_id = realm::index(world);
     let ok = path::friendly(world, me);
     let me_id = me.get("id");
@@ -312,18 +321,6 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     }
     if !apart && path::home(world, me, n(me.get("capital")), to).is_some() {
         return None;
-    }
-    let now = world.get("seconds").or(0.0).floor();
-    let last = mem::get(me.get("ramCapital"), 0);
-    let kept = if last.truthy() && last.get("field").truthy() && matches!(last.get("field").get("to"), Value::Num(x) if *x == to) {
-        Some(last.get("field").clone())
-    } else {
-        None
-    };
-    if let Some(k) = &kept {
-        if now - vor0(k.get("at")) < 10.0 {
-            return kept;
-        }
     }
     if cycles_left() < 300.0 * world.get("provinces").len() as f64 + after {
         return kept;
@@ -890,9 +887,36 @@ fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
 
 // Defend with a fight (those the plan sends: common::defends); attack with a capture, since free land and rivals' towns
 // fall only to units capturing them.
+fn cleared_front(u: View, world: View, me: View, p: &Value) -> Option<Value> {
+    if u.get("doing").str() != "idle" || u.get("to").num_or(-1.0) >= 0.0
+        || plan::age(p, world).unwrap_or(0.0) <= 120.0 || common::defends(p, u) >= 0.0
+        || u.path("build.strength").num_or(0.0) <= 0.0 || u.path("build.wings").truthy()
+        || u.path("rts.sea.ship").truthy() || cycles_left() < 2500.0 { return None; }
+    let by = realm::index(world);
+    let ours = me.get("id").num();
+    if by.get(p.get("attack").num_or(-1.0)).get("owner").num_or(-2.0) != ours { return None; }
+    let here = by.at(u.get("at"));
+    let clear = |q: View| q.get("units").entries().all(|(f, n)|
+        n.num_or(0.0) <= 0.0 || f.parse::<f64>().is_ok_and(|f| f == ours));
+    if !clear(here) { return None; }
+    let neutral = |q: View| q.truthy() && q.get("visible").truthy() && q.get("owner").num_or(-2.0) == -1.0
+        && clear(q) && !q.get("leased").iter().any(|l| l.get("to").num_or(-1.0) == ours);
+    let target = if neutral(here) { Some(here) } else if here.get("owner").num_or(-2.0) == ours {
+        here.get("adj").iter().take(8).map(|id| by.at(id)).filter(|q| neutral(*q))
+            .max_by(|a, b| a.get("cores").num_or(0.0).total_cmp(&b.get("cores").num_or(0.0)))
+    } else { None }?;
+    let mut out = orders::to(u, "capture", target.get("id").num(), world, me, ())?;
+    let local = obj! {"attack"=>target.get("id"),"stage"=>u.get("at"),"defend"=>-1,
+        "need"=>2,"threat"=>0,"at"=>world.get("seconds")};
+    out.set("ram", vec![obj! {"write"=>0,"bytes"=>plan::pack(&local)}]);
+    out.set("alert", 7);
+    Some(out)
+}
+
 fn war_order(u: View, world: View, me: View) -> Option<Value> {
     if common::received_ship(u,world,me) { return None; }
     let p = plan::of(me, u);
+    if let Some(out) = cleared_front(u, world, me, &p) { return Some(out); }
     let defend = common::defends(&p, u);
     let defending = defend >= 0.0;
     let target = if defending { defend } else { vn(p.get("attack")) };
@@ -1072,14 +1096,35 @@ fn lancer(units: View, world: View, me: View) {
 }
 
 fn gun(units: View, world: View, me: View) {
-    // Route planning can exhaust a low scaled callback before a single gun reaches its loop guard.
+    // Admission includes cold plan reads, routing, order submission and the return.
     if me.get("rts").truthy() && cycles_left() < 2500.0 { return; }
-    let rts = me.get("rts").truthy();
+    let mut budget = ControlBudget::new(me);
     for i in 0..units.len() {
-        if rts && cycles_left() < 2200.0 {
-            break;
-        }
+        if !budget.has_room(me) { break; }
         let u = turn(units, i, world);
+        let began = cycles_left();
+        if !budget.admits(u, world, me) {
+            gun_plan(u, me);
+            budget.finish(began);
+            continue;
+        }
+        gun_turn(u, world, me);
+        budget.finish(began);
+    }
+}
+
+// A short call can refresh its portable plan without starting a route.
+fn gun_plan(u: View, me: View) {
+    let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
+    if !bytes.is_bytes() || bytes.len()<2 {return;}
+    let b=bytes.bytes();let read=4.0*f64::from(u16::from_le_bytes([b[0],b[1]]));
+    if cycles_left()<read+600.0 {return;}
+    let p=plan::of(me,u);
+    if cycles_left()<600.0 || !p.get("jobs").is_undef() {return;}
+    if let Some(ram)=orders::carry(u,&p,me) {order(obj!{"id"=>u.get("id"),"ram"=>ram,"alert"=>8});}
+}
+
+fn gun_turn(u: View, world: View, me: View) {
         let p = plan::of(me, u);
         let defend = Value::Num(common::defends(&p, u));
         let target = if vn(&defend) >= 0.0 { &defend } else { p.get("attack") };
@@ -1092,7 +1137,7 @@ fn gun(units: View, world: View, me: View) {
             if set_up {
                 order(pack_up());
             }
-            continue;
+        return;
         }
         let stage = p.get("stage");
         let under_pressure = is_str(u.get("why"), "attacked") && set_up;
@@ -1105,9 +1150,10 @@ fn gun(units: View, world: View, me: View) {
                 }
                 None => order(pack_up()),
             }
-            continue;
+        return;
         }
-        let o = carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me);
+    let verb=common::siege_verb(world,me,vn(target),vn(&defend)>=0.0);
+    let o = carry(orders::to(u, verb, vn(target), world, me, ()), u, &p, me);
         if set_up {
             if !same_v(u.get("at"), target) || n(u.get("to")) >= 0.0 {
                 match o {
@@ -1118,18 +1164,18 @@ fn gun(units: View, world: View, me: View) {
                     }
                     None => order(pack_up()),
                 }
-            }
-            continue;
+        } else if let Some(o)=o { order(o); }
+        return;
         }
         // Only a gun already standing in the target province may set up. `to < 0` tells arrival from a route whose
         // first leg has not started.
         if same_v(u.get("at"), target) && n(u.get("to")) < 0.0 {
-            order(obj! { "id" => u.get("id"), "deploy" => true, "alert" => 8 });
+        let mut setup=o.unwrap_or_else(||obj! {"id"=>u.get("id")});
+        setup.set("deploy",true);setup.set("alert",8);order(setup);
         } else if let Some(mut o) = o {
             o.set("alert", 8);
             order(o);
         }
-    }
 }
 
 // The air wing hunts where think's plan says (plan.hunt): it fights there, picking off miners and archers (reflex),
@@ -1144,7 +1190,7 @@ fn wing(units: View, world: View, me: View) {
             order(obj! { "id" => u.get("id"), "land" => true });
         }
     }
-    if me.get("rts").truthy() && cycles_left() < 2600.0 {
+    if me.get("rts").truthy() && cycles_left() < 3500.0 {
         return;
     }
     let pl = plan::for_units(me, units, world);
@@ -1757,7 +1803,7 @@ mod nullptr_ext {
     pub fn spies(units: View, world: View, me: View) {
         let rts = me.get("rts").truthy();
         // Leave room for a spy's terrain checks, RAM notes and final order.
-        if rts && cycles_left() < 3400.0 {
+        if rts && cycles_left() < 4500.0 {
             return;
         }
         let by_id = realm::index(world);
@@ -1773,14 +1819,14 @@ mod nullptr_ext {
         let lead = common::dominant(world).map_or(-1.0, |l| n(l.get("id")));
         for turn in 0..units.len() {
             let i = (turn + now as usize) % units.len();
-            if rts && cycles_left() < 3000.0 {
+            if rts && cycles_left() < 4000.0 {
                 break;
             }
             if marks.is_none() && (!rts || cycles_left() > 6000.0) {
                 marks = Some(marks_of(world, me));
                 posts = Some(posts_of(world, me));
             }
-            if rts && cycles_left() < 3000.0 { break; }
+            if rts && cycles_left() < 4000.0 { break; }
             let marks: &[(f64, f64, &'static str, f64)] = marks.as_deref().unwrap_or(&[]);
             let posts: &[f64] = posts.as_deref().unwrap_or(&[]);
             // the spies are few: each keeps its place in the list, so the i-th spy keeps the i-th mark
@@ -1844,7 +1890,7 @@ mod nullptr_ext {
                 let spies_here = units.iter().filter(|s| n(s.get("at")) == cap && n(s.get("to")) < 0.0).count() as f64;
                 let ours_in = here.get("units").key(me_id).or(0.0) >= spies_here + 2.0
                     || same_v(here.get("siege").get("by"), &Value::Num(me_id));
-                let theirs = spy::read(me, u);
+                let page=me.get("ramSpied").key(u.get("at").num()).key(0.0).get("bytes"); let read=if page.is_bytes()&&page.len()>=2 {let b=page.bytes();4.0*f64::from(u16::from_le_bytes([b[0],b[1]]))}else{0.0}; let theirs=if !rts || (page.is_bytes()&&cycles_left()>=read+3500.0) {spy::read(me,u)}else{Value::Null};
                 let marching = theirs.get("attack").num_or(-1.0) >= 0.0 && theirs.get("attack").num() == n(me.get("capital"));
                 let spot = hide_spot(here);
                 let loot = loot(world, me, owner);

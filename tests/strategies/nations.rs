@@ -412,3 +412,43 @@ fn a_shade_keeps_its_committed_remote_military_destination() {
     let a=views(&[Value::Arr(vec![v[0].clone()]),v[1].clone(),v[2].clone()]);shade(a[0],a[1],a[2]);
     assert!(emitted().iter().all(|o|o.get("structure").is_undef()));
 }
+
+#[test]
+fn a_late_merchant_map_repairs_its_physical_allowance_before_opening_the_full_survey() {
+    let world=obj! {"provinces"=>vec![Value::Null;44],"units"=>vec![Value::Null;69]};
+    let mut me=planner_fixture();
+    me.entry("units").set("total",37);
+    me.entry("compute").set("thinkPeak",29785);
+    me.entry("compute").entry("used").set("think",29785);
+    let cpu=me.entry("rts").entry("cpu");
+    cpu.set("income",77181);cpu.set("bank",518723);cpu.set("spendCap",96477);
+    cpu.entry("limits").set("think",53500);cpu.set("available",obj! {"think"=>53356});
+    let args=views(&[world.clone(),me.clone()]);
+    let orders=think(args[0],args[1]);
+    assert!(orders.get("policy").is_undef(),"repair the allowance before the full policy and survey");
+    let physical=planner_allowance(orders.get("compute").get("cpu"),77181.0);
+    assert!(physical>53356.0 && physical<=96477.0);
+    me.entry("rts").entry("cpu").entry("limits").set("think",physical);
+    me.entry("rts").entry("cpu").set("available",obj! {"think"=>physical-144.0});
+    me.entry("compute").set("thinkPeak",7629);
+    me.entry("compute").entry("used").set("think",7629);
+    for held in [5000.0,8000.0] {
+        with_cycle_reserve(held,|| {
+            let args=views(&[world.clone(),me.clone()]);
+            assert!(matches!(planner_admission(args[0],args[1],physical-cycles_reserved()-144.0),PlannerAdmission::Full),
+                "the emitted physical limit funds the following map after RAM and the governor return reserve");
+        });
+    }
+}
+
+#[test]
+fn artillery_orders_strike_walls_only_during_an_offensive_siege() {
+    for (walls,defending,want) in [(false,false,"fight"),(true,false,"capture"),(true,true,"fight")] {
+        let fixture=wall_artillery_fixture("spire",walls,defending,false,false);
+        let args=views(&fixture);
+        super::spire(args[0],args[1],args[2]);
+        let orders=emitted();
+        assert!(orders.iter().any(|o|o.get("do").str()==want && o.get("target").num()==1.0),
+            "walls={walls}, defending={defending}: {orders:?}");
+    }
+}

@@ -869,8 +869,10 @@ fn chancery(orders: &mut Value, world: View, me: View, plan: &Value, clock: &mut
 
     // the census of the border, for the court's weightier decisions (a step short of cycles leaves its timer for the
     // next second: `due` isn't asked until the cycles are there)
-    let weigh = cycles_left() > 16000.0 && due(clock, "weigh", 10.0, now);
-    let deal = cycles_left() > 14000.0 && purse > 150.0 && due(clock, "deal", 25.0, now);
+    let census_room = 16000.0 + 80.0 * world.get("provinces").len() as f64
+        + 60.0 * world.get("units").len() as f64;
+    let weigh = cycles_left() > census_room && due(clock, "weigh", 10.0, now);
+    let deal = cycles_left() > census_room && purse > 150.0 && due(clock, "deal", 25.0, now);
     if weigh || deal {
         let mut c = census(world, me, court.num("campaign", -1.0));
         if weigh {
@@ -1386,6 +1388,24 @@ fn turn(units: View, i: usize, world: View) -> View {
 }
 
 fn miner(units: View, world: View, me: View) {
+    // A cold short call keeps local cargo work and leaves remote plan reads for a funded turn.
+    if world.get("logistics").truthy() && cycles_left() < 6000.0
+        && cycles_left() > common::LOGISTICS_MINER_REMOTE_FALLBACK_RUNWAY {
+        let mut read: f64 = 0.0;
+        for u in units.iter().take(8).take_while(|_| cycles_left() > 3300.0) {
+            if plan::known(me,u).is_some() { continue; }
+            let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
+            if bytes.is_bytes() && bytes.len()>=2 {
+                let b=bytes.bytes();read=read.max(4.0*f64::from(u16::from_le_bytes([b[0],b[1]])));
+            }
+        }
+        if read > 0.0 && cycles_left() < read + 2600.0 {
+            let local=common::LOGISTICS_MINER_REMOTE_FALLBACK_RUNWAY-100.0;
+            let held=(cycles_left()-local).max(0.0);
+            with_cycle_reserve(held, || common::recover_miners(units,world,me));
+            return;
+        }
+    }
     if common::recover_miners(units, world, me) { return; }
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
@@ -1686,7 +1706,7 @@ fn gun(units: View, world: View, me: View) {
         if rts {
             let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
             let read=if bytes.is_bytes() && bytes.len()>=2 {
-                let b=bytes.bytes();2.0*f64::from(u16::from_le_bytes([b[0],b[1]]))
+                let b=bytes.bytes();4.0*f64::from(u16::from_le_bytes([b[0],b[1]]))
             }else{0.0};
             if cycles_left()<1800.0+read {break;}
         }
@@ -1704,6 +1724,7 @@ fn gun(units: View, world: View, me: View) {
             }
             continue;
         }
+        let verb=common::siege_verb(world,me,vn(target),vn(&defend)>=0.0);
         let stage = p.get("stage");
         let under_pressure = is_str(u.get("why"), "attacked") && set_up;
         if under_pressure && vn(stage) >= 0.0 && !same_v(u.get("at"), stage) {
@@ -1721,7 +1742,7 @@ fn gun(units: View, world: View, me: View) {
         if set_up {
             if !same_v(u.get("at"), target) || n(u.get("to")) >= 0.0 {
                 if !can_route { break; }
-                match carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me) {
+                match carry(orders::to(u, verb, vn(target), world, me, ()), u, &p, me) {
                     Some(mut o) => {
                         o.set("deploy", false);
                         o.set("alert", 8);
@@ -1729,16 +1750,17 @@ fn gun(units: View, world: View, me: View) {
                     }
                     None => order(pack_up()),
                 }
-            }
+            } else if let Some(o)=orders::to(u,verb,vn(target),world,me,()) { order(o); }
             continue;
         }
         // Only a gun already standing in the target province may set up. `to < 0` tells arrival from a route whose
         // first leg has not started.
         if same_v(u.get("at"), target) && n(u.get("to")) < 0.0 {
-            order(obj! { "id" => u.get("id"), "deploy" => true, "alert" => 8 });
+            let mut setup=orders::to(u,verb,vn(target),world,me,()).unwrap_or_else(||obj! {"id"=>u.get("id")});
+            setup.set("deploy",true);setup.set("alert",8);order(setup);
         } else {
             if !can_route { break; }
-            if let Some(mut o) = carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me) {
+            if let Some(mut o) = carry(orders::to(u, verb, vn(target), world, me, ()), u, &p, me) {
                 o.set("alert", 8);
                 order(o);
             }
@@ -1763,12 +1785,18 @@ fn wing(units: View, world: View, me: View) {
     }
     // A cold plan and its first route need more than the legacy 2,200-cycle floor. Keep the standing sortie until a
     // funded turn can finish it; recovery above already handles zero-fabrication calls.
-    if me.get("rts").truthy() && cycles_left() < 2500.0 {
-        return;
+    if me.get("rts").truthy() {
+        let read = units.iter().filter_map(|u| {
+            let bytes = me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
+            if bytes.is_bytes() && bytes.len() >= 2 {
+                let b = bytes.bytes(); Some(4.0 * f64::from(u16::from_le_bytes([b[0], b[1]])))
+            } else { None }
+        }).fold(0.0, f64::max);
+        if cycles_left() < (800.0 + read).max(3500.0) { return; }
     }
     let pl = plan::for_units(me, units, world);
     // The loop below cannot issue an order with less runway; skip its map index too.
-    if me.get("rts").truthy() && cycles_left() < 2500.0 { return; }
+    if me.get("rts").truthy() && cycles_left() < 2000.0 { return; }
     let by_id = realm::index(world);
     let hunt = pl.get("hunt");
     let abroad = hunt.is_undef();
@@ -1798,7 +1826,7 @@ fn wing(units: View, world: View, me: View) {
     let verb = if q.truthy() && n(owner) >= 0.0 && !same(owner, me.get("id")) && !allies.has_num(n(owner)) && foes == 0 { "raid" } else { "fight" };
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
-        if rts && cycles_left() < 2500.0 {
+        if rts && cycles_left() < 2000.0 {
             break;
         }
         let u = turn(units, i, world);

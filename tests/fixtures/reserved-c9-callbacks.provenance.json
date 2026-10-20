@@ -1,0 +1,30 @@
+{
+  "kind": "captured-public-default",
+  "scope": "The two unique non-puzzle callback failures in the completed rejected C9 suite. Complete arguments come from public house programs; no player source or private player state is included.",
+  "recordedAt": "2026-10-20T12:40:55.394581+00:00",
+  "engineBinarySha256": "29d166a4a5b504468c344b63a2691033fb1731abc8440a8edaf497eb92c6e80d",
+  "sdkSha256": "cc29620eea08423a8d46f7cc1029319cef81aaa91bc2c5ad324a042fe10fd509",
+  "frozenInputManifestSha256": "b9085f7515b992dc47cc4538a29ccad12ad97d5946dd5ee718d74f1e47cce638",
+  "cases": [
+    {
+      "fixture": "fleet-runner-reserved-c9-2613.json",
+      "function": "runner",
+      "world": "six-88223-r0",
+      "tick": 93781,
+      "fuel": 2613,
+      "capturedSourceSha256": "155d41d2b95765c32e24d822de672c56bd7b4143d0ca63c52dcb8108dc687f5c",
+      "recordSha256": "6c243bf72437a90276c9fe8f3253619706ed4fd80508ef038ee0e62179181678",
+      "fixtureSha256": "682273d23c03d4b40b701d50b033d1c1d317affd8e63976554df5c303bd7e04f"
+    },
+    {
+      "fixture": "nations-think-reserved-c9-86430.json",
+      "function": "think",
+      "world": "six-88223-r3",
+      "tick": 54481,
+      "fuel": 86430,
+      "capturedSourceSha256": "ca3dfe159e84feb870842e6825828e1e5a9839c169fdea9bac3cd1bd4ab1fac0",
+      "recordSha256": "6ef71ec8048f0c73b727db9f09c4e141fe7e2f9e6a8c32b6f770f5ceb36a3719",
+      "fixtureSha256": "6b83be6af72bf0899353bff5033b270389259ee1626382af5d92897755ddd104"
+    }
+  ]
+}

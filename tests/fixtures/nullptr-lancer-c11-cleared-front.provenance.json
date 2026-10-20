@@ -1,0 +1,12 @@
+{
+  "scope": "No-step unit callback observation of the saved rejected C11 endpoint, for authored public Null Pointer code. The native unit view and RAM projection use the actual engine unit-call shape. This is a reconstructed diagnostic observation, not a previously executed callback capture.",
+  "fixtureSha256": "96bdf8308f4a1ca8e90f8835899d656f1de805fed7bb483b8ee2db64353ce6e7",
+  "sourceStateSha256": "872166b498bcd4d5c048d89ae8c0a8aa02405588893a7f8572d170809684a8dc",
+  "probeSourceSha256": "d7e886adc0e1d9837b0a6eb572bce9e8bbc01645332ab3af5c436cd3c96cb970",
+  "function": "lancer",
+  "expectedTarget": 35,
+  "expectedUnitIds": [
+    1584,
+    1586
+  ]
+}

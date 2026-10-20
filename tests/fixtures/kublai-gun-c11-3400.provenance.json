@@ -1,0 +1,17 @@
+{
+  "scope": "Exact callback arguments captured from authored public default programs in rejected C11 simulator worlds. These are regression inputs; they are not fresh acceptance results or human player observations.",
+  "engineRevision": "2f5c1c8364f98b3549a1298974ee222c3f94e2be",
+  "factionBaselineRevision": "f4d8cffc23b2d26f436855d944054a7f1d3c08ba",
+  "meterRate": 64,
+  "fixture": "kublai-gun-c11-3400.json",
+  "program": "kublai",
+  "function": "gun",
+  "recordedAllowance": 3400,
+  "tick": 118395,
+  "fixtureSha256": "ab8d3a71fb474828f8f0db013d1cac84e33086532ce55c1843cabc3f25e9ff11",
+  "captureSha256": "b1f3694ac76d487c0534523aaead0ec7be60788358a52ba6615f36af75452ac4",
+  "sourceSha256": "e23cf6a86a73a02858e7f9fde1533197096cbe8033aba1ab139bab6e4fe5cc0d",
+  "worlds": [
+    "day-149101-r0"
+  ]
+}

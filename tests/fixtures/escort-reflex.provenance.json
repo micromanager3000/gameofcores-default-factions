@@ -1,0 +1,17 @@
+{
+  "scope": "Authored public-default escort contacts. No captured player source, messages or private observations are used. Two armed surface escorts share one callback bank and ability lane. The sea rules charge 300 plus 150 per target before the world price level. The Nations pool retains its existing 180-cycle ability headroom.",
+  "fixtures": [
+    {
+      "fixture": "escort-reflex-one-volley.json",
+      "sha256": "9095016b05af590f5481ebda0da254645bef51b6ba94f2d290e7df9db9229f7b",
+      "abilityCycles": 630,
+      "expectedFundedVolleys": 1
+    },
+    {
+      "fixture": "escort-reflex-two-volley.json",
+      "sha256": "34ef8790d21d3399700d1a8a45e5c1fe4d028c1a4e200e62f2b22fab695c0e66",
+      "abilityCycles": 1080,
+      "expectedFundedVolleys": 2
+    }
+  ]
+}

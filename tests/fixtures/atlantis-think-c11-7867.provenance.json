@@ -1,0 +1,17 @@
+{
+  "scope": "Exact callback arguments captured from authored public default programs in rejected C11 simulator worlds. These are regression inputs; they are not fresh acceptance results or human player observations.",
+  "engineRevision": "2f5c1c8364f98b3549a1298974ee222c3f94e2be",
+  "factionBaselineRevision": "f4d8cffc23b2d26f436855d944054a7f1d3c08ba",
+  "meterRate": 64,
+  "fixture": "atlantis-think-c11-7867.json",
+  "program": "atlantis",
+  "function": "think",
+  "recordedAllowance": 7867,
+  "tick": 48630,
+  "fixtureSha256": "f262d1d9a4458a1aeabdeb7087e9c1445d80fe9cc38d2f691c3ee731d4e35786",
+  "captureSha256": "bbd6bc77e54a6fa97af9cd629f1a30482f959902c17678d8153a50cef2b03c1c",
+  "sourceSha256": "4ef1975559bfff19c7f6a366c2adbdbab6a7a81fcf0735a84d5e46954101e74c",
+  "worlds": [
+    "six-149119-r3"
+  ]
+}
