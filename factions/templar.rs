@@ -606,7 +606,7 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
 // spend still loses all of its orders. Keep a peak-aware full estimate, while a
 // capped faction can resume with the guarded lean pass below.
 const PLAN_REMAINING_MARGIN: f64 = 6000.0;
-const PLAN_CALLBACK_OVERHEAD: f64 = 2500.0;
+const PLAN_CALLBACK_OVERHEAD: f64 = 3500.0;
 
 fn full_think_need(world: View, me: View) -> f64 {
     let measured = me.get("compute").get("thinkPeak").num_or(0.0);

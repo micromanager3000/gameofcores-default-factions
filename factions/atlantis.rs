@@ -645,7 +645,7 @@ fn strategy(world: View, me: View) -> Value {
         mix_set(&mut mix,"aeronaut",0.12);
     }
     let pick = |a: (bool, &'static str), b: (bool, &'static str)| -> Vec<&'static str> { [a, b].into_iter().filter(|x| x.0).map(|x| x.1).collect() };
-    if !lean || (cycles_left()>12000.0 && common::unit_upkeep(me)<=income*0.4) {match choose_spawn(me, &mix, common::miner_room(me, &survey)) {
+    if !lean || (cycles_left()+cycles_reserved()>20000.0 && common::unit_upkeep(me)<=income*0.4) {match choose_spawn(me, &mix, common::miner_room(me, &survey)) {
         Some("miner") => spawn_one(&mut orders, me, "miner", miner_body(), &[]),
         Some("line") => spawn_one(&mut orders, me, "line", line_body(), &[]),
         Some("bulwark") => spawn_one(&mut orders, me, "bulwark", line_body(), &pick((has("armor"), "armor"), (has("dash"), "dash"))),

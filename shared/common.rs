@@ -350,9 +350,9 @@ fn logistics_miners(units: View, world: View, me: View) {
         if !transferred && cycles_left()>LOGISTICS_MINER_FALLBACK_RUNWAY {
             let index=realm::index(world);let ours=me.get("id").num();let mut gathered=false;let mut remote=None;let mut closed=None;
             if let Some(u)=units.iter().take_while(|_|cycles_left()>1600.0).find(|u| {
+                let at=u.get("at").num();if closed==Some(at){return false;}
                 if u.get("doing").str()=="gather" || u.path("rts.sea.ship").truthy() || cargo(*u)>0.0 || cargo_working(*u) {return false;}
                 if remote.is_none(){remote=Some(*u);}
-                let at=u.get("at").num();if closed==Some(at){return false;}
                 let p=index.get(at);
                 let open=p.get("owner").num_or(-1.0)==ours && p.get("mines").iter().enumerate().any(|(k,v)|v.num_or(0.0)>0.0&&realm::worker(p,k as f64)==ours&&p.get("staff").at(k).num_or(0.0)<2.0);
                 if !open{closed=Some(at);}open
@@ -2030,6 +2030,7 @@ pub fn recovery_rent(out:&mut Value,me:View){
 
 /// Runs the house strategy with economic recovery; classic worlds keep normal planning.
 pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
+    let wide=me.path("rts.cpu").truthy()&&cycles_left()>50000.0;
     let work=|| {
     if cycles_left()>800.0 && capital_rescue_wait(world,me){return obj!{};}
     if cycles_left()>7000.0 {
@@ -2042,9 +2043,11 @@ pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Valu
         out
     };
     if let Some(out)=super::energy::infrastructure_turn(world,me){return finish(out);}
-        finish(govern_with_room(world,me,share,strategy))
+    let late=||finish(govern_with_room(world,me,share,strategy));
+    if !wide&&me.path("rts.cpu").truthy()&&cycles_left()>7000.0 {return with_cycle_reserve(5000.0,late);}
+    late()
     };
-    if me.path("rts.cpu").truthy()&&cycles_left()>7000.0 {
+    if wide {
         return with_cycle_reserve(8000.0,work);
     }
     work()

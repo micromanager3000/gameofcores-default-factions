@@ -144,6 +144,7 @@ A short Atlantis think returns its completed policy before pricing another recru
 Recruitment reviews wait until the CPU policy and callback return can fit.
 Its guns can refresh their portable plan when a new route cannot fit.
 Nations funds a complete cold aircraft turn before changing its flight orders.
+A requested Templar retry includes the governor's work before the planner.
 Shared escorts follow the program's unit catalogue when programs change seats. The Fleet keeps its dedicated navy.
 
 In worlds with town walls, offensive artillery uses `capture` orders to damage them.
