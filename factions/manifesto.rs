@@ -449,13 +449,13 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     Some(field)
 }
 
-// What a full think costs: about 7,000 cycles plus 50 for each unit in sight (the census of rivals' units below), or
-// the most a think took in the last 5 seconds when that's more. Think's CPU limit and the research reserve are sized
-// from it, so a poor bank still pays for think.
+// A full plan needs its map and unit census even after cheap recovery calls erase the recent peak.
+// The short path keeps the previous marks and target while still publishing its plan and CPU policy.
 fn think_need(world: View, me: View) -> f64 {
     let units = world.get("units");
     let seen = if units.truthy() { units.len() as f64 } else { 0.0 };
-    max(7000.0 + 50.0 * seen, me.get("compute").get("thinkPeak").or(0.0))
+    let shape=if rts(me) {15000.0+200.0*world.get("provinces").len() as f64+100.0*seen} else {7000.0+50.0*seen};
+    max(shape, me.get("compute").get("thinkPeak").or(0.0))
 }
 
 /// The spawns the ◆ left can pay: deals we accept that ask us for ◆, and bribes, are paid before spawns, and a spawn
@@ -561,10 +561,28 @@ fn affordable(mut orders: Value, me: View, start: f64) -> Value {
 
 fn think(world: View, me: View) -> Value {
     if cycles_left()<800.0 {return obj!{};}
-    common::govern(world, me, 0.4, || strategy(world, me))
+    let upkeep=frontier_upkeep(world,me);
+    common::govern(world, me, upkeep, || strategy_with_upkeep(world, me,upkeep))
 }
 
-fn strategy(world: View, me: View) -> Value {
+
+fn frontier_upkeep(world:View,me:View)->f64{
+    let cpu=me.path("rts.cpu");let income=cpu.get("income").num_or(0.0);
+    if !world.get("logistics").truthy() || world.get("seconds").num_or(0.0)<600.0 || income<=0.0
+        || cpu.get("bank").num_or(0.0)<income*60.0 || me.path("units.stalled").num_or(0.0)>0.0
+        || me.path("units.queued").num_or(0.0)>0.0{return 0.4;}
+    if me.path("units.byType.line").num_or(0.0)==0.0{return 0.55;}
+    let ours=me.get("id").num();let mut lines=0;
+    for u in world.get("units").iter(){
+        if cycles_left()<12000.0{return 0.4;}
+        if u.get("owner").num_or(-1.0)==ours && u.get("type").str()=="line" && u.get("hp").num_or(0.0)>0.0
+            && !u.path("rts.sea.ship").truthy() && !u.path("build.wings").truthy(){lines+=1;if lines>=2{return 0.4;}}
+    }
+    0.55
+}
+
+fn strategy(world:View,me:View)->Value{strategy_with_upkeep(world,me,frontier_upkeep(world,me))}
+fn strategy_with_upkeep(world: View, me: View,upkeep:f64) -> Value {
     // Below this even the lean plan won't fit: keep the standing orders a second longer.
     if rts(me) && cycles_left() < 6000.0 {
         return common::recovery(world, me);
@@ -579,7 +597,8 @@ fn strategy(world: View, me: View) -> Value {
     if rts(me) && cycles_left() < need * 0.75 {
         return common::recovery(world, me);
     }
-    let lean = rts(me) && cycles_left() < need + 3000.0;
+    let full_need=need+200.0*world.get("provinces").len() as f64;
+    let lean = rts(me) && cycles_left() < full_need + 6000.0;
     let me_id = me.get("id").num();
     let now = world.get("seconds").or(0.0).floor();
     // All power to the soviets: local governors (+15 loyalty, extraction capped at 42%) keep the won-over land won over, and
@@ -608,9 +627,10 @@ fn strategy(world: View, me: View) -> Value {
         None
     };
     let kept = kept.filter(|q| q.get("owner").num() != me_id);
-    let target = kept.or_else(|| pick_target(world, me, &picks));
-    let mut survey = common::survey(world, me, &target.into_iter().collect::<Vec<View>>(), 2.0);
-    if kept.is_some() {
+    let target = kept.or_else(|| if lean {None}else{pick_target(world, me, &picks)});
+    let mut survey = if lean {common::local_plan(world,me,&prev,12000.0)}else{
+        common::survey(world, me, &target.into_iter().collect::<Vec<View>>(), 2.0)};
+    if !lean && kept.is_some() {
         survey.set("stage", prev.get("stage").clone());
     }
     survey.set("home", me.get("capital"));
@@ -641,7 +661,7 @@ fn strategy(world: View, me: View) -> Value {
     if let Some(f) = field {
         survey.set("field", f);
     }
-    common::share(&mut orders, &survey, world, me);
+    if lean {plan::share(&mut orders,&survey,me);} else {common::share(&mut orders, &survey, world, me);}
 
     let pressure = invaded_n;
     let cpu = me.get("rts").get("cpu");
@@ -664,7 +684,7 @@ fn strategy(world: View, me: View) -> Value {
         me,
         &mix,
         |t, k| unit_name(me, t, k),
-        &common::Recruit { reserve: 0.0, limits: &limits, builds: &builds, upkeep: 0.45 },
+        &common::Recruit { reserve: 0.0, limits: &limits, builds: &builds, upkeep: upkeep.max(0.45) },
     );
     // The Red Army fights in ranks once research allows: every third recruit a rifleman, every third armored.
     let techs = me.get("techs");
@@ -701,6 +721,7 @@ fn strategy(world: View, me: View) -> Value {
     common::budget(&mut orders, world, me, &common::Budget { research: 0.13, code: 0.66, techs: &TECHS, types: Some(&types) });
     let mut policy = cpu_policy(world, me, &orders, pressure, need);
     common::fit_cpu(&mut policy, me);
+    common::plan_allowance(&mut policy,me,full_need+8500.0);
     orders.entry("compute").set("cpu", policy);
 
     let at = mem::get(me.get("ramCapital"), CLOCK);
@@ -884,6 +905,7 @@ fn line(units: View, world: View, me: View) {
         }
         let u = nth(units, turn, world);
         let defend = common::defends(&p, u);
+        if common::received_ship(u,world,me) { continue; }
         let (mut verb, mut target) = if defend >= 0.0 { ("fight", defend) } else { ("capture", attack) };
         // a third of the army garrisons the land that is under the papers of others, the rest goes where the plan says
         let hold = p.get("hold").items();

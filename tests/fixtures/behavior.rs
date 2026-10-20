@@ -392,7 +392,13 @@ fn a_full_think_runs_every_third_second_while_nothing_presses() {
     assert!(!think_at(&mut world, &recovering, 4.0), "standing recovery leaves income for hauling");
     assert!(think_at(&mut world, &recovering, 6.0), "recovery is reviewed on the next full think");
     me.entry("units").set("stalled", 1);
-    assert!(think_at(&mut world, &me, 4.0), "a stalled unit brings the think back every second");
+    me.entry("rts").entry("cpu").set("limits",obj!{"upkeep"=>5000});
+    world.set("seconds",4);
+    let args=views(&[world.clone(),me]);let mut ran=false;
+    let out=common::govern(args[0],args[1],0.4,||{ran=true;obj!{}});
+    assert!(!ran,"a funded upkeep stall preserves the three-second strategy cadence");
+    assert!(out.get("compute").get("cpu").get("limits").get("upkeep").num()>5000.0,
+        "the intervening call raises upkeep to the estimated full bill");
 }
 
 #[test]

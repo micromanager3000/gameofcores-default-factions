@@ -617,7 +617,7 @@ fn lean_think_need(world: View, me: View) -> f64 {
 
 fn budgeted_think_need(world: View, me: View, spend_cap: f64) -> f64 {
     let full = full_think_need(world, me);
-    if spend_cap >= full + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD {
+    if spend_cap >= full + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD + cycles_reserved() {
         full
     } else {
         lean_think_need(world, me)
@@ -631,16 +631,24 @@ fn plan_fuel_ready(allowance: f64, remaining: f64, need: f64) -> bool {
 const PLAN_REMAINING_MARGIN: f64 = 4000.0;
 const PLAN_CALLBACK_OVERHEAD: f64 = 2500.0;
 
+fn plan_callback_overhead(me: View) -> f64 {
+    let cpu = me.path("rts.cpu");
+    let prefix = (cpu.path("available.think").num_or(cycles_left() + cycles_reserved())
+        - cycles_left() - cycles_reserved()).max(0.0);
+    PLAN_CALLBACK_OVERHEAD.max(prefix + cpu.path("spent.think").num_or(0.0) + 500.0)
+}
+
 fn affordable_plan_limit(me: View, need: f64) -> Option<f64> {
     let cpu = me.path("rts.cpu");
     let funded = cpu.get("bank").or(0.0) + cpu.get("income").or(20000.0).max(1.0);
     let spend_cap = cpu.get("spendCap").or(cpu.get("burst").or(funded));
-    let required = need + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD;
-    let ceiling = required.min(funded).min(spend_cap);
-    (ceiling >= required).then_some(ceiling)
+    let required = need + PLAN_REMAINING_MARGIN + plan_callback_overhead(me);
+    let ceiling = funded.min(spend_cap);
+    (ceiling >= required+cycles_reserved()).then_some(required)
 }
 
 fn recovery_for_plan(world: View, me: View, need: f64) -> Value {
+    let retry = affordable_plan_limit(me, need);
     let mut orders = common::recovery(world, me);
     let cpu = me.path("rts.cpu");
     let income = cpu.get("income").or(20000.0).max(1.0);
@@ -651,7 +659,7 @@ fn recovery_for_plan(world: View, me: View, need: f64) -> Value {
     orders.entry("compute").entry("cpu").entry("limits").set("think", cheap_ceiling);
     // Use recovery when the selected planning pass does not fit.
     if bank >= income * 2.0 {
-        if let Some(ceiling) = affordable_plan_limit(me, need) {
+        if let Some(ceiling) = retry {
             orders.entry("compute").entry("cpu").entry("limits").set("think", ceiling);
         }
     }
@@ -742,6 +750,7 @@ fn think(world: View, me: View) -> Value {
 }
 
 fn strategy(world: View, me: View, hunting: &mut Option<bool>) -> Value {
+    let setup = plan_callback_overhead(me);
     // Leave this callback runway for recovery policy.
     let cpu = me.path("rts.cpu");
     let spend_cap = cpu.get("spendCap").or(cpu.get("burst").or(0.0));
@@ -756,6 +765,11 @@ fn strategy(world: View, me: View, hunting: &mut Option<bool>) -> Value {
         let allowance = if available.truthy() { available.get("think").num_or(0.0) } else { cycles_left() };
         if !plan_fuel_ready(allowance, cycles_left(), need) {
             return if rich_rebuild_is_capped(world, me) { lean_rebuild(world, me) } else { recovery_for_plan(world, me, need) };
+        }
+        // The smaller admission must run a smaller planner, rather than reopen every full-map task.
+        if spend_cap < full_think_need(world,me)+PLAN_REMAINING_MARGIN+PLAN_CALLBACK_OVERHEAD+cycles_reserved()
+            || cycles_left()<full_think_need(world,me)+PLAN_REMAINING_MARGIN {
+            return local_strategy(world,me,start);
         }
     }
     let me_id = me.get("id").num();
@@ -791,7 +805,7 @@ fn strategy(world: View, me: View, hunting: &mut Option<bool>) -> Value {
     let census = cycles_left() > 55.0 * world.get("units").len() as f64 + 20000.0;
     let enemy = if census { seen_threats(world, me, logbook.get("tk").num_or(0.0)) } else { Threats::default() };
     // Keep standing orders when little think fuel remains.
-    let naval = if cycles_left() > 26000.0 {
+    let naval = if cycles_left() > 38000.0 {
         let naval=naval_plan(world, me, &mut plan, target_id, defend, &enemy.rowing);
         *hunting=Some(naval.raid>0);
         naval
@@ -930,6 +944,7 @@ fn strategy(world: View, me: View, hunting: &mut Option<bool>) -> Value {
         // Visible contact releases research reserves for combat.
         let mut policy = cpu_policy(me, offer, threatened || enemy.total >= 2.0);
         common::fit_cpu(&mut policy, me);
+        common::plan_allowance(&mut policy,me,full_think_need(world,me)+PLAN_REMAINING_MARGIN+setup);
         orders.entry("compute").set("cpu", policy);
     }
     let pact_leader = realm::leader(world).map(|l| l.get("id").num());
@@ -938,7 +953,8 @@ fn strategy(world: View, me: View, hunting: &mut Option<bool>) -> Value {
     let limits = me.get("rts").get("cpu").get("limits");
     let limit = if limits.truthy() { limits.get("think").or(0.0) } else { 0.0 };
     let ran_out = limit > 1.0 && me.get("compute").get("used").get("think").or(0.0) >= limit * 0.97;
-    if cycles_left() < 6000.0 || (rts(me) && ran_out) {
+    // The court, intrigue and inbox can use over 15,000 cycles before the shared logistics review and return.
+    if cycles_left() < 30000.0 || (rts(me) && ran_out) {
         return affordable(orders, me, start);
     }
     let at = mem::get(me.get("ramCapital"), CLOCK);
@@ -1000,6 +1016,60 @@ fn strategy(world: View, me: View, hunting: &mut Option<bool>) -> Value {
         concat(&mut orders, "ram", mem::put(CLOCK, &clock.at, "local", None, 1).unwrap_or_default());
     }
     affordable(orders, me, start)
+}
+
+// Keep a supplied land front and the standing naval assignments while the full map review cannot fit.
+fn local_strategy(world:View,me:View,start:f64)->Value {
+    let previous=mem::get(me.get("ramCapital"),0);
+    let plan=common::local_plan(world,me,&previous,14000.0);
+    let cpu=me.path("rts.cpu");
+    let types=common::calls(world,&[
+        ("miner",6000.0,6.0),("runner",5000.0,4.0),("lancer",4200.0,4.0),
+        ("shade",7000.0,3.0),("sentry",4500.0,5.0),("spire",6000.0,4.0),
+        ("needle",5500.0,3.0),("kite",5000.0,3.0),("scout",5000.0,8.0),
+        ("warjunk",8000.0,3.0),("picket",6000.0,6.0),("corsair",8000.0,3.0),("carrier",8000.0,3.0),
+    ],cpu.get("income").num_or(0.0),cpu.path("available.control").num_or(f64::INFINITY)*0.8,me.path("units.byType"));
+    let threatened=plan.get("threat").num_or(0.0)>0.0;
+    let mut policy=cpu_policy(me,0.0,threatened);
+    common::fit_cpu(&mut policy,me);
+    let full=full_think_need(world,me)+PLAN_REMAINING_MARGIN+PLAN_CALLBACK_OVERHEAD;
+    if cpu.get("bank").num_or(0.0)>=cpu.get("income").num_or(0.0)*2.0&&full+cycles_reserved()<=cpu.get("spendCap").num_or(0.0) {
+        let old=policy.get("limits").get("think").num_or(0.0);
+        let old=if old<=1.0 {old*cpu.get("income").num_or(0.0)}else{old};
+        policy.entry("limits").set("think",old.max(full));
+    }
+    let mut orders=obj! {"policy"=>obj! {"extraction"=>0.42,"autonomy"=>"direct","integrate"=>"tolerate","invest"=>true},
+        "compute"=>obj! {"cpu"=>policy,"types"=>types},"memo"=>"Quiet Fleet: maintaining the nearby front and standing sea assignments."};
+    plan::share(&mut orders,&plan,me);
+    if me.path("units.byType.miner").num_or(0.0)<4.0&&plan.get("mineRoom").num_or(0.0)>0.0 {
+        add_spawn(&mut orders,me,"miner",miner_body(),&[]);
+    } else if common::fighters(me)<plan.get("recruitNeed").num_or(2.0).max((plan.get("threat").num_or(0.0)*2.0+1.0).min(6.0)) {
+        add_spawn(&mut orders,me,"runner",runner_body(),&[]);
+    } else if me.path("units.byType.miner").num_or(0.0)<common::miner_room(me,&plan).min(12.0)
+        &&common::every(world.get("seconds").num_or(0.0),6.0,me.get("id").num()) {
+        add_spawn(&mut orders,me,"miner",miner_body(),&[]);
+    } else if cycles_left()>18000.0 {
+        let nv=plan.get("nv");
+        let naval=Naval {stations:nv.get("st").len(),landing:nv.get("lt").num_or(-1.0),landing_name:String::new(),
+            fleet:nv.get("fw").num_or(-1.0),blockade:nv.get("bx").len(),raid:nv.get("rw").len()};
+        naval_spawn(&mut orders,world,me,&naval,0.0,threatened);
+    }
+    if me.path("research.tech").str().is_empty() {
+        let all=world.get("techs");let mine=me.get("techs");
+        for &want in research_techs(world,me) {
+            if cycles_left()<10000.0 {break;}
+            let mut pick=want;
+            for _ in 0..8 {
+                let tech=all.get(pick);
+                match tech.get("requires").iter().find(|t|!mine.get(t.str()).truthy()) {Some(t)=>pick=t.str(),None=>break}
+            }
+            let tech=all.get(pick);
+            if !mine.get(pick).truthy()&&tech.truthy()&&tech.get("requires").iter().all(|t|mine.get(t.str()).truthy()) {
+                orders.set("research",pick);break;
+            }
+        }
+    }
+    affordable(orders,me,start)
 }
 
 // Bribe and sway likely border provinces; lease scan and cloak.
@@ -1430,11 +1500,8 @@ fn shore_water(world: View, p: f64) -> f64 {
     first
 }
 
-/// What the fleet does this second: think works it out once and puts it in the plan as `nv`, small enough for every
-/// province to hold, and each junk copies what it needs into its own RAM before it sails off our coast.
-/// `st`: [a, b, water] for each crossing to land overseas a picket must hold; `lw`/`lt`: the water off the next landing
-/// and the province the marines land on (-1: none); `fw`: where the battle fleet keeps; `hw`: home water; `rw`: waters
-/// the corsairs hunt in.
+/// `nv` carries crossings `st=[a,b,water]`, landing water/province `lw`/`lt` (-1: none),
+/// fleet/home waters `fw`/`hw`, and patrol waters `rw`. Ships copy it into their RAM before leaving connected coasts.
 struct Naval {
     stations: usize,
     landing: f64,
@@ -1459,7 +1526,7 @@ fn naval_plan(world: View, me: View, plan: &mut Value, target_id: f64, defend: f
         let cached = last.get("st").items().iter().find(|x| x.at(0).num() == a && x.at(1).num() == b).map(|x| x.at(2).num());
         let w = match cached {
             Some(w) => w,
-            None if cycles_left() > 24000.0 => sea::station(world, a, b),
+            None if cycles_left() > 36000.0 => sea::station(world, a, b),
             None => -1.0,
         };
         if w >= 0.0 {
@@ -1498,7 +1565,7 @@ fn naval_plan(world: View, me: View, plan: &mut Value, target_id: f64, defend: f
                 lt = q.get("id").num();
             }
         }
-        if lt >= 0.0 && cycles_left() > 24000.0 {
+        if lt >= 0.0 && cycles_left() > 36000.0 {
             let from = frontier.iter().find(|q| q.get("id").num() == lt).and_then(|q| realm::from(*q)).unwrap_or(-1.0);
             lw = if from >= 0.0 { sea::station(world, from, lt) } else { -1.0 };
             if lw < 0.0 {
@@ -1536,7 +1603,7 @@ fn naval_plan(world: View, me: View, plan: &mut Value, target_id: f64, defend: f
     let mut fresh: Vec<(f64, f64)> = rowing.iter().copied().filter(|&(a, b)| !bx.iter().any(|y| y.at(0).num() == a && y.at(1).num() == b)).collect();
     fresh.sort_by_key(|&(a, b)| u8::from(!(ours(a) || ours(b))));
     if let Some(&(a, b)) = fresh.first() {
-        if cycles_left() > 24000.0 {
+        if cycles_left() > 36000.0 {
             let w = sea::station(world, a, b);
             if w >= 0.0 {
                 if bx.len() >= 4 && (ours(a) || ours(b)) {
@@ -1561,7 +1628,7 @@ fn naval_plan(world: View, me: View, plan: &mut Value, target_id: f64, defend: f
     // Patrol rival dock waters, nearest first.
     let mut lanes: Vec<(usize, f64)> = Vec::new();
     for d in world.path("logistics.docks").iter() {
-        if cycles_left() < 24000.0 || hw < 0.0 { break; }
+        if cycles_left() < 36000.0 || hw < 0.0 { break; }
         let w = d.get("water").num_or(-1.0);
         let owner = by_id.get(d.get("p").num()).get("owner").num_or(-1.0);
         if w < 0.0 || rw.contains(&w) || !realm::is_rival(world, me, owner) { continue; }
@@ -1598,9 +1665,8 @@ fn naval_plan(world: View, me: View, plan: &mut Value, target_id: f64, defend: f
     Naval { stations: st.len(), landing: lt, landing_name: name, fleet: fw, blockade: bx.len(), raid: rw.len() }
 }
 
-/// What the newest prize says: a rival's shared plan, read from the code pages of a ship we sank (me.rts.sea.prizes).
-/// `warn`: our province it means to attack (-1: none); `bonus`: its own land it left (its home and staging ground),
-/// worth more to our army; `line`: what the fleet says about it.
+/// `me.rts.sea.prizes` supplies a threatened province `warn` (-1: none),
+/// rival home/stage provinces `bonus`, and the fleet's text `line`.
 struct Intel {
     warn: f64,
     bonus: Vec<f64>,
@@ -1744,9 +1810,7 @@ fn naval_spawn(orders: &mut Value, world: View, me: View, naval: &Naval, rival_s
 
 // ---- The junks ----
 
-/// The water junk `u` should keep to, from the fleet's orders (`nv`): role 0 warjunk, 1 picket, 2 corsair; `k` is its
-/// place among the junks of its kind (by id), so each picket takes its own crossing.
-/// The strait (a, b) a warjunk on the blockade keeps: the same pick as [`junk_goal`]; None for the rest.
+/// A warjunk's blockade strait, matching `junk_goal`; other roles return None.
 fn junk_strait(nv: &Value, role: u8, k: usize) -> Option<(f64, f64)> {
     let bx = nv.get("bx").items();
     (role == 0 && k % 2 == 1 && !bx.is_empty()).then(|| {
@@ -1755,6 +1819,7 @@ fn junk_strait(nv: &Value, role: u8, k: usize) -> Option<(f64, f64)> {
     })
 }
 
+/// Station for role 0 warjunk, 1 picket or 2 corsair; `k` ranks same-role hulls by ID.
 fn junk_goal(nv: &Value, role: u8, k: usize, now: f64) -> f64 {
     let fw = nv.get("fw").num_or(-1.0);
     match role {
@@ -1847,8 +1912,7 @@ fn quarry(u: View, me: View, world: View, role: u8) -> Option<View> {
     best
 }
 
-/// Every junk: keep to its water, or go after a rival ship nearby; the reflex fires the guns. A junk standing off our
-/// own coast hears the plan there, and copies its water into its own RAM (page 1) for when it sails off a rival's.
+/// Sail to station or chase a nearby rival. Copy coastal orders to ship RAM page 1 before leaving.
 fn junks(units: View, world: View, me: View, role: u8) -> Value {
     // Route, contact, and ship-RAM scans need more than a thin control lane.
     // Below it, retain the standing course for the next funded callback.
@@ -1973,9 +2037,8 @@ fn carrier(units: View, world: View, me: View) -> Value {
     junks(units, world, me, 0)
 }
 
-/// A junk in contact: a broadside at whatever is at sea in its arc (the side with more; a broadside with nothing at
-/// sea in the arc costs nothing), the beam turned to the nearest rival ship, and its guns on the nearest rival it can
-/// reach, ship or shore. A hurt corsair runs and dashes.
+/// Broadside at ships and rowers on the busier side; an empty arc costs nothing.
+/// Face the nearest ship and fire guns at the nearest rival in reach, at sea or ashore. Hurt corsairs retreat and dash.
 fn junk_reflex(u: View, ns: View, pool: &mut Pool) -> Option<Value> {
     let r = u.get("rts");
     let sea = r.get("sea");

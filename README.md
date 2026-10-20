@@ -47,6 +47,10 @@ A job keyed to any other second would run only when the two line up.
 In the simulations, thinking fell from about a third of the houses' spend to a fifth, and the army got the difference.
 
 With cargo, income arrives in loads, and the army lives on the bank between deliveries.
+Cargo factions decline automatic local recruitment with `acceptLocals: false` while retaining deliberate spawns, hires and persuasion.
+Their recruitment review counts buildings and the full cost of queued and fielded units.
+During a capital cash shortage, recovery pays a delivery crew first and limits reserves to automatic refill.
+Spare currency can fund temporary rentals while preserving two unit prices and 120 seconds of rent.
 Units stalled between loads stand at no cost until the next one.
 They send a house into recovery only once its bank falls under two seconds of income.
 Once the army's upkeep passes half of income, a recruit waits until the bank can pay the larger army for 30 seconds.

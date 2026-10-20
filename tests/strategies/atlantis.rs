@@ -49,7 +49,7 @@ fn a_capped_science_house_refreshes_its_plan_and_recruits_without_optional_resea
     let saved=views(&[ram]);let plan=mem::get(saved[0],0);
     assert_eq!(plan.get("attack").num(),1.0);
     assert!(!plan.get("mines").is_empty());
-    for key in ["field","front","convoy"] {assert!(plan.get(key).is_undef(),"bounded planning omits {key}");}
+    for key in ["field","front","convoy"] {assert!(!plan.get(key).truthy(),"bounded planning leaves no active {key}");}
     assert!(!orders.get("spawn").is_empty());
     assert!(orders.get("compute").get("cpu").get("limits").get("fabrication").num()>0.0);
     for key in ["research","rent","send","accept"] {assert!(orders.get(key).is_undef(),"standing science and trade remain unchanged: {key}");}

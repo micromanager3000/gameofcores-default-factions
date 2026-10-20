@@ -7,6 +7,31 @@ fn line_pages(value: &Value) -> Value {
 }
 
 #[test]
+fn a_funded_cargo_house_rebuilds_two_ground_lines_before_ordinary_recruitment(){
+    let world=obj!{"seconds"=>600,"logistics"=>obj!{},"units"=>arr![
+        obj!{"owner"=>5,"type"=>"line","hp"=>2,"rts"=>obj!{"sea"=>obj!{"ship"=>true}}},
+        obj!{"owner"=>5,"type"=>"line","hp"=>2,"build"=>obj!{"wings"=>1}},
+        obj!{"owner"=>5,"type"=>"line","hp"=>2}]};
+    let me=obj!{"id"=>5,"units"=>obj!{"total"=>3,"byType"=>obj!{"line"=>3}},
+        "rts"=>obj!{"cpu"=>obj!{"income"=>10000,"bank"=>600000}}};
+    let args=views(&[world.clone(),me.clone()]);
+    assert_eq!(frontier_upkeep(args[0],args[1]),0.55,"ships and aircraft cannot replace capturers");
+    let mut ready=world.clone();ready.entry("units").push(obj!{"owner"=>5,"type"=>"line","hp"=>2});
+    let args=views(&[ready,me.clone()]);assert_eq!(frontier_upkeep(args[0],args[1]),0.4);
+    for case in ["early","poor","stalled","queued","no-cargo"]{
+        let mut w=world.clone();let mut m=me.clone();
+        match case{
+            "early"=>w.set("seconds",599),
+            "poor"=>m.entry("rts").entry("cpu").set("bank",599999),
+            "stalled"=>m.entry("units").set("stalled",1),
+            "queued"=>m.entry("units").set("queued",1),
+            _=>w.set("logistics",Value::Null),
+        }
+        let args=views(&[w,m]);assert_eq!(frontier_upkeep(args[0],args[1]),0.4,"{case}");
+    }
+}
+
+#[test]
 fn a_local_manifesto_plan_keeps_priority_over_a_carried_core() {
     let local = line_pages(&obj! {"attack"=>1,"stage"=>0,"hold"=>arr![0],"sway"=>arr![1]});
     let core = plan::pack(&obj! {"attack"=>2,"stage"=>2});

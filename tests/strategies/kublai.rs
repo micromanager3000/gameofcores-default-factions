@@ -140,3 +140,35 @@ fn kublai_wing_preserves_urgent_landings_and_a_funded_sortie() {
     assert_eq!(out.len(),1,"hot aircraft land before optional route work");
     assert!(out[0].get("land").truthy());
 }
+#[test]
+fn a_hired_hull_retrained_as_skirm_guards_shipping_instead_of_marching_ashore() {
+    let u=obj! {"id"=>77,"type"=>"skirm","owner"=>0,"at"=>1,"to"=>-1,"doing"=>"idle","build"=>obj! {"carry"=>0,"strength"=>2},
+        "rts"=>obj! {"sea"=>obj! {"ship"=>true,"water"=>1,"course"=>"stop"}}};
+    let world=obj! {"seconds"=>30,"logistics"=>obj! {"docks"=>vec![obj! {"p"=>0,"water"=>0},obj! {"p"=>1,"water"=>1}]},
+        "waters"=>vec![obj! {"id"=>0,"adj"=>vec![1],"coast"=>vec![0]},obj! {"id"=>1,"adj"=>vec![0],"coast"=>vec![1]}],
+        "provinces"=>vec![obj! {"id"=>0,"owner"=>0,"hops"=>0,"adj"=>vec![1]},obj! {"id"=>1,"owner"=>0,"hops"=>1,"adj"=>vec![0]}]};
+    let me=obj! {"id"=>0,"capital"=>0,"ramCapital"=>obj! {},"rts"=>obj! {"cpu"=>obj! {"income"=>30000},"sea"=>obj! {"contacts"=>Vec::<Value>::new()}}};
+    let args=views(&[u.clone(),world,me]);
+    assert!(super::war_order(args[0],args[1],args[2]).is_none());
+    let orders=emitted();
+    assert_eq!(orders.len(),1);
+    assert_eq!(orders[0].get("sail").num(),0.0,"the acquired ship returns to the receiving dock");
+    assert!(orders[0].get("do").is_undef(),"a hull receives no land verb");
+    let mut land=u;land.entry("rts").entry("sea").set("ship",false);
+    let ground=View::of(&land);
+    assert_eq!(super::war_order(ground,args[1],args[2]).expect("ground defence").get("do").str(),"fight");
+}
+#[test]
+fn a_short_kublai_plan_rebuilds_capturers_beside_the_working_mining_crew() {
+    let args=views(&productive_local_fixture());
+    let out=super::local_strategy(args[0],args[1]);
+    assert!(out.get("spawn").items().iter().any(|s|s.get("type").str()=="screen"));
+    assert!(out.get("ram").len()>0,"the next reachable target is published");
+    assert!(out.get("compute").get("cpu").truthy());
+}
+#[test]
+fn a_local_kublai_army_develops_the_core_it_just_held() {
+    let args=views(&frontier_mining_fixture("screen"));
+    let out=super::local_strategy(args[0],args[1]);
+    assert!(out.get("spawn").items().iter().any(|s|s.get("type").str()=="miner"));
+}

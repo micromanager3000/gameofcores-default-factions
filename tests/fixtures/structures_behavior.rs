@@ -38,3 +38,20 @@ fn building_services_still_respect_cash_and_recovery_limits() {
         assert!(orders.get("structureService").is_empty());
     }
 }
+
+#[test]
+fn building_attacks_respect_each_units_paid_cover_and_its_expiry(){
+    for (host,seconds,blocked) in [(2,30,true),(2,0,false),(3,30,false)]{
+        let world=obj!{"seconds"=>6,"factions"=>arr![Value::Null,Value::Null,obj!{"id"=>2,"alive"=>true}],
+            "provinces"=>arr![obj!{"id"=>5,"owner"=>2}],"units"=>arr![
+                obj!{"id"=>101,"owner"=>1,"type"=>"picket","air"=>false,"at"=>5,"hp"=>5,
+                    "cover"=>obj!{"by"=>host,"secondsLeft"=>seconds},"pos"=>obj!{"p"=>5,"x"=>0,"y"=>0},"build"=>obj!{}}
+            ]};
+        let me=obj!{"id"=>1,"seat"=>1,"units"=>obj!{"stalled"=>0},"contracts"=>Vec::<Value>::new(),
+            "rts"=>obj!{"structureCosts"=>obj!{"base"=>1},"cpu"=>obj!{"income"=>10000,"bank"=>100000,"last"=>obj!{"upkeep"=>0}},
+                "structures"=>arr![obj!{"id"=>9,"owner"=>2,"state"=>"ready","p"=>5,"x"=>0,"y"=>0,"radius"=>1,"hp"=>100}]}};
+        let args=views(&[world,me]);let mut out=obj!{};shared::structures::apply(&mut out,args[0],args[1]);
+        assert_eq!(out.get("structureAttacks").is_empty(),blocked,"active host cover protects the unit regardless of how it was granted");
+        if !blocked{assert_eq!(out.get("structureAttacks").at(0).get("target").num(),9.0);}
+    }
+}

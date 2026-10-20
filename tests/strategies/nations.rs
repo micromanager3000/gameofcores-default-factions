@@ -86,7 +86,7 @@ fn planner_allowance(policy: &Value, income: f64) -> f64 {
 fn exhausted_planner_repairs_its_next_allowance_before_reentering_expensive_work() {
     let mut me=planner_fixture();
     let args=views(&[me.clone()]);
-    let PlannerAdmission::Raise(orders)=planner_admission(args[0],31893.0) else { panic!("a funded exhausted planner repairs its allowance") };
+    let PlannerAdmission::Raise(orders)=planner_admission(View::undefined(),args[0],31893.0) else { panic!("a funded exhausted planner repairs its allowance") };
     let policy=orders.get("compute").get("cpu");
     let next=planner_allowance(policy,106000.0);
     assert!(next>32000.0*1.2+4000.0,"exhaustion is a lower bound with a further invocation margin");
@@ -95,7 +95,7 @@ fn exhausted_planner_repairs_its_next_allowance_before_reentering_expensive_work
     assert_eq!(policy.get("reserve"),me.get("rts").get("cpu").get("reserve"));
     me.entry("rts").entry("cpu").set("limits",policy.get("limits").clone());
     let args=views(&[me]);
-    assert!(matches!(planner_admission(args[0],next-3000.0),PlannerAdmission::Full),"the outgoing policy must admit the following call, including wrapper costs");
+    assert!(matches!(planner_admission(View::undefined(),args[0],next-3000.0),PlannerAdmission::Full),"the outgoing policy must admit the following call, including wrapper costs");
 }
 
 #[test]
@@ -103,13 +103,13 @@ fn planner_repair_respects_hard_caps_without_creating_a_recovery_loop() {
     let mut me=planner_fixture();
     me.entry("rts").entry("cpu").set("spendCap",45000);
     let args=views(&[me.clone()]);
-    let PlannerAdmission::Raise(orders)=planner_admission(args[0],31893.0) else { panic!("the hard cap still permits a useful allowance increase") };
+    let PlannerAdmission::Raise(orders)=planner_admission(View::undefined(),args[0],31893.0) else { panic!("the hard cap still permits a useful allowance increase") };
     let policy=orders.get("compute").get("cpu");
     let next=planner_allowance(policy,106000.0);
     assert!(next<=45000.0);
     me.entry("rts").entry("cpu").set("limits",policy.get("limits").clone());
     let args=views(&[me]);
-    assert!(matches!(planner_admission(args[0],next-3000.0),PlannerAdmission::Lean),"a binding cap selects local planning rather than silently admitting the full pass");
+    assert!(matches!(planner_admission(View::undefined(),args[0],next-3000.0),PlannerAdmission::Lean),"a binding cap selects local planning rather than silently admitting the full pass");
 }
 
 #[test]
@@ -121,7 +121,53 @@ fn a_low_income_planner_keeps_its_viable_lean_admission() {
     let cpu=me.entry("rts").entry("cpu");
     cpu.set("income",20000);cpu.set("spendCap",25000);cpu.entry("limits").set("think",20000);
     let args=views(&[me]);
-    assert!(matches!(planner_admission(args[0],17000.0),PlannerAdmission::Full),"a cheap 15k planner need not wait for a large-world allowance");
+    assert!(matches!(planner_admission(View::undefined(),args[0],17000.0),PlannerAdmission::Full),"a cheap 15k planner need not wait for a large-world allowance");
+}
+
+#[test]
+fn a_cheap_recent_peak_does_not_admit_a_large_full_map_or_loop_above_the_code_cap() {
+    let world=obj! {"provinces"=>vec![Value::Null;35],"units"=>vec![Value::Null;57]};
+    let mut me=planner_fixture();
+    me.entry("units").set("total",16);
+    me.entry("compute").set("thinkPeak",6694);
+    me.entry("compute").entry("used").set("think",6694);
+    let cpu=me.entry("rts").entry("cpu");
+    cpu.set("income",37453);cpu.set("bank",325256);cpu.set("spendCap",46816);
+    cpu.entry("limits").set("think",21483);cpu.set("reserve",obj! {});
+    let args=views(&[world.clone(),me.clone()]);
+    let PlannerAdmission::Raise(orders)=planner_admission(args[0],args[1],21419.0) else {panic!("the captured cheap peak must repair the full-map allowance")};
+    let next=planner_allowance(orders.get("compute").get("cpu"),37453.0);
+    assert!(next>27700.0 && next<=46816.0);
+    let cpu=me.entry("rts").entry("cpu");
+    cpu.set("income",20000);cpu.set("spendCap",25000);
+    let args=views(&[world,me]);
+    assert!(matches!(planner_admission(args[0],args[1],25000.0),PlannerAdmission::Lean),"an impossible full-map allowance keeps the local planner available");
+}
+
+#[test]
+fn a_large_merchant_map_funds_its_survey_and_keeps_the_next_full_allowance() {
+    let world=obj! {"provinces"=>vec![Value::Null;44],"units"=>vec![Value::Null;74]};
+    let mut me=planner_fixture();
+    me.entry("units").set("total",18);
+    me.entry("compute").set("thinkPeak",3887);
+    me.entry("compute").entry("used").set("think",224);
+    let cpu=me.entry("rts").entry("cpu");
+    cpu.set("income",73033);cpu.set("bank",1733263);cpu.set("spendCap",91291);
+    cpu.entry("limits").set("think",39347);cpu.set("available",obj! {"think"=>39226});
+    with_cycle_reserve(5000.0,|| {
+        let args=views(&[world.clone(),me.clone()]);
+        let PlannerAdmission::Raise(orders)=planner_admission(args[0],args[1],32558.0) else {
+            panic!("a cheap recent peak cannot admit the captured merchant map on 39k physical cycles");
+        };
+        let next=planner_allowance(orders.get("compute").get("cpu"),73033.0);
+        me.entry("rts").entry("cpu").entry("limits").set("think",next+cycles_reserved());
+        me.entry("rts").entry("cpu").set("available",obj! {"think"=>next+cycles_reserved()-120.0});
+        let args=views(&[world,me]);
+        assert!(matches!(planner_admission(args[0],args[1],next-2500.0),PlannerAdmission::Full));
+        let policy=cpu_policy(args[0],args[1],0.0,false);
+        assert!(planner_allowance(&policy,73033.0)>=planner_map_need(args[0],args[1])+6000.0,
+            "a completed planner retains the allowance needed for the next map and wrapper");
+    });
 }
 
 #[test]
@@ -131,7 +177,7 @@ fn planner_repair_leaves_other_lanes_reserved_cycles_in_the_shared_bank() {
     cpu.set("bank",240000);
     cpu.set("reserve",obj! {"think"=>3500,"control"=>190000});
     let args=views(&[me]);
-    let PlannerAdmission::Raise(orders)=planner_admission(args[0],31893.0) else { panic!("the remaining shared bank can fund one larger planner call") };
+    let PlannerAdmission::Raise(orders)=planner_admission(View::undefined(),args[0],31893.0) else { panic!("the remaining shared bank can fund one larger planner call") };
     let next=planner_allowance(orders.get("compute").get("cpu"),106000.0);
     assert!(next<=240000.0-190000.0-4000.0,"other lanes' reserves and the repair call are funded first");
 }
@@ -144,8 +190,8 @@ fn a_cap_below_observed_work_selects_lean_even_with_a_larger_configured_limit() 
     me.entry("rts").entry("cpu").entry("limits").set("think",162588);
     me.entry("rts").entry("cpu").set("available",obj! {"think"=>119418});
     let args=views(&[me]);
-    assert!(matches!(planner_admission(args[0],119000.0),PlannerAdmission::Lean));
-    assert!(matches!(planner_admission(args[0],1.0e9),PlannerAdmission::Lean),"the public allowance also bounds a synthetic native callback");
+    assert!(matches!(planner_admission(View::undefined(),args[0],119000.0),PlannerAdmission::Lean));
+    assert!(matches!(planner_admission(View::undefined(),args[0],1.0e9),PlannerAdmission::Lean),"the public allowance also bounds a synthetic native callback");
 }
 
 #[test]
