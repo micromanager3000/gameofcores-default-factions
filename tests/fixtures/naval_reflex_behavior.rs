@@ -90,17 +90,43 @@ fn a_loaded_hull_keeps_sailing_when_the_target_is_off_its_beam() {
 }
 
 #[test]
-fn an_escort_can_hold_its_beam_during_reload_without_buying_another_volley() {
+fn an_escort_keeps_its_course_during_reload_without_buying_another_volley() {
     let (mut u, near) = naval_case(1.0, 3.0, 0.0);
     u.entry("rts").entry("abilityIn").set("broadside", 2);
     let args = views(&[u, near]);
-    let mut out = obj! {"id"=>1,"hit"=>2};
+    let mut out = obj! {"id"=>1,"hit"=>2,"sail"=>arr![3,4]};
+    let before = out.clone();
+    let (mut bank, mut abilities) = (10000.0, 1000.0);
+    assert!(!common::naval_reflex(args[0], args[1], &mut out, &mut bank, &mut abilities));
+    assert_eq!(out, before, "face would cancel the existing sailing course");
+    assert_eq!((bank, abilities), (10000.0, 1000.0));
+}
+
+#[test]
+fn an_aligned_escort_fires_without_replacing_its_sailing_course() {
+    let (u, near) = naval_case(1.0, 0.0, 3.0);
+    let args = views(&[u, near]);
+    let mut out = obj! {"id"=>1,"sail"=>arr![3,4],"focus"=>2};
     let (mut bank, mut abilities) = (10000.0, 1000.0);
     assert!(common::naval_reflex(args[0], args[1], &mut out, &mut bank, &mut abilities));
-    assert!(out.get("ability").is_undef());
+    assert_eq!(out.get("ability").str(), "broadside");
+    assert_eq!(out.get("sail"), &arr![3,4]);
+    assert_eq!(out.get("focus").num(), 2.0);
+    assert!(out.get("face").is_undef() && out.get("step").is_undef() && out.get("hold").is_undef());
+    assert_eq!((bank, abilities), (9550.0, 550.0));
+}
+
+#[test]
+fn a_ready_unloaded_escort_can_aim_an_affordable_bow_contact() {
+    let (u, near) = naval_case(1.0, 3.0, 0.0);
+    let args = views(&[u, near]);
+    let mut out = obj! {"id"=>1,"step"=>obj! {"x"=>1,"y"=>0},"hold"=>true};
+    let (mut bank, mut abilities) = (10000.0, 450.0);
+    assert!(common::naval_reflex(args[0], args[1], &mut out, &mut bank, &mut abilities));
     assert!(out.get("face").truthy());
-    assert_eq!(out.get("hit").num(), 2.0);
-    assert_eq!((bank, abilities), (10000.0, 1000.0));
+    assert_eq!(out.get("step"), &Value::Null);
+    assert!(!out.get("hold").truthy() && out.get("ability").is_undef());
+    assert_eq!((bank, abilities), (10000.0, 450.0), "aiming does not buy a volley before it can fire");
 }
 
 #[test]

@@ -648,23 +648,25 @@ pub fn siege_verb(world:View,me:View,target:f64,defend:bool)->&'static str {
 	if owner==me.get("id").num() || realm::is_ally(me,owner) {"fight"}else{"capture"}
 }
 
-/// Add an affordable broadside or a beam-facing order for an armed convoy escort.
-/// The caller supplies the bank and ability cycles left after its other actions.
+/// Add an affordable broadside. Unloaded combat ships can stop briefly to aim a ready volley.
+/// Aligned shots and reloads leave the existing course in place.
 pub fn naval_reflex(u:View, near:View, out:&mut Value, bank:&mut f64, abilities:&mut f64)->bool {
 	let s=u.path("rts.sea");
 	if !s.get("ship").truthy() || u.get("range").num_or(0.0)<=0.0 || s.get("dived").truthy()
-		|| out.get("ability").truthy() || cycles_left()<5000.0 {return false;}
+		|| out.get("ability").truthy() || cycles_left()<5000.0
+		|| u.path("rts.abilityIn.broadside").num_or(0.0)>0.0 {return false;}
 	let level=price_level(u);
-	if bank.min(*abilities)<450.0*level {return false;}
-	let crowded=near.iter().filter(|t|t.get("rival").truthy()).count()>=8;
+	if bank.min(*abilities)<450.0*level || near.iter().filter(|t|t.get("rival").truthy()).count()>=8 {return false;}
 	let (mut possible,mut useful)=([0_u32;2],[0_u32;2]);
 	let mut target:Option<View>=None;
+	let mut contacts=0_u32;
 	for t in near.iter() {
 		if cycles_left()<3000.0 {return false;}
 		if !t.get("rival").truthy() || t.get("air").truthy() || t.path("rts.sea.water").num_or(-1.0)<0.0
 			|| t.path("rts.sea.dived").truthy() {continue;}
 		let d=t.get("d").num_or(99.0);
 		if d>6.2 {continue;}
+		contacts+=1;
 		let bearing=sea::bearing(u,t);
 		let side=usize::from(bearing.side=="starboard");
 		if bearing.off<=47.0 {possible[side]+=1;}
@@ -680,22 +682,21 @@ pub fn naval_reflex(u:View, near:View, out:&mut Value, bank:&mut f64, abilities:
 		if bearing.off<=43.0 {useful[side]+=1;}
 		if target.is_none_or(|old|d<old.get("d").num_or(99.0)){target=Some(t);}
 	}
-	let mut changed=false;
-	if !crowded && u.path("rts.abilityIn.broadside").num_or(0.0)<=0.0 {
-		let best=usize::from(useful[1]>useful[0]);
-		for side in [best,1-best] {
-			let cost=(300.0+150.0*f64::from(possible[side]))*level;
-			if useful[side]>0 && cost<=*bank && cost<=*abilities {
-				*bank-=cost;*abilities-=cost;out.set("ability","broadside");
-				out.set("side",if side==1 {"starboard"}else{"port"});changed=true;break;
-			}
+	let best=usize::from(useful[1]>useful[0]);
+	for side in [best,1-best] {
+		let cost=(300.0+150.0*f64::from(possible[side]))*level;
+		if useful[side]>0 && cost<=*bank && cost<=*abilities {
+			*bank-=cost;*abilities-=cost;out.set("ability","broadside");
+			out.set("side",if side==1 {"starboard"}else{"port"});return true;
 		}
 	}
-	if let Some(t)=target.filter(|_|logistics::cargo(u)<=0.0 && !u.path("rts.cargo.job").truthy()) {
-		let b=sea::beam(u,t);out.set("face",obj!{"x"=>b.x,"y"=>b.y});changed=true;
+	let aim_cost=(300.0+150.0*f64::from(contacts))*level;
+	if let Some(t)=target.filter(|t| logistics::cargo(u)<=0.0 && !u.path("rts.cargo.job").truthy()
+		&& bank.min(*abilities)>=aim_cost && sea::bearing(u,*t).off>43.0) {
+		let b=sea::beam(u,t);out.set("face",obj!{"x"=>b.x,"y"=>b.y});
+		out.set("step",Value::Null);out.set("hold",false);return true;
 	}
-	if changed {out.set("step",Value::Null);out.set("hold",false);}
-	changed
+	false
 }
 
 /// A hired or bought hull can inherit a land controller name. Keep its cargo job, or give it a sea job.

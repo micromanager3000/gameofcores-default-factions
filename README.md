@@ -73,7 +73,7 @@ The program compiles against the public game SDK. All faction helpers count towa
 The game provides 3,360 free RAM pages to every faction, covering the included preset source and the grid planner.
 Compiled instructions are metered normally.
 Quiet Fleet leaves standing infantry orders in place when a short call cannot afford its plan lookup.
-Compute of Nations starts optional market searches only when planning leaves enough cycles to finish the call.
+Compute of Nations checks its return budget between optional market jobs and keeps completed work.
 Shared code fenced `// @house` … `// @end` goes into the house programs only. The default program leaves out the sea
 escorts this way, but carries the same power grid planner as the founders.
 Both the Rust package and the Node exporter produce the same source; `npm test` checks every program.
@@ -152,6 +152,9 @@ Shared escorts follow the program's unit catalogue when programs change seats. T
 Templar and Nations escorts can turn nearby rival ships onto their beam and fire a funded broadside.
 They preserve paid gunfire and share the bank and ability cycles left after other combat actions.
 Loaded ships keep their cargo route.
+Aligned volleys and reloads preserve the current sailing course.
+Nations handles land contacts before naval aiming within the same reflex allowance.
+Fleet and Nations defer reflex pool setup when the allowance cannot fund their first turn.
 
 In worlds with town walls, offensive artillery uses `capture` orders to damage them.
 Guns already deployed at the target keep firing at its walls.
