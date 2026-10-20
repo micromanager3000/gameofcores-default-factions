@@ -1670,11 +1670,11 @@ fn wing(units: View, world: View, me: View) {
                 let b = bytes.bytes(); Some(4.0 * f64::from(u16::from_le_bytes([b[0], b[1]])))
             } else { None }
         }).fold(0.0, f64::max);
-        if cycles_left() < 2500.0 + read { return; }
+        if cycles_left() < (800.0 + read).max(3500.0) { return; }
     }
     let pl = plan::for_units(me, units, world);
     // The loop below cannot issue an order with less runway; skip its map index too.
-    if me.get("rts").truthy() && cycles_left() < 2500.0 { return; }
+    if me.get("rts").truthy() && cycles_left() < 2000.0 { return; }
     let by_id = realm::index(world);
     let hunt = pl.get("hunt");
     let abroad = hunt.is_undef();
@@ -1704,7 +1704,7 @@ fn wing(units: View, world: View, me: View) {
     let verb = if q.truthy() && n(owner) >= 0.0 && !same(owner, me.get("id")) && !allies.has_num(n(owner)) && foes == 0 { "raid" } else { "fight" };
     let rts = me.get("rts").truthy();
     for i in 0..units.len() {
-        if rts && cycles_left() < 2500.0 {
+        if rts && cycles_left() < 2000.0 {
             break;
         }
         let u = turn(units, i, world);

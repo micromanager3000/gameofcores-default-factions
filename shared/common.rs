@@ -331,6 +331,30 @@ fn miner_gather(u: View, world: View, me: View) -> Option<Value> {
 	orders::gather(u,world,me)
 }
 
+// A short recovery can assign one neighboring mine without opening the general route planner.
+fn miner_nearby(u: View, world: View, me: View) -> Option<Value> {
+	let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
+	let read=if plan::known(me,u).is_none() && bytes.is_bytes() && bytes.len()>=2 {
+		let b=bytes.bytes();4.0*f64::from(u16::from_le_bytes([b[0],b[1]]))
+	}else{0.0};
+	if cycles_left()<read+800.0 {return None;}
+	let plan=plan::of(me,u);let index=realm::index(world);let here=index.at(u.get("at"));
+	for mine in plan.get("mines").items().iter().take(12) {
+		if cycles_left()<800.0 {break;}
+		let target=mine.at(0).num_or(-1.0);let slot=mine.at(1).num_or(-1.0);
+		if target<0.0 || slot<0.0 || (target!=u.get("at").num() && !here.get("adj").has_num(target)) {continue;}
+		let p=index.get(target);
+		if p.get("owner").num_or(-1.0)!=me.get("id").num() || slot>=p.get("mines").len() as f64
+			|| p.get("mines").at(slot as usize).num_or(0.0)<=0.0 || p.get("staff").at(slot as usize).num_or(0.0)>=2.0
+			|| realm::worker(p,slot)!=me.get("id").num() {continue;}
+		if cycles_left()<500.0 {return None;}
+		let mut out=obj! {"id"=>u.get("id"),"do"=>"gather","target"=>target,"slot"=>slot};
+		if target!=u.get("at").num() {out.set("via",vec![target]);}
+		return Some(out);
+	}
+	None
+}
+
 fn logistics_miners(units: View, world: View, me: View) {
 	// Full local assignment reads cargo and route state for each body.  Below this runway the
 	// bounded delivery retry can still free a loaded miner without losing the callback.
@@ -364,7 +388,7 @@ fn logistics_miners(units: View, world: View, me: View) {
 			}
 			if !gathered && cycles_left()>LOGISTICS_MINER_REMOTE_FALLBACK_RUNWAY {
 				if let Some(u)=remote {
-					if let Some(o)=miner_gather(u,world,me){order(o);}
+					if let Some(o)=miner_nearby(u,world,me){order(o);}
 				}
 			}
 		}

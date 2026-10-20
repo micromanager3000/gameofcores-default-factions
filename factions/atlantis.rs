@@ -498,7 +498,7 @@ fn think_need(world: View, me: View) -> f64 {
 fn think(world: View, me: View) -> Value {
     if cycles_left()<800.0 {return obj!{};}
     // A short callback only opens the next allowance; standing unit schedules continue.
-    if me.path("rts.cpu").truthy() && cycles_left() < 10000.0 {
+    if me.path("rts.cpu").truthy() && cycles_left() < 6000.0 {
         if common::capital_rescue_wait(world,me){return obj!{};}
         return obj! { "compute" => obj! { "cpu" => obj! {
             "limits" => obj! { "think" => 24000, "control" => 0.5, "upkeep" => 0.65,
@@ -512,6 +512,7 @@ fn think(world: View, me: View) -> Value {
     // Recovery's map and unit scans also need fuel when income falls sharply.
     // A policy-only turn lets the next call recover without repeating those scans.
     if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
+        return common::govern(world, me, 0.4, || {
         let income = me.path("rts.cpu.income").num_or(20000.0).max(1.0);
         let mut types = obj! {};
         for ty in me.get("types").keys() { types.set(ty, obj! { "share" => 0, "every" => 8 }); }
@@ -531,10 +532,11 @@ fn think(world: View, me: View) -> Value {
         let mut recovery = mem::get(me.get("ramCapital"), 244);
         if !matches!(recovery, Value::Obj(_)) { recovery = obj! {}; }
         recovery.set("r", true);
-        return common::govern(world, me, 0.4, || obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
+        obj! { "compute" => obj! { "cpu" => cpu, "types" => types },
             "ram" => mem::put(244, &recovery, "local", None, 1).unwrap_or_default(),
             "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0,
-            "memo" => "Recovering production" });
+            "memo" => "Recovering production" }
+        });
     }
     common::govern(world, me, 0.4, || strategy(world, me))
 }
