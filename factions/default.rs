@@ -53,6 +53,7 @@ fn strategy(world: View, me: View) -> Value {
     if ready > 0.0 && ready >= plan.get("need").num() {
         plan.set("ready", ready);
     }
+    common::doctrine(&mut plan, world, me);
     common::front_snapshot(&mut plan, world, me);
     plan::share(&mut orders, &plan, me);
     let techs = me.get("techs");

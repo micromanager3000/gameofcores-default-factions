@@ -129,10 +129,10 @@ fn mods(me: View, kind: &str) -> Vec<&'static str> {
     out
 }
 
-// Room for more units: up to the allowance, then past it while their upkeep stays under 40% of income (common::room).
+// Room for more units: up to the army allowance, then past it while their upkeep stays under 50% of income
+// (common::army_room).
 fn army_room(me: View) -> f64 {
-    let u = me.get("units");
-    jmax(n(u.get("cap")) - n(u.get("total")) - n(u.get("queued")) - u.get("hiredOut").or(0.0), common::room(me, 0.4))
+    common::army_room(me, 0.5)
 }
 
 // Reserve fabrication CPU locally while constructing the spawn list. The engine processes spawns in order, so checking
@@ -328,7 +328,7 @@ fn think(world: View, me: View) -> Value {
     if cycles_left()<800.0 {return obj!{};}
     if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
         if common::capital_rescue_wait(world,me){return obj!{};}
-        return emergency_recovery_policy();
+        return emergency_recovery_policy(me);
     }
     let mut orders = if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
         common::govern(world, me, 0.4, || recovery_policy(me))
@@ -389,10 +389,10 @@ fn flight_progress(orders: &mut Value, world: View, me: View) {
 
 // At the bottom of a short think slice, update only the CPU budget needed for the next one. Leave type schedules and
 // standing orders alone; the larger recovery policy needs more cycles to build.
-fn emergency_recovery_policy() -> Value {
+fn emergency_recovery_policy(me: View) -> Value {
     obj! { "compute" => obj! { "cpu" => obj! {
         "limits" => obj! {
-            "think" => 24000, "control" => 0.5, "upkeep" => 0.65,
+            "think" => common::short_think(me), "control" => 0.5, "upkeep" => 0.65,
             "research" => 0, "influence" => 0, "fabrication" => 0, "visuals" => 0,
             "reflex" => 0.15, "duel" => 0.08, "challenge" => 0.02,
             "drive" => 0.08, "armor" => 0.05, "weapon" => 0.08, "abilities" => 0, "cloak" => 0, "gate" => 0
@@ -575,6 +575,7 @@ fn strategy(world: View, me: View) -> Value {
                 >= (me.path("units.total").num_or(0.0)-me.path("units.stalled").num_or(0.0)).max(1.0) {0.0}else{army_room(me)},
         "priceLevel" => common::price_level(me),
     };
+    common::doctrine(&mut plan,world,me);
     if full {common::share(&mut orders, &plan, world, me);} else {plan::share(&mut orders,&plan,me);}
 
     let count = |k: &str| bt.get(k).or(0.0);

@@ -140,6 +140,56 @@ fn kublai_wing_preserves_urgent_landings_and_a_funded_sortie() {
     assert_eq!(out.len(),1,"hot aircraft land before optional route work");
     assert!(out[0].get("land").truthy());
 }
+
+#[test]
+fn formation_slots_keep_bodies_apart_and_the_flank_past_the_front() {
+    use super::{slot, FLANK};
+    let (anchor, facing) = ((2.0, 0.0), (-1.0, 0.0));
+    let front: Vec<Point> = (0..9).map(|i| slot(anchor, facing, 0, i, 9, 4.0)).collect();
+    for (i, a) in front.iter().enumerate() {
+        assert!(a.x.hypot(a.y) <= 7.5 + 1e-9, "a slot stays on the map");
+        for b in &front[i + 1..] {
+            assert!((a.x - b.x).hypot(a.y - b.y) >= 0.5, "two units half a cell apart fit side by side");
+        }
+    }
+    // the second rank stands behind the first: farther from the foe the formation faces
+    let first = slot(anchor, facing, 0, 0, 1, 4.0);
+    let second = slot(anchor, facing, 1, 0, 1, 4.0);
+    assert!(second.x > first.x);
+    // the flank squad goes round both ends of a 4-cell front, a cell ahead of it
+    let left = slot(anchor, facing, FLANK, 0, 2, 4.0);
+    let right = slot(anchor, facing, FLANK, 1, 2, 4.0);
+    assert!(left.y.abs() > 2.0 && right.y.abs() > 2.0 && left.y * right.y < 0.0, "{},{} {},{}", left.x, left.y, right.x, right.y);
+    assert!(left.x < anchor.0 && right.x < anchor.0);
+}
+
+#[test]
+fn focus_fire_gangs_up_within_the_cap_and_keeps_standing_targets() {
+    let rival = |id: i64, hp: f64, d: f64| obj! {"id"=>id,"owner"=>1,"rival"=>true,"air"=>false,"range"=>0,"hp"=>hp,"hpMax"=>2,"d"=>d};
+    let mut units = Value::arr();
+    let mut near = Value::obj();
+    for i in 0..6i64 {
+        let hit = if i == 5 { Value::Num(91.0) } else { Value::Null };
+        units.push(obj! {"id"=>i,"reach"=>4,"range"=>1,"air"=>false,"hit"=>hit});
+        near.set(&i.to_string(), arr![rival(90, 0.5, 1.0), rival(91, 2.0, 1.5)]);
+    }
+    let v = views(&[units, near]);
+    let picks = super::focus_fire(v[0], v[1], 4);
+    let on = |id: f64| picks.iter().filter(|p| p.1.is_some_and(|t| t.get("id").num() == id)).count();
+    assert_eq!(on(90.0), 4, "the weakest rival takes the cap");
+    assert_eq!(on(91.0), 2, "the rest go to the next");
+    assert_eq!(picks[5].1.map(|t| t.get("id").num()), Some(91.0), "a unit keeps its standing target");
+}
+
+#[test]
+fn rest_reflex_sleeps_only_a_unit_that_just_keeps_striking() {
+    let mut strike = obj! {"id"=>1,"hit"=>7,"hold"=>true};
+    super::rest_reflex(&mut strike, 0.8);
+    assert_eq!(strike.get("wake").num(), 0.8);
+    let mut step = obj! {"id"=>1,"hit"=>7,"step"=>obj!{"x"=>1,"y"=>0}};
+    super::rest_reflex(&mut step, 0.8);
+    assert!(step.get("wake").is_undef(), "a unit on the move is called on its next turn");
+}
 #[test]
 fn a_hired_hull_retrained_as_skirm_guards_shipping_instead_of_marching_ashore() {
     let u=obj! {"id"=>77,"type"=>"skirm","owner"=>0,"at"=>1,"to"=>-1,"doing"=>"idle","build"=>obj! {"carry"=>0,"strength"=>2},
@@ -149,14 +199,14 @@ fn a_hired_hull_retrained_as_skirm_guards_shipping_instead_of_marching_ashore() 
         "provinces"=>vec![obj! {"id"=>0,"owner"=>0,"hops"=>0,"adj"=>vec![1]},obj! {"id"=>1,"owner"=>0,"hops"=>1,"adj"=>vec![0]}]};
     let me=obj! {"id"=>0,"capital"=>0,"ramCapital"=>obj! {},"rts"=>obj! {"cpu"=>obj! {"income"=>30000},"sea"=>obj! {"contacts"=>Vec::<Value>::new()}}};
     let args=views(&[u.clone(),world,me]);
-    assert!(super::war_order(args[0],args[1],args[2]).is_none());
+    assert!(super::war_order(args[0],args[1],args[2],None).is_none());
     let orders=emitted();
     assert_eq!(orders.len(),1);
     assert_eq!(orders[0].get("sail").num(),0.0,"the acquired ship returns to the receiving dock");
     assert!(orders[0].get("do").is_undef(),"a hull receives no land verb");
     let mut land=u;land.entry("rts").entry("sea").set("ship",false);
     let ground=View::of(&land);
-    assert_eq!(super::war_order(ground,args[1],args[2]).expect("ground defence").get("do").str(),"fight");
+    assert_eq!(super::war_order(ground,args[1],args[2],None).expect("ground defence").get("do").str(),"fight");
 }
 #[test]
 fn a_short_kublai_plan_rebuilds_capturers_beside_the_working_mining_crew() {

@@ -30,14 +30,35 @@ Their presentation also follows their own seat.
 
 ## Armies
 
-Every house fights in waves, with the shared code in `shared/common.rs` (`front`, `govern` and the recovery below them).
+Every house fights by the game SDK's `war` doctrine with `seek` (`docs/sdk.md` in `gameofcores`, "war: when the army goes").
+The house picks the target and the stage. Before think shares its plan, `common::doctrine` passes it through `war::doctrine`.
+A unit asks `war::front` before it takes the plan's attack (`common::front`).
+The army gathers at the stage until 70% of its ground fighters stand there or are on the attack, then goes in and stays in.
+A rival stack of 3 or more in the house's land, once it's a quarter of the army, draws the whole army.
+The army falls back to the stage when rivals in the target outnumber it 1.4 to 1, and goes in again at 1.2 to 1.
+With `seek`, the massed army goes after a rival army of 8 or more within two steps of the house's land that it outnumbers 1.2 to 1.
+`common::govern` and `common::recovery` also pass the CPU policy through `war::drive_limit`, which raises the drive limit to pay the army's march.
+It engages only on the recovery and capital-rescue paths.
 
+With the doctrine off, every house fights in waves.
 An army abroad weighs the hit points of fighting units in its target province: its own and its allies' against everyone else's.
 Workers, cargo carriers, scouts and ships don't count.
 When the rivals there outweigh it 1.6 to 1, its hurt units fall back to the stage province, and the rest fight on.
 While that fight is lost, units at the stage hold there instead of walking in one at a time.
 They go in together once they and the units still in the target outweigh the rivals 1.15 to 1.
 A first attack goes in on the plan. Defenders, aircraft and ships keep their own orders.
+
+### World switches
+
+A world can turn the houses' defaults off through `me.lab`. A field the world leaves out keeps its default.
+
+| Field | Default | Other values |
+| --- | --- | --- |
+| `doctrine` | `"seek"`: the `war` doctrine with `seek` | `"mass"`: the doctrine without `seek`. `"off"`: the waves above. |
+| `march` | `true`: `war::drive_limit` pays the march | `false`: the house's own drive limit. |
+| `spend` | `"held"`: upkeep keeps the house's share of income (`common::spend_share`) | `"rise"`: up to 70% as the bank fills from a quarter to three quarters. `"paid"`: so, but only after a second that paid every drive, armor and weapon charge. |
+| `fixes` | `true` | `false` turns off three fixes (`common::fixes`). The lean plan scans until it has seen 12 of the house's provinces. A short think asks for half again its recent peak. Carriers skip a depot at 98% of its capacity. |
+| `think` | `0` | Think's limit is at least this share of income. |
 
 In CPU RTS worlds, a house runs its full strategy every third second.
 In the seconds between, it returns no orders, so its unit orders, plan and CPU policy stand.

@@ -255,10 +255,10 @@ fn seen_threats(world: View, me: View) -> Threats {
     t
 }
 
-// Keep a rebuilding force of twelve; larger armies must fit half of income.
+// Keep a rebuilding force of twelve fighters; larger armies must fit 60% of income.
 fn army_room(me: View) -> f64 {
     let u = me.get("units");
-    max(12.0 - u.get("total").num() - u.get("queued").num() - u.get("hiredOut").or(0.0), common::room(me, 0.5))
+    max(12.0 - common::army(me) - u.get("queued").num() - u.get("hiredOut").or(0.0), common::room(me, 0.6))
 }
 
 thread_local! {
@@ -669,6 +669,7 @@ fn strategy(world: View, me: View) -> Value {
         "policy" => obj! { "extraction" => 0.42, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true },
         "provinces" => Value::arr(),
     };
+    common::doctrine(&mut plan,world,me);
     if full_plan { common::share(&mut orders, &plan, world, me); }
     else { plan::share(&mut orders, &plan, me); }
 

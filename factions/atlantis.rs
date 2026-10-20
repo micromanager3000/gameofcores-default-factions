@@ -226,10 +226,10 @@ fn choose_spawn(me: View, mix: &[(&'static str, f64)], room: f64) -> Option<&'st
     best
 }
 
-// Room for more units: up to the allowance, then past it while their upkeep stays under 40% of income (common::room).
+// Room for more units: up to the army allowance, then past it while their upkeep stays under 50% of income
+// (common::army_room).
 fn army_room(me: View) -> f64 {
-    let u = me.get("units");
-    max(u.get("cap").num() - u.get("total").num() - u.get("queued").num() - u.get("hiredOut").or(0.0), common::room(me, 0.4))
+    common::army_room(me, 0.5)
 }
 
 fn spawn_one(orders: &mut Value, me: View, ty: &str, build: Value, modules: &[&str]) {
@@ -499,7 +499,7 @@ fn think(world: View, me: View) -> Value {
     if me.path("rts.cpu").truthy() && cycles_left() < 6000.0 {
         if common::capital_rescue_wait(world,me){return obj!{};}
         return obj! { "compute" => obj! { "cpu" => obj! {
-            "limits" => obj! { "think" => 24000, "control" => 0.5, "upkeep" => 0.65,
+            "limits" => obj! { "think" => common::short_think(me), "control" => 0.5, "upkeep" => 0.65,
                 "research" => 0, "influence" => 0, "fabrication" => 0, "visuals" => 0,
                 "reflex" => 0.15, "duel" => 0.08, "challenge" => 0.02,
                 "drive" => 0.08, "armor" => 0, "weapon" => 0.08,
@@ -611,6 +611,7 @@ fn strategy(world: View, me: View) -> Value {
     }
     if lean { air_guard = prev.get("airGuard").num_or(-1.0); }
     survey.set("airGuard", air_guard);
+    common::doctrine(&mut survey,world,me);
     if lean {plan::share(&mut orders,&survey,me);} else {common::share(&mut orders, &survey, world, me);}
     // Distant visible armies shape the mix. Only invaders and aircraft over our land cut research funding.
     let pressure = invaded_n + if air_guard >= 0.0 { 1.0 } else { 0.0 };
@@ -1408,9 +1409,15 @@ fn reflex(units: View, near: View) -> Vec<Value> {
                 o.set("hold", true);
             }
         }
+        // reflex sleep: a unit that only keeps striking isn't called for 0.8 s, one with nothing to do for 0.6 s (the
+        // game wakes it sooner when its target goes, a shell comes, or, with no target, it's hit)
+        if matches!(o.get("hit"), Value::Num(_)) && !o.get("step").truthy() && !o.get("ability").truthy() { o.set("wake", 0.8); }
         if best.is_some() || o.get("step").truthy() || o.get("ability").truthy() || o.get("deploy").truthy() {
             if cycles_left() < 700.0 { break; }
             order(o);
+        } else if hazard.is_none() && threat.is_none() {
+            if cycles_left() < 700.0 { break; }
+            order(obj! { "id" => u.get("id"), "wake" => 0.6 });
         }
         turn_cost = turn_cost.max(1.5 * (began - cycles_left()));
     }

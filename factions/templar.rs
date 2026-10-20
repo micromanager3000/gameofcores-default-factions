@@ -325,10 +325,10 @@ fn choose_spawn(me: View, mix: &[(&'static str, f64)], room: f64) -> Option<&'st
     best
 }
 
-// Keep a rebuilding force of twelve; larger armies must fit half of income.
+// Keep a rebuilding force of twelve fighters; larger armies must fit half of income.
 fn army_room(me: View) -> f64 {
     let u = me.get("units");
-    max(12.0 - num(u.get("total")) - num(u.get("queued")) - u.get("hiredOut").or(0.0), common::room(me, 0.5))
+    max(12.0 - common::army(me) - num(u.get("queued")) - u.get("hiredOut").or(0.0), common::room(me, 0.5))
 }
 
 fn spawn_one(orders: &mut Value, me: View, kind: Option<&str>, body: Value, modules: Vec<&str>) {
@@ -740,7 +740,7 @@ fn think(world: View, me: View) -> Value {
     if me.get("rts").truthy() && cycles_left() < 3000.0 {
         if common::capital_rescue_wait(world,me){return obj!{};}
         return obj! { "compute" => obj! { "cpu" => obj! {
-            "limits" => obj! { "think" => 24000, "control" => 0.5, "upkeep" => 0.65,
+            "limits" => obj! { "think" => common::short_think(me), "control" => 0.5, "upkeep" => 0.65,
                 "research" => 0, "influence" => 0, "fabrication" => 0, "visuals" => 0,
                 "reflex" => 0.15, "duel" => 0, "challenge" => 0,
                 "drive" => 0.08, "armor" => 0, "weapon" => 0.08,
@@ -784,6 +784,7 @@ fn strategy(world: View, me: View) -> Value {
         // The pilgrims' holy sites travel in the plan to the scouts at home.
         survey.set("pilgrims", pilgrim_sites(world, me));
     }
+    common::doctrine(&mut survey,world,me);
     if full_plan {common::share(&mut orders, &survey, world, me);}
     else {plan::share(&mut orders, &survey, me);}
 
@@ -1278,7 +1279,9 @@ fn tactical_order(u: View, world: View, me: View, role: &str, budget: &RouteBudg
     let defend = common::defends(&p, u);
     let attack = vnum(p.get("attack"));
     let target = if defend >= 0.0 { defend } else if attack >= 0.0 { attack } else { num(me.get("capital")) };
-    if !budget.route(u, target, world, me) { return None; }
+    // under the war doctrine the army gathers at the stage first
+    let war = defend < 0.0 && attack >= 0.0 && common::war_on(me);
+    if !budget.route(u, if war { vnum(p.get("stage")) } else { target }, world, me) { return None; }
     // a beaten army falls back to the stage, and reinforcements wait there for a wave (common::front)
     if defend < 0.0 && attack >= 0.0 {
         if let Some(o) = common::front(u, world, me, &p) {
@@ -1338,6 +1341,20 @@ fn artillery(units: View, world: View, me: View) {
         let began = cycles_left();
         let r = u.get("rts");
         let p = plan::of(me, u);
+        // under the war doctrine guns gather and fall back with the army
+        if common::war_on(me) && common::defends(&p, u) < 0.0 && vnum(p.get("attack")) >= 0.0 {
+            if let Some(o) = common::front(u, world, me, &p) {
+                if let Some(mut o) = carry(o, u, &p, me) {
+                    if !o.get("target").is_undef() {
+                        o.set("deploy", false);
+                        o.set("power", obj! { "drive" => 260, "armor" => 180, "weapon" => 650 });
+                    }
+                    order(o);
+                }
+                budget.finish(began, true);
+                continue;
+            }
+        }
         let target = if common::defends(&p, u) >= 0.0 {
             Value::Num(common::defends(&p, u))
         } else if vnum(p.get("attack")) >= 0.0 {
@@ -1852,7 +1869,7 @@ fn legacy_think(world: View, me: View) -> Value {
     ];
     // miners stop at what the mines can use (common::miner_room)
     let limits = [("scout", 1.0), ("spy", 1.0), ("miner", common::miner_room(me, &survey))];
-    common::recruit(&mut orders, me, &mix, name, &common::Recruit { reserve: 10.0, limits: &limits, builds: &builds, upkeep: 0.4 });
+    common::recruit(&mut orders, me, &mix, name, &common::Recruit { reserve: 10.0, limits: &limits, builds: &builds, upkeep: 0.5 });
     let u = me.get("units");
     orders.set("memo", format!("{} mining · {} guards", jstr(or(u.get("doing").get("gather"), 0.0)), jstr(or(u.get("byType").get("guard"), 0.0))));
     // pacts: one, with factions that aren't leading the world (the weak band together against the strong)
@@ -1888,8 +1905,10 @@ fn guard(units: View, world: View, me: View) {
     }
     let cap = me.get("capital");
     let mut keep: Option<View> = None;
+    // under the war doctrine no guard stays home
+    let home = !common::war_on(me);
     for u in units.iter() {
-        if eq(u.get("at"), cap) && keep.is_none_or(|k| num(u.get("id")) < num(k.get("id"))) {
+        if home && eq(u.get("at"), cap) && keep.is_none_or(|k| num(u.get("id")) < num(k.get("id"))) {
             keep = Some(u);
         }
     }
