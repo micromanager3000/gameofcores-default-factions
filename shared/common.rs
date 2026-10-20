@@ -339,7 +339,7 @@ fn logistics_miners(units: View, world: View, me: View) {
         use logistics::{Endpoint as E,cargo,transfer};
         let cap=me.get("capital").num();
         let mut transferred=false;
-        if let Some(u)=units.iter().take_while(|_|cycles_left()>LOGISTICS_MINER_FALLBACK_RUNWAY).find(|u|!u.path("rts.sea.ship").truthy()&&u.get("doing").str()!="gather"&&!cargo_working(*u)&&cargo(*u)>0.0) {
+        if let Some(u)=units.iter().take_while(|_|cycles_left()>LOGISTICS_MINER_FALLBACK_RUNWAY).find(|u|!u.path("rts.sea.ship").truthy()&&u.get("doing").str()!="gather"&&cargo(*u)>0.0&&!cargo_working(*u)) {
             let at=u.get("at").num();let dest=if logistics::land_route(world,me,at,cap).is_some(){E::town(cap)}else{E::town(at)};
             if let Some(o)=transfer(u,world,me,dest,false,None){order(o);transferred=true;}
         }
@@ -348,11 +348,14 @@ fn logistics_miners(units: View, world: View, me: View) {
         // bounded plan-routed attempt can fill a remote slot when there is no local work; the SDK
         // declines it if its route cannot leave a safe order reserve.
         if !transferred && cycles_left()>LOGISTICS_MINER_FALLBACK_RUNWAY {
-            let index=realm::index(world);let ours=me.get("id").num();let mut gathered=false;
-            if let Some(u)=units.iter().find(|u| {
-                if u.path("rts.sea.ship").truthy() || u.get("doing").str()=="gather" || cargo_working(*u) || cargo(*u)>0.0 {return false;}
-                let p=index.get(u.get("at").num());
-                p.get("owner").num_or(-1.0)==ours && p.get("mines").iter().enumerate().any(|(k,v)|v.num_or(0.0)>0.0&&realm::worker(p,k as f64)==ours&&p.get("staff").at(k).num_or(0.0)<2.0)
+            let index=realm::index(world);let ours=me.get("id").num();let mut gathered=false;let mut remote=None;let mut closed=None;
+            if let Some(u)=units.iter().take_while(|_|cycles_left()>1600.0).find(|u| {
+                if u.get("doing").str()=="gather" || u.path("rts.sea.ship").truthy() || cargo(*u)>0.0 || cargo_working(*u) {return false;}
+                if remote.is_none(){remote=Some(*u);}
+                let at=u.get("at").num();if closed==Some(at){return false;}
+                let p=index.get(at);
+                let open=p.get("owner").num_or(-1.0)==ours && p.get("mines").iter().enumerate().any(|(k,v)|v.num_or(0.0)>0.0&&realm::worker(p,k as f64)==ours&&p.get("staff").at(k).num_or(0.0)<2.0);
+                if !open{closed=Some(at);}open
             }) {
                 let p=index.get(u.get("at").num());
                 if let Some((slot,_))=p.get("mines").iter().enumerate().find(|(k,v)|v.num_or(0.0)>0.0&&realm::worker(p,*k as f64)==ours&&p.get("staff").at(*k).num_or(0.0)<2.0) {
@@ -360,7 +363,7 @@ fn logistics_miners(units: View, world: View, me: View) {
                 }
             }
             if !gathered && cycles_left()>LOGISTICS_MINER_REMOTE_FALLBACK_RUNWAY {
-                if let Some(u)=units.iter().find(|u|!u.path("rts.sea.ship").truthy()&&u.get("doing").str()!="gather"&&!cargo_working(*u)&&cargo(*u)<=0.0) {
+                if let Some(u)=remote {
                     if let Some(o)=orders::gather(u,world,me){order(o);}
                 }
             }
@@ -377,13 +380,15 @@ fn logistics_miners(units: View, world: View, me: View) {
             // @end
             continue;
         }
+        let doing=u.get("doing").str();
+        if doing=="gather"&&!u.path("rts.cargo.job").truthy(){continue;}
         let n=cargo(u);let at=u.get("at").num();
         if cargo_working(u) {continue;}
-        if n>0.0 && u.get("doing").str()!="gather" {
+        if n>0.0 && doing!="gather" {
             let dest=if logistics::land_route(world,me,at,cap).is_some(){E::town(cap)}else{E::town(at)};
             if let Some(o)=transfer(u,world,me,dest,false,None){order(o);}continue;
         }
-        if u.get("doing").str()=="gather" {continue;}
+        if doing=="gather" {continue;}
         // Prefer the capital's slots while there is room, so no faction needs a ship for its first delivery.
         let p=realm::index(world).get(cap);
         let slot=p.get("mines").iter().enumerate().find(|(k,v)|v.num_or(0.0)>0.0 && realm::worker(p,*k as f64)==me.get("id").num() && p.get("staff").at(*k).num_or(0.0)<2.0);
