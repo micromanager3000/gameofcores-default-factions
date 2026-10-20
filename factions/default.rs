@@ -26,7 +26,7 @@ fn think(world: View, me: View) -> Value {
         let mut out=common::govern(world, me, 0.4, || strategy(world, me));
         // Classic planning shares each second with unit code and research.
         // Keep room for this map review and its returned allocation.
-        let room=(1.0-(start-cycles_left()+800.0)/me.path("compute.cycles").num_or(1.0).max(1.0)).max(0.0);
+        let room=(1.0-(start-cycles_left()+2000.0)/me.path("compute.cycles").num_or(1.0).max(1.0)).max(0.0);
         if out.get("compute").truthy() {
             let compute=out.entry("compute");
             let units=compute.get("units").num_or(0.0).min(room);
