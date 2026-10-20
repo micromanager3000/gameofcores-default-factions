@@ -497,6 +497,7 @@ fn think(world: View, me: View) -> Value {
     if cycles_left()<800.0 {return obj!{};}
     // A short callback only opens the next allowance; standing unit schedules continue.
     if me.path("rts.cpu").truthy() && cycles_left() < 6000.0 {
+        if common::capital_rescue_wait(world,me){return obj!{};}
         return obj! { "compute" => obj! { "cpu" => obj! {
             "limits" => obj! { "think" => 24000, "control" => 0.5, "upkeep" => 0.65,
                 "research" => 0, "influence" => 0, "fabrication" => 0, "visuals" => 0,
@@ -559,9 +560,10 @@ fn strategy(world: View, me: View) -> Value {
         None
     };
     let kept = kept.filter(|q| q.get("owner").num() != me_id);
-    let target = kept.or_else(|| pick_target(world, me));
-    let mut survey = common::survey(world, me, &target.into_iter().collect::<Vec<View>>(), 2.0);
-    if kept.is_some() {
+    let target = kept.or_else(|| if lean {None}else{pick_target(world, me)});
+    let mut survey = if lean {common::local_plan(world,me,&prev,12000.0)}else{
+        common::survey(world, me, &target.into_iter().collect::<Vec<View>>(), 2.0)};
+    if !lean && kept.is_some() {
         survey.set("stage", prev.get("stage").clone());
     }
     survey.set("home", me.get("capital"));
@@ -694,6 +696,7 @@ fn strategy(world: View, me: View) -> Value {
         orders.entry("compute").set("types",types);
         let mut policy=cpu_policy(world,me,&orders,pressure,need);
         common::fit_cpu(&mut policy,me);
+        common::plan_allowance(&mut policy,me,need+700.0*world.get("provinces").len() as f64+2500.0);
         orders.entry("compute").set("cpu",policy);
         return affordable(orders,me,start);
     }
@@ -702,6 +705,7 @@ fn strategy(world: View, me: View) -> Value {
     atlantis_ext::choose_research(&mut orders, world, me);
     let mut policy = cpu_policy(world, me, &orders, pressure, need);
     common::fit_cpu(&mut policy, me);
+    common::plan_allowance(&mut policy,me,need+700.0*world.get("provinces").len() as f64+2500.0);
     orders.entry("compute").set("cpu", policy);
     orders.set("memo", atlantis_ext::memo(world, me));
     let pact_leader = realm::leader(world).map(|l| l.get("id").num());
@@ -986,6 +990,7 @@ enum Role {
 }
 
 fn tactical_order(u: View, world: View, me: View, role: Role) -> Option<Value> {
+    if common::received_ship(u,world,me) { return None; }
     let p = plan::of(me, u);
     let mut defend = common::defends(&p, u);
     let air_guard = p.get("airGuard").num_or(-1.0);

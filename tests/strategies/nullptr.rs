@@ -193,3 +193,17 @@ fn a_generator_inside_a_capital_does_not_replace_valuable_technology_theft() {
     let out=emitted();assert!(out.iter().any(|o|o.get("do").str()=="steal"),"{out:?}");
     assert!(out.iter().all(|o|o.get("structure").is_undef()));
 }
+#[test]
+fn local_nullptr_planning_rearms_workers_without_waiting_for_a_full_spy_census() {
+    let args=views(&productive_local_fixture());
+    let out=super::local_strategy(args[0],args[1]);
+    assert!(out.get("spawn").items().iter().any(|s|s.get("type").str()=="screen"),"the held mining core receives a combat unit");
+    assert!(!out.get("ram").is_empty(),"the reachable target and its stage accompany the CPU policy");
+    assert!(out.get("compute").get("cpu").truthy());
+}
+#[test]
+fn a_local_nullptr_army_develops_the_core_it_just_held() {
+    let args=views(&frontier_mining_fixture("screen"));
+    let out=super::local_strategy(args[0],args[1]);
+    assert!(out.get("spawn").items().iter().any(|s|s.get("type").str()=="miner"));
+}

@@ -327,6 +327,7 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
 fn think(world: View, me: View) -> Value {
     if cycles_left()<800.0 {return obj!{};}
     if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
+        if common::capital_rescue_wait(world,me){return obj!{};}
         return emergency_recovery_policy();
     }
     let mut orders = if me.path("rts.cpu").truthy() && cycles_left() < 18000.0 {
@@ -427,11 +428,15 @@ fn recovery_policy(me: View) -> Value {
         "propaganda" => Value::arr(), "preach" => Value::arr(), "rent" => 0 }
 }
 
-fn full_planning_ready(world:View,me:View,remaining:f64)->bool {
+fn full_planning_need(world:View,me:View)->f64 {
     let scan=18000.0+300.0*world.get("provinces").len() as f64+100.0*world.get("units").len() as f64;
     // Reserve the survey, routes and policy work that follows the census.
     let need=(me.path("compute.thinkPeak").num_or(0.0)*1.25+6000.0).max(scan)+26000.0;
-    remaining>=need && me.path("rts.cpu.spendCap").num_or(f64::INFINITY)>=need
+    need
+}
+fn full_planning_ready(world:View,me:View,remaining:f64)->bool {
+    let need=full_planning_need(world,me);
+    remaining>=need && me.path("rts.cpu.spendCap").num_or(f64::INFINITY)>=need+cycles_reserved()
 }
 
 // Keep local mining, defense and a nearby ground/air objective moving without a global census or route field.
@@ -636,6 +641,7 @@ fn strategy(world: View, me: View) -> Value {
     }
     let mut policy = cpu_policy(me, &plan, &type_calls);
     common::fit_cpu(&mut policy, me);
+    common::plan_allowance(&mut policy,me,full_planning_need(world,me)+2500.0);
     orders.entry("compute").set("cpu", policy);
     // the sorties so far (sky::tally), and the memo spectators read: where the vimanas fly, or how near Flight is
     let air = if full && (wings > 0.0 || !last.get("sky").is_undef()) && cycles_left() > 9000.0 { sky::tally(world, me, &mut orders) } else { sky::Tally::default() };
@@ -885,6 +891,7 @@ fn stale_local_attack(u: View, units: View, world: View, me: View, p: &Rc<Value>
 // Defend with a fight (those the plan sends: common::defends); attack with a capture, since free land and rivals' towns
 // fall only to units capturing them.
 fn war_order(u: View, units: View, world: View, me: View) -> Option<Value> {
+    if common::received_ship(u,world,me) { return None; }
     let mut p = plan::of(me, u);
     // Keep a newer carried advance when captured land repeats an obsolete plan.
     if plan::here(me, u) && u.get("at").num() != me.get("capital").num()

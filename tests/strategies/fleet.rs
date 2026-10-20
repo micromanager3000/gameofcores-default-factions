@@ -1,4 +1,15 @@
 #[test]
+fn a_fleet_retry_includes_its_ram_read_and_preserves_the_hard_execution_cap(){
+    let mut me=obj!{"rts"=>obj!{"cpu"=>obj!{"income"=>100000,"bank"=>1000000,"spendCap"=>100000,
+        "available"=>obj!{"think"=>70000},"spent"=>obj!{"think"=>8000}}}};
+    let args=views(&[me.clone()]);let retry=super::affordable_plan_limit(args[0],40000.0).expect("funded retry");
+    assert!(retry-8000.0>=44000.0,"the next read still leaves the planner and its 4,000-cycle margin funded");
+    me.entry("rts").entry("cpu").set("spendCap",50000);
+    let args=views(&[me]);
+    assert!(super::affordable_plan_limit(args[0],40000.0).is_none(),"a nominal planner budget cannot consume the RAM-read allowance");
+}
+
+#[test]
 fn retirement_postamble_admits_the_cold_plan_only_for_a_funded_existing_corsair() {
     let world=obj! {"logistics"=>obj! {}};
     let mut me=obj! {"units"=>obj! {"byType"=>obj! {"corsair"=>0}},
@@ -386,4 +397,18 @@ fn fleet_funded_zero_unit_startup_reaches_the_governed_miner_bootstrap() {
     let v=views(&args);
     let out=super::think(v[0],v[1]);
     assert!(out.get("spawn").is_empty(),"a genuinely unfunded startup must wait for a body and income: {out:?}");
+}
+#[test]
+fn local_fleet_planning_rebuilds_a_land_force_after_losing_its_army() {
+    let args=views(&productive_local_fixture());
+    let out=super::local_strategy(args[0],args[1],cycles_left());
+    assert!(out.get("spawn").items().iter().any(|s|s.get("type").str()=="runner"),"productive miners and carriers need a new capturer");
+    assert!(!out.get("ram").is_empty(),"the nearby frontier is published with the recruit");
+    assert!(out.get("compute").get("types").get("miner").truthy());
+}
+#[test]
+fn the_local_fleet_crews_a_new_core_after_rebuilding_its_land_force() {
+    let args=views(&frontier_mining_fixture("runner"));
+    let out=super::local_strategy(args[0],args[1],cycles_left());
+    assert!(out.get("spawn").items().iter().any(|s|s.get("type").str()=="miner"));
 }

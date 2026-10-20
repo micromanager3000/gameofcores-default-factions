@@ -625,11 +625,11 @@ fn hard_think_cap(me: View) -> f64 {
 
 fn budgeted_think_need(world: View, me: View) -> f64 {
     let full = full_think_need(world, me);
-    if hard_think_cap(me) >= full + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD { full } else { lean_think_need(world, me) }
+    if hard_think_cap(me) >= full + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD + cycles_reserved() { full } else { lean_think_need(world, me) }
 }
 
 fn full_plan_selected(world: View, me: View) -> bool {
-    hard_think_cap(me) >= full_think_need(world, me) + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD
+    hard_think_cap(me) >= full_think_need(world, me) + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD + cycles_reserved()
 }
 
 fn plan_fuel_ready(allowance: f64, remaining: f64, need: f64) -> bool {
@@ -645,7 +645,7 @@ fn recovery_for_plan(world: View, me: View, need: f64) -> Value {
     let limit = orders.get("compute").get("cpu").get("limits").get("think").num_or(0.0).min(cap);
     orders.entry("compute").entry("cpu").entry("limits").set("think", limit);
     let retry = need + PLAN_REMAINING_MARGIN + PLAN_CALLBACK_OVERHEAD;
-    if bank >= income * 2.0 && retry <= cap && retry <= bank + income {
+    if bank >= income * 2.0 && retry + cycles_reserved() <= cap && retry + cycles_reserved() <= bank + income {
         orders.entry("compute").entry("cpu").entry("limits").set("think", retry);
     }
     orders
@@ -738,6 +738,7 @@ fn think(world: View, me: View) -> Value {
     // A nearly empty slice cannot afford govern's scans. Open the next allowance,
     // keep miners first for upkeep, and leave type schedules and standing orders alone.
     if me.get("rts").truthy() && cycles_left() < 3000.0 {
+        if common::capital_rescue_wait(world,me){return obj!{};}
         return obj! { "compute" => obj! { "cpu" => obj! {
             "limits" => obj! { "think" => 24000, "control" => 0.5, "upkeep" => 0.65,
                 "research" => 0, "influence" => 0, "fabrication" => 0, "visuals" => 0,
@@ -890,6 +891,7 @@ fn strategy(world: View, me: View) -> Value {
     }
     let mut policy = cpu_policy(world, me, &orders, pressure);
     common::fit_cpu(&mut policy, me);
+    common::plan_allowance(&mut policy,me,full_think_need(world,me)+PLAN_REMAINING_MARGIN+PLAN_CALLBACK_OVERHEAD);
     orders.entry("compute").set("cpu", policy);
     orders.set("memo", format!("Knights Templated: {} · pressure {}", if strained { "banking CPU" } else { "combined arms" }, jstr(pressure)));
     sermon_memo(&mut orders, me);
@@ -1229,7 +1231,7 @@ fn miner(units: View, world: View, me: View) {
 // useful as a small capture/defence reserve while the licensed bodies take over.
 fn line(units: View, world: View, me: View) {
     // a call short of the plan lookup and an order keeps its units' standing orders a second longer
-    if short(me) {
+    if short(me) || (me.get("rts").truthy() && cycles_left() < 3600.0) {
         return;
     }
     let p = plan::for_units(me, units, world);
@@ -1271,6 +1273,7 @@ fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
 }
 
 fn tactical_order(u: View, world: View, me: View, role: &str, budget: &RouteBudget) -> Option<Value> {
+    if common::received_ship(u,world,me) { return None; }
     let p = plan::of(me, u);
     let defend = common::defends(&p, u);
     let attack = vnum(p.get("attack"));

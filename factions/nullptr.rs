@@ -442,12 +442,19 @@ fn think(world: View, me: View) -> Value {
     if !me.path("rts.cpu").truthy() {
         return common::govern(world, me, 0.4, || strategy(world, me));
     }
-    if cycles_left() < 3900.0 { return think_emergency(); }
+    if cycles_left() < 3900.0 {
+        if common::capital_rescue_wait(world,me){return obj!{};}
+        return think_emergency();
+    }
     // Do not let a profitable cargo crew remain worker-only while a full planner waits for a rare high-burst second.
     if productive_reentry(me) { return think_reentry(me); }
     if world.get("logistics").truthy() && me.path("units.total").num_or(0.0) < 4.0
         && me.path("rts.cpu.income").num_or(0.0) < 30000.0 {
         return common::govern(world, me, 0.4, || strategy(world, me));
+    }
+    let local=28000.0+160.0*world.get("provinces").len() as f64+80.0*world.get("units").len() as f64;
+    if cycles_left()>=18000.0&&cycles_left()<local {
+        return common::govern(world,me,0.4,||local_strategy(world,me));
     }
     // The recent peak includes execution and ABI serialization, but excludes RAM application.
     let peak = me.path("compute.thinkPeak").num_or(0.0);
@@ -497,6 +504,8 @@ fn strategy(world: View, me: View) -> Value {
     if rts.truthy() && cycles_left() < jmax(16000.0, 1.25 * me.get("compute").get("thinkPeak").or(0.0)) {
         return common::recovery(world, me);
     }
+    let full=28000.0+160.0*world.get("provinces").len() as f64+80.0*world.get("units").len() as f64;
+    if rts.truthy()&&cycles_left()<full {return local_strategy(world,me);}
     let t = me.get("techs");
     let has = |k: &str| t.get(k).truthy();
     let bt = me.get("units").get("byType");
@@ -558,6 +567,7 @@ fn strategy(world: View, me: View) -> Value {
     let type_calls = common::calls(world, &TYPES, income, control, bt);
     let mut policy = cpu_policy(me, &plan, &type_calls);
     common::fit_cpu(&mut policy, me);
+    common::plan_allowance(&mut policy,me,31000.0+160.0*world.get("provinces").len() as f64+80.0*world.get("units").len() as f64);
     let fabrication = fabrication_budget(me, &policy);
     let mut orders = obj! {
         "policy" => obj! { "extraction" => if defend >= 0.0 { 0.38 } else { 0.5 }, "autonomy" => "direct", "integrate" => "tolerate", "invest" => true },
@@ -699,6 +709,31 @@ fn strategy(world: View, me: View) -> Value {
         }
     }
     payable(orders, me, held)
+}
+
+// A short callback refreshes a nearby front without reopening the global spy and army census.
+fn local_strategy(world:View,me:View)->Value {
+    let previous=mem::get(me.get("ramCapital"),0);
+    let plan=common::local_plan(world,me,&previous,12000.0);
+    let cpu=rts_cpu(me);
+    let type_calls=common::calls(world,&TYPES,cpu.get("income").num_or(0.0),
+        cpu.path("available.control").num_or(f64::INFINITY)*0.8,me.path("units.byType"));
+    let mut policy=cpu_policy(me,&plan,&type_calls);
+    common::fit_cpu(&mut policy,me);
+    common::plan_allowance(&mut policy,me,31000.0+160.0*world.get("provinces").len() as f64+80.0*world.get("units").len() as f64);
+    let mut orders=obj! {"policy"=>obj! {"extraction"=>if plan.get("defend").num_or(-1.0)>=0.0 {0.38}else{0.5},
+        "autonomy"=>"direct","integrate"=>"tolerate","invest"=>true},
+        "compute"=>obj! {"cpu"=>policy,"types"=>type_calls},"memo"=>"Address Zero: maintaining the nearby front and standing spy jobs."};
+    plan::share(&mut orders,&plan,me);
+    let fighters=common::fighters(me);
+    let floor=plan.get("recruitNeed").num_or(2.0).max((plan.get("threat").num_or(0.0)*2.0+1.0).min(6.0));
+    let miners=common::miner_room(me,&plan).min(12.0);
+    if fighters<floor||me.path("units.byType.miner").num_or(0.0)<miners {
+        let builds=[("miner",build(MINER)),("screen",build(SCREEN))];
+        common::recruit(&mut orders,me,&[("miner",0.5),("screen",0.5)],|t,k|format!("{t} {k:.0}"),
+            &common::Recruit {limits:&[("miner",miners),("screen",floor)],builds:&builds,..common::Recruit::default()});
+    }
+    orders
 }
 
 /// Whether the ledger to write says what the one in RAM says.
@@ -854,6 +889,7 @@ fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
 // Defend with a fight (those the plan sends: common::defends); attack with a capture, since free land and rivals' towns
 // fall only to units capturing them.
 fn war_order(u: View, world: View, me: View) -> Option<Value> {
+    if common::received_ship(u,world,me) { return None; }
     let p = plan::of(me, u);
     let defend = common::defends(&p, u);
     let defending = defend >= 0.0;

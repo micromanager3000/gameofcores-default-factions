@@ -298,6 +298,7 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
 fn think(world: View, me: View) -> Value {
     if cycles_left()<800.0 {return obj!{};}
     if me.path("rts.cpu").truthy() && cycles_left() < 3000.0 {
+        if common::capital_rescue_wait(world,me){return obj!{};}
         return emergency_recovery_policy(me);
     }
     // Let cargo recovery recruit the first miners before the full planner fits.
@@ -377,6 +378,8 @@ fn budget_phase(orders: &mut Value, world: View, me: View, budget: &common::Budg
     }
 }
 
+fn planning_need(world:View,me:View)->f64 {25000.0+100.0*world.get("provinces").len() as f64+100.0*world.get("units").len() as f64}
+
 fn strategy(world: View, me: View) -> Value {
     let rts = me.get("rts");
     if rts.truthy() && cycles_left() < 3000.0 {
@@ -386,6 +389,9 @@ fn strategy(world: View, me: View) -> Value {
     // runs out sets none, and its limit, a share of income, stays too small when income falls, every second after.
     if rts.truthy() && cycles_left() < jmax(12000.0, 0.75 * me.get("compute").get("thinkPeak").or(0.0)) {
         return common::recovery(world, me);
+    }
+    if rts.truthy() && cycles_left()<planning_need(world,me) {
+        return local_strategy(world,me);
     }
     let t = me.get("techs");
     let has = |k: &str| t.get(k).truthy();
@@ -519,6 +525,7 @@ fn strategy(world: View, me: View) -> Value {
     budget_phase(&mut orders, world, me, &budget, &type_calls, cycles_left());
     let mut policy = cpu_policy(me, &plan, &type_calls);
     common::fit_cpu(&mut policy, me);
+    common::plan_allowance(&mut policy,me,planning_need(world,me)+2500.0);
     orders.entry("compute").set("cpu", policy);
     let allies = me.get("allies");
     let treaties = me.get("contracts").iter().filter(|c| !c.get("ended").truthy()).count();
@@ -558,6 +565,39 @@ fn strategy(world: View, me: View) -> Value {
         }
     }
     payable(orders, me)
+}
+
+// The court waits for a complete planning allowance while its nearby army and mines keep working.
+fn local_strategy(world:View,me:View)->Value {
+    let previous=mem::get(me.get("ramCapital"),0);
+    let plan=common::local_plan(world,me,&previous,12000.0);
+    let cpu=rts_cpu(me);
+    let types=common::calls(world,&TYPES,cpu.get("income").num_or(0.0),
+        cpu.path("available.control").num_or(f64::INFINITY)*0.8,me.path("units.byType"));
+    let mut policy=cpu_policy(me,&plan,&types);
+    common::fit_cpu(&mut policy,me);
+    common::plan_allowance(&mut policy,me,planning_need(world,me)+2500.0);
+    let mut orders=obj! {"policy"=>obj! {"extraction"=>0.5,"autonomy"=>"direct","integrate"=>"tolerate","invest"=>true},
+        "compute"=>obj! {"cpu"=>policy,"types"=>types},"memo"=>"Xanadu: maintaining the nearby front while the court waits."};
+    plan::share(&mut orders,&plan,me);
+    let floor=plan.get("recruitNeed").num_or(2.0).max((plan.get("threat").num_or(0.0)*2.0+1.0).min(6.0));
+    let miners=common::miner_room(me,&plan).min(12.0);
+    if common::fighters(me)<floor||me.path("units.byType.miner").num_or(0.0)<miners {
+        let builds=[("miner",build(MINER)),("screen",build(SCREEN))];
+        common::recruit(&mut orders,me,&[("miner",0.5),("screen",0.5)],|t,k|format!("{t} {k:.0}"),
+            &common::Recruit {limits:&[("miner",miners),("screen",floor)],builds:&builds,..common::Recruit::default()});
+    }
+    if me.path("research.tech").str().is_empty() {
+        let all=world.get("techs");let mine=me.get("techs");
+        for &want in &TECHS {
+            if cycles_left()<7000.0 {break;}
+            let tech=all.get(want);
+            if tech.truthy()&&!mine.get(want).truthy()&&tech.get("requires").iter().all(|t|mine.get(t.str()).truthy()) {
+                orders.set("research",want);break;
+            }
+        }
+    }
+    payable(orders,me)
 }
 
 // Where the air wing hunts: the province outside our land where we see the most rival miners and ranged units (miners
@@ -1378,6 +1418,7 @@ fn carry(o: Option<Value>, u: View, p: &Rc<Value>, me: View) -> Option<Value> {
 // Defend with a fight (those the plan sends: common::defends); attack with a capture, since free land and rivals' towns
 // fall only to units capturing them.
 fn war_order(u: View, world: View, me: View) -> Option<Value> {
+    if common::received_ship(u,world,me) { return None; }
     let p = plan::of(me, u);
     let defend = common::defends(&p, u);
     let defending = defend >= 0.0;

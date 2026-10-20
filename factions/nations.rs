@@ -445,7 +445,7 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
     Some(field)
 }
 
-fn cpu_policy(me: View, offer: f64, under_attack: bool) -> Value {
+fn cpu_policy(world: View, me: View, offer: f64, under_attack: bool) -> Value {
     let c = me.get("rts").get("cpu");
     let old = c.get("reserve").get("research").or(0.0);
     let income = c.get("income").or(14000.0);
@@ -467,6 +467,8 @@ fn cpu_policy(me: View, offer: f64, under_attack: bool) -> Value {
         max(64000.0, income * 0.5),
         max(max(24000.0 + me.get("units").get("total").or(0.0) * 200.0, income * 0.4), me.get("compute").get("thinkPeak").or(0.0) * 1.5),
     ));
+    let think=think.max((planner_map_need(world,me)+6000.0)
+        .min((c.get("spendCap").num_or(f64::INFINITY)-cycles_reserved()).max(0.0)));
     obj! {
         "limits" => obj! {
             "think" => think, "control" => round(max(50000.0, income * 0.5)), "reflex" => 50000,
@@ -501,26 +503,35 @@ fn think(world: View, me: View) -> Value {
 
 enum PlannerAdmission { Full, Raise(Value), Lean }
 
+fn planner_map_need(world: View, me: View) -> f64 {
+    let base=if me.path("units.total").num_or(0.0)<20.0 {15000.0}else{20000.0};
+    // Frontier ranking, survey, roads and shared-plan publication each revisit the map.
+    base+400.0*world.get("provinces").len() as f64+100.0*world.get("units").len() as f64
+}
+
 // Repair a planner allowance before opening the map and market. A capped call runs a separate local pass.
-fn planner_admission(me: View, remaining: f64) -> PlannerAdmission {
+fn planner_admission(world: View, me: View, remaining: f64) -> PlannerAdmission {
     let cpu = me.path("rts.cpu");
     let income = cpu.get("income").num_or(0.0);
     let bank = cpu.get("bank").num_or(0.0);
-    let cap = cpu.get("spendCap").num_or(0.0);
+    let cap = (cpu.get("spendCap").num_or(0.0)-cycles_reserved()).max(0.0);
     if income <= 0.0 || cap <= 0.0 { return PlannerAdmission::Full; }
     let remaining = remaining.min(cpu.path("available.think").num_or(remaining)).min(cap);
     let amount = |n: f64| if n <= 1.0 { n * income } else { n };
-    let configured = amount(cpu.path("limits.think").num_or(cap));
+    let configured = (amount(cpu.path("limits.think").num_or(cap))-cycles_reserved()).max(0.0);
     let peak = me.path("compute.thinkPeak").num_or(0.0).max(me.path("compute.used.think").num_or(0.0));
     let exhausted = peak >= configured * 0.97;
     let observed = if exhausted { peak.max(configured) } else { peak };
     let base: f64 = if me.path("units.total").num_or(0.0) < 20.0 { 15000.0 } else { 20000.0 };
-    let required = base.max(observed * 1.2 + 4000.0);
+    // Cheap recovery calls erase the recent peak. A full map, census, policy and return still need room.
+    let shape=planner_map_need(world,me);
+    let required = shape.max(observed * 1.2 + 4000.0);
     if remaining >= required { return PlannerAdmission::Full; }
     if bank < income * 2.0 || me.path("units.stalled").num_or(0.0) > 0.0 { return PlannerAdmission::Lean; }
     let protected: f64 = cpu.get("reserve").entries().filter(|(lane, _)| *lane != "think")
         .map(|(_, value)| amount(value.num_or(0.0))).sum();
     let ceiling = cap.min((bank - protected - 4000.0).max(0.0)).floor();
+    if ceiling < required { return PlannerAdmission::Lean; }
     let next = (required + 4000.0).min(ceiling).floor();
     if next <= configured + 2000.0 || next < base + 4000.0 { return PlannerAdmission::Lean; }
     let mut policy = obj! {
@@ -612,7 +623,7 @@ fn strategy(world: View, me: View) -> Value {
         return common::recovery(world, me);
     }
     let start = cycles_left();
-    let full_plan = if rts(me) { match planner_admission(me, start) {
+    let full_plan = if rts(me) { match planner_admission(world, me, start) {
         PlannerAdmission::Full => true,
         PlannerAdmission::Raise(orders) => return orders,
         PlannerAdmission::Lean => false,
@@ -746,7 +757,7 @@ fn strategy(world: View, me: View) -> Value {
         let tech = if studying.is_empty() { View::undefined() } else { world.get("techs").get(&studying) };
         let offer = if tech.truthy() { tech.get("offer").num() } else { 0.0 };
         // Contacts release research reserves for combat.
-        let mut policy = cpu_policy(me, offer, threatened || enemy.total >= 2.0);
+        let mut policy = cpu_policy(world, me, offer, threatened || enemy.total >= 2.0);
         common::fit_cpu(&mut policy, me);
         orders.entry("compute").set("cpu", policy);
     }
@@ -1718,6 +1729,7 @@ fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
         }
         let u = nth(units, turn, world);
         // those the plan sends to defend (common::defends), the rest on the target
+        if common::received_ship(u,world,me) { continue; }
         let defend = Value::Num(common::defends(&pl, u));
         let goal = if num(&defend) >= 0.0 { &defend } else { pl.get("attack") };
         let verb = if num(&defend) >= 0.0 || u.get("air").truthy() || u.path("build.wings").truthy() { "fight" } else { "capture" };
@@ -1946,6 +1958,7 @@ fn sentry(units: View, world: View, me: View) -> Value {
         if !budget.admits(u, me) { break; }
         let began = cycles_left();
         let pl = plan::of(me, u);
+        if common::received_ship(u,world,me) { continue; }
         let defend = common::defends(&pl, u);
         let attack = pl.get("attack").num_or(-1.0);
         let q = by_id.get(attack);

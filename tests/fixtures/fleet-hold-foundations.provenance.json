@@ -1,0 +1,28 @@
+{
+  "kind": "captured-public-default",
+  "scope": "Two actual public Quiet Fleet controller failures in the first current-main checkpoint comparison. The fixture preserves complete callback arguments. No player program or private player state is included.",
+  "engineBase": "eace6b1b",
+  "engineBinarySha256": "1e84d9610167064d528ea17b7375575f7201479b5cf6ab36fd5d76928e8f0a95",
+  "sdkSha256": "cc29620eea08423a8d46f7cc1029319cef81aaa91bc2c5ad324a042fe10fd509",
+  "sourceSha256": "ceb1c1e785b3a59e39cf41f79c46a7d542a235a3210ee6728209b1915d11a7d4",
+  "cases": [
+    {
+      "fixture": "fleet-sentry-foundations-101.json",
+      "function": "sentry",
+      "seed": 101,
+      "tick": 56326,
+      "fuel": 2689,
+      "recordSha256": "f564dd1c3748d3bbf6d7b459c7b60d985071b435baaa6b1529f27419793ea33c",
+      "fixtureSha256": "e7935d115c1650bb4df8f998ff582b2c22ad04c17104b60e744c4177fd8ecf74"
+    },
+    {
+      "fixture": "fleet-spire-foundations-101.json",
+      "function": "spire",
+      "seed": 101,
+      "tick": 50881,
+      "fuel": 2549,
+      "recordSha256": "6fd28c044636ae91264f791b455b11a56e73a3c8652812a7387b890cd5b0df68",
+      "fixtureSha256": "f16d88088fb12de7fe2683437f7a59f76e0b76013979f56df352c95a7e851eef"
+    }
+  ]
+}
