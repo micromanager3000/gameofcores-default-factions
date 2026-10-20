@@ -733,7 +733,7 @@ fn strategy(world: View, me: View) -> Value {
             ("sentry", 4500.0, 5.0),
             ("spire", 6000.0, 4.0),
             ("needle", 5500.0, 3.0),
-            ("kite", 5000.0, 3.0),
+            ("kite", 7000.0, 3.0),
             ("scout", 5000.0, 8.0),
         ],
         me.get("rts").get("cpu").get("income").or(0.0),
@@ -1699,7 +1699,7 @@ fn carry_order(o: Option<Value>, u: View, pl: &std::rc::Rc<Value>, me: View) -> 
     Some(o)
 }
 
-fn infantry_plan(units: View, me: View) -> Option<std::rc::Rc<Value>> {
+fn unit_plan(units: View, me: View) -> Option<std::rc::Rc<Value>> {
     if !rts(me) {return Some(plan::for_units(me,units,View::undefined()));}
     let mut core=None;
     for u in units.iter() {
@@ -1722,9 +1722,9 @@ fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
     if short(me, 3000.0, 1200.0) {
         return Value::arr();
     }
-    let Some(pl)=infantry_plan(units,me) else {return Value::arr();};
+    let Some(pl)=unit_plan(units,me) else {return Value::arr();};
     for turn in 0..units.len() {
-        if rts(me) && cycles_left() < 2200.0 {
+        if rts(me) && cycles_left() < 2100.0 {
             break;
         }
         let u = nth(units, turn, world);
@@ -1831,11 +1831,10 @@ fn kite(units: View, world: View, me: View) {
     // a flier a minute up comes down on your nearest land before anything else, even short of cycles: its burn climbs
     // the longer it flies, and an unpaid one crashes
     land_hot(units);
-    if short(me, 2500.0, 1200.0) {
+    if short(me, 3500.0, 1200.0) {
         return;
     }
-    let pl = plan::for_units(me, units, View::undefined());
-    let by_id = realm::index(world);
+    let Some(pl)=unit_plan(units,me) else {return;};
     let goal = if num(pl.get("defend")) >= 0.0 {
         pl.get("defend")
     } else if num(pl.get("prey")) >= 0.0 {
@@ -1847,7 +1846,7 @@ fn kite(units: View, world: View, me: View) {
         return;
     }
     let goal = num(goal);
-    let q = by_id.get(goal);
+    let q=world.get("provinces").iter().find(|p|p.get("id").num()==goal).unwrap_or_default();
     let owner = q.get("owner").num();
     let raid = num(pl.get("defend")) < 0.0 && q.truthy() && owner >= 0.0 && owner != me.get("id").num() && realm::is_rival(world, me, owner);
     let verb = if raid { "raid" } else { "fight" };

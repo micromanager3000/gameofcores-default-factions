@@ -1071,16 +1071,31 @@ fn lancer(units: View, world: View, me: View) {
 
 fn gun(units: View, world: View, me: View) {
     // Admission includes cold plan reads, routing, order submission and the return.
-    if me.get("rts").truthy() && cycles_left() < 3200.0 { return; }
+    if me.get("rts").truthy() && cycles_left() < 2500.0 { return; }
     let mut budget = ControlBudget::new(me);
     for i in 0..units.len() {
         if !budget.has_room(me) { break; }
         let u = turn(units, i, world);
         let began = cycles_left();
-        if !budget.admits(u, world, me) { continue; }
+        if !budget.admits(u, world, me) {
+            gun_plan(u, me);
+            budget.finish(began);
+            continue;
+        }
         gun_turn(u, world, me);
         budget.finish(began);
     }
+}
+
+// A short call can refresh its portable plan without starting a route.
+fn gun_plan(u: View, me: View) {
+    let bytes=me.get("ramProvince").key(u.get("at").num()).key(0.0).get("bytes");
+    if !bytes.is_bytes() || bytes.len()<2 {return;}
+    let b=bytes.bytes();let read=4.0*f64::from(u16::from_le_bytes([b[0],b[1]]));
+    if cycles_left()<read+600.0 {return;}
+    let p=plan::of(me,u);
+    if cycles_left()<600.0 || !p.get("jobs").is_undef() {return;}
+    if let Some(ram)=orders::carry(u,&p,me) {order(obj!{"id"=>u.get("id"),"ram"=>ram,"alert"=>8});}
 }
 
 fn gun_turn(u: View, world: View, me: View) {
