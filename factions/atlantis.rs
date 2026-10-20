@@ -302,6 +302,8 @@ fn payable(mut orders: Value, me: View) -> Value {
 // under the new CPU policy: what think spent and the other lanes' reserves come off the bank first. A spawn it can't
 // pay is only an error, so it waits a second. start: cycles_left() when think began.
 fn affordable(mut orders: Value, me: View, start: f64) -> Value {
+    // Return the completed policy before pricing another recruit.
+    if rts(me) && cycles_left()<4000.0 {orders.set("spawn",Value::arr());return orders;}
     orders = payable(orders, me);
     let c = me.get("rts").get("cpu");
     let policy = orders.get("compute").get("cpu").clone();
@@ -643,7 +645,7 @@ fn strategy(world: View, me: View) -> Value {
         mix_set(&mut mix,"aeronaut",0.12);
     }
     let pick = |a: (bool, &'static str), b: (bool, &'static str)| -> Vec<&'static str> { [a, b].into_iter().filter(|x| x.0).map(|x| x.1).collect() };
-    if !lean || common::unit_upkeep(me)<=income*0.4 {match choose_spawn(me, &mix, common::miner_room(me, &survey)) {
+    if !lean || (cycles_left()>12000.0 && common::unit_upkeep(me)<=income*0.4) {match choose_spawn(me, &mix, common::miner_room(me, &survey)) {
         Some("miner") => spawn_one(&mut orders, me, "miner", miner_body(), &[]),
         Some("line") => spawn_one(&mut orders, me, "line", line_body(), &[]),
         Some("bulwark") => spawn_one(&mut orders, me, "bulwark", line_body(), &pick((has("armor"), "armor"), (has("dash"), "dash"))),

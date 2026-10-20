@@ -432,11 +432,13 @@ fn a_late_merchant_map_repairs_its_physical_allowance_before_opening_the_full_su
     me.entry("rts").entry("cpu").set("available",obj! {"think"=>physical-144.0});
     me.entry("compute").set("thinkPeak",7629);
     me.entry("compute").entry("used").set("think",7629);
-    with_cycle_reserve(5000.0,|| {
-        let args=views(&[world,me]);
-        assert!(matches!(planner_admission(args[0],args[1],physical-cycles_reserved()-144.0),PlannerAdmission::Full),
-            "the emitted physical limit funds the following map after RAM and the governor return reserve");
-    });
+    for held in [5000.0,8000.0] {
+        with_cycle_reserve(held,|| {
+            let args=views(&[world.clone(),me.clone()]);
+            assert!(matches!(planner_admission(args[0],args[1],physical-cycles_reserved()-144.0),PlannerAdmission::Full),
+                "the emitted physical limit funds the following map after RAM and the governor return reserve");
+        });
+    }
 }
 
 #[test]

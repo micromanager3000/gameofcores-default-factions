@@ -516,7 +516,8 @@ fn planner_admission(world: View, me: View, remaining: f64) -> PlannerAdmission 
     let bank = cpu.get("bank").num_or(0.0);
     let cap = (cpu.get("spendCap").num_or(0.0)-cycles_reserved()).max(0.0);
     if income <= 0.0 || cap <= 0.0 { return PlannerAdmission::Full; }
-    let remaining = remaining.min(cpu.path("available.think").num_or(remaining)).min(cap);
+    let available=(cpu.path("available.think").num_or(remaining+cycles_reserved())-cycles_reserved()).max(0.0);
+    let remaining = remaining.min(available).min(cap);
     let amount = |n: f64| if n <= 1.0 { n * income } else { n };
     let configured = (amount(cpu.path("limits.think").num_or(cap))-cycles_reserved()).max(0.0);
     let peak = me.path("compute.thinkPeak").num_or(0.0).max(me.path("compute.used.think").num_or(0.0));
@@ -524,7 +525,8 @@ fn planner_admission(world: View, me: View, remaining: f64) -> PlannerAdmission 
     let observed = if exhausted { peak.max(configured) } else { peak };
     let base: f64 = if me.path("units.total").num_or(0.0) < 20.0 { 15000.0 } else { 20000.0 };
     // Cheap recovery calls erase the recent peak. A full map, census, policy and return still need room.
-    let shape=planner_map_need(world,me);
+    // Preserve the funded map allowance when the governor protects more return cycles.
+    let shape=(planner_map_need(world,me)-(cycles_reserved()-5000.0).max(0.0)).max(0.0);
     let required = shape.max(observed * 1.2 + 4000.0);
     if remaining >= required { return PlannerAdmission::Full; }
     if bank < income * 2.0 || me.path("units.stalled").num_or(0.0) > 0.0 { return PlannerAdmission::Lean; }

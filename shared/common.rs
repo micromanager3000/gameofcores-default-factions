@@ -155,7 +155,7 @@ pub fn air_recovery(units: View, me: View) -> bool {
 /// preserve a cooling stop, and use the carried plan again after cooling. Wings remain part of the body.
 pub fn fly(units: View, world: View, me: View) {
     if air_recovery(units,me) {return;}
-    if cycles_left()<2400.0 {
+    if cycles_left()<3500.0 {
         for u in units.iter().take_while(|_| cycles_left()>400.0) {
             let a=u.path("rts.air");
             if a.get("aloft").truthy() && a.get("heat").num_or(0.0)>=45.0 {
@@ -205,7 +205,7 @@ pub fn fly(units: View, world: View, me: View) {
             if !coming_home { order(obj! {"id"=>u.get("id"),"land"=>true}); }
         }
     }
-    if cycles_left() < 2400.0 { return; }
+    if cycles_left() < 3500.0 { return; }
     let plan = plan::for_units(me, units, world);
     let goal = ["defend", "target", "attack"].iter().map(|k|plan.get(k)).find(|v|v.num().is_finite()&&v.num()>=0.0);
     let Some(goal) = goal else { return };
@@ -2030,6 +2030,7 @@ pub fn recovery_rent(out:&mut Value,me:View){
 
 /// Runs the house strategy with economic recovery; classic worlds keep normal planning.
 pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Value) -> Value {
+    let work=|| {
     if cycles_left()>800.0 && capital_rescue_wait(world,me){return obj!{};}
     if cycles_left()>7000.0 {
         if let Some(mut out)=capital_delivery_rescue(world,me){recovery_rent(&mut out,me);if world.get("logistics").truthy(){out.set("acceptLocals",false);}return out;}
@@ -2041,9 +2042,10 @@ pub fn govern(world: View, me: View, share: f64, strategy: impl FnOnce() -> Valu
         out
     };
     if let Some(out)=super::energy::infrastructure_turn(world,me){return finish(out);}
-    let work=||finish(govern_with_room(world,me,share,strategy));
+        finish(govern_with_room(world,me,share,strategy))
+    };
     if me.path("rts.cpu").truthy()&&cycles_left()>7000.0 {
-        return with_cycle_reserve(5000.0,work);
+        return with_cycle_reserve(8000.0,work);
     }
     work()
 }
@@ -2155,7 +2157,7 @@ fn govern_units(world: View, me: View, share: f64, strategy: impl FnOnce() -> Va
             let now=world.get("seconds").num_or(0.0);
             let old=mem::get(me.get("ramCapital"),RECOVERY_PAGE);
             let short=unit_upkeep(me)>income*0.65 && me.path("rts.cpu.bank").num_or(0.0)<income*4.0;
-            let since=if short {old.get("s").num_or(now).min(now)} else {now};
+            let since=if short || me.path("units.stalled").num_or(0.0)>0.0 {old.get("s").num_or(now).min(now)} else {now};
             ram(&mut out, mem::put(RECOVERY_PAGE, &obj! { "r" => true, "s" => since }, "local", None, 1).unwrap_or_default());
             let over_cap=me.path("units.total").num_or(0.0)>me.path("units.cap").num_or(512.0);
             if short && (over_cap || now-since>=INSOLVENT_WAIT) {
@@ -2215,7 +2217,7 @@ fn govern_base(world: View, me: View, share: f64, strategy: impl FnOnce() -> Val
     }
     // A short strategy can itself have chosen recovery; its positive miner allocation must survive this wrapper.
     if orders.get("memo").str() == "Recovering production" { return orders; }
-    if was.get("r").truthy() {
+    if was.get("r").truthy() && me.path("units.stalled").num_or(0.0)==0.0 {
         ram(&mut orders, mem::free(RECOVERY_PAGE, 1, None));
     }
     if orders.get("spawn").is_empty() { return orders; }
@@ -2355,7 +2357,7 @@ fn recover_with(world: View, me: View, e: &Economy, shortage: bool) -> Value {
     let mut orders = recovery_policy(me);
     let now = world.get("seconds").num_or(0.0);
     let old = mem::get(me.get("ramCapital"), RECOVERY_PAGE);
-    let since = if shortage { old.get("s").num_or(now).min(now) } else { now };
+    let since = if shortage || me.path("units.stalled").num_or(0.0)>0.0 { old.get("s").num_or(now).min(now) } else { now };
     ram(&mut orders, mem::put(RECOVERY_PAGE, &obj! { "r" => true, "s" => since }, "local", None, 1).unwrap_or_default());
     let ours = me.get("id").num();
     // Price mining rights once per province.

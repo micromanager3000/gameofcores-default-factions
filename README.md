@@ -58,6 +58,7 @@ Buildings and plants count against the army's share of income, since the upkeep 
 Research and influence slow down while the bank holds under 60 seconds of the army's upkeep.
 The upkeep lane may always spend at least 80% of income a second.
 A house disbands units for want of cycles only after 90 seconds short, a few at a time, until upkeep fits in 80% of income.
+Brief cargo receipts keep the recovery timer while units remain unpaid. Normal planning clears it once every unit is paid.
 Over its unit cap, or in a world without cargo, it cuts sooner and deeper, to 55% of income.
 
 ## Export a program
@@ -138,6 +139,9 @@ Aircraft controllers use visible `me.rts.air.contacts` entries to intercept riva
 Think shares convoy locations and combat estimates through plan RAM. Ground units carry combat estimates on unit page 93 and discard them after 120 seconds. Convoy guards use locations observed within the last 12 seconds.
 Arjuna's idle frontier troops return for new orders after a fulfilled attack becomes stale.
 Null Pointer's spies keep standing orders when a complete turn cannot fit.
+They check the cost of reading a rival's plan before decoding it.
+A short Atlantis think returns its completed policy before pricing another recruit.
+Recruitment reviews wait until the CPU policy and callback return can fit.
 Its guns can refresh their portable plan when a new route cannot fit.
 Nations funds a complete cold aircraft turn before changing its flight orders.
 Shared escorts follow the program's unit catalogue when programs change seats. The Fleet keeps its dedicated navy.

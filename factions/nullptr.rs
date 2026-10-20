@@ -1164,7 +1164,7 @@ fn wing(units: View, world: View, me: View) {
             order(obj! { "id" => u.get("id"), "land" => true });
         }
     }
-    if me.get("rts").truthy() && cycles_left() < 2600.0 {
+    if me.get("rts").truthy() && cycles_left() < 3500.0 {
         return;
     }
     let pl = plan::for_units(me, units, world);
@@ -1777,7 +1777,7 @@ mod nullptr_ext {
     pub fn spies(units: View, world: View, me: View) {
         let rts = me.get("rts").truthy();
         // Leave room for a spy's terrain checks, RAM notes and final order.
-        if rts && cycles_left() < 5500.0 {
+        if rts && cycles_left() < 4500.0 {
             return;
         }
         let by_id = realm::index(world);
@@ -1793,14 +1793,14 @@ mod nullptr_ext {
         let lead = common::dominant(world).map_or(-1.0, |l| n(l.get("id")));
         for turn in 0..units.len() {
             let i = (turn + now as usize) % units.len();
-            if rts && cycles_left() < 3000.0 {
+            if rts && cycles_left() < 4000.0 {
                 break;
             }
             if marks.is_none() && (!rts || cycles_left() > 6000.0) {
                 marks = Some(marks_of(world, me));
                 posts = Some(posts_of(world, me));
             }
-            if rts && cycles_left() < 3000.0 { break; }
+            if rts && cycles_left() < 4000.0 { break; }
             let marks: &[(f64, f64, &'static str, f64)] = marks.as_deref().unwrap_or(&[]);
             let posts: &[f64] = posts.as_deref().unwrap_or(&[]);
             // the spies are few: each keeps its place in the list, so the i-th spy keeps the i-th mark
@@ -1864,7 +1864,7 @@ mod nullptr_ext {
                 let spies_here = units.iter().filter(|s| n(s.get("at")) == cap && n(s.get("to")) < 0.0).count() as f64;
                 let ours_in = here.get("units").key(me_id).or(0.0) >= spies_here + 2.0
                     || same_v(here.get("siege").get("by"), &Value::Num(me_id));
-                let theirs = spy::read(me, u);
+                let page=me.get("ramSpied").key(u.get("at").num()).key(0.0).get("bytes"); let read=if page.is_bytes()&&page.len()>=2 {let b=page.bytes();4.0*f64::from(u16::from_le_bytes([b[0],b[1]]))}else{0.0}; let theirs=if !rts || (page.is_bytes()&&cycles_left()>=read+3500.0) {spy::read(me,u)}else{Value::Null};
                 let marching = theirs.get("attack").num_or(-1.0) >= 0.0 && theirs.get("attack").num() == n(me.get("capital"));
                 let spot = hide_spot(here);
                 let loot = loot(world, me, owner);
