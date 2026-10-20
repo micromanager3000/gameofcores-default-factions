@@ -72,6 +72,8 @@ Exports fit the game's 512 KiB source limit. Players can copy and change the exp
 The program compiles against the public game SDK. All faction helpers count toward source RAM.
 The game provides 3,360 free RAM pages to every faction, covering the included preset source and the grid planner.
 Compiled instructions are metered normally.
+Quiet Fleet leaves standing infantry orders in place when a short call cannot afford its plan lookup.
+Compute of Nations starts optional market searches only when planning leaves enough cycles to finish the call.
 Shared code fenced `// @house` … `// @end` goes into the house programs only. The default program leaves out the sea
 escorts this way, but carries the same power grid planner as the founders.
 Both the Rust package and the Node exporter produce the same source; `npm test` checks every program.

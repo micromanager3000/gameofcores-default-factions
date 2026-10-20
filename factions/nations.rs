@@ -788,7 +788,7 @@ fn strategy(world: View, me: View) -> Value {
     }
     // Reserve the governor and ABI tail before optional market searches.
     let seen = 10.0 * world.get("units").len() as f64;
-    if !rts(me) || cycles_left() > 30000.0 + seen {
+    if !rts(me) || cycles_left() > 45000.0 + seen {
         let mood = market::Mood { threatened, fight: threatened || enemy.total >= 4.0, shade_ready, target: target_id, army: name };
         market::run(&mut orders, world, me, &mut clock, now, &mood, &sold);
     }
