@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "scope": "Public default-program simulation capture used to repair short reflex admission. This contains no player-authored code or private player data. The failed development source and all full-hour requirements remain separately recorded; this fixture does not establish balance acceptance.",
+  "capturedTick": 42972,
+  "faction": 4,
+  "function": "reflex",
+  "capturedFuel": 215,
+  "captureSha256": "d784e65521099e17babaec987eed307ad58d03c0702b6d0b0cdcb939c325eda0",
+  "capturedPublicSourceSha256": "7433d91c1ccb2b845c80e646d8c963610dba9ce54753ccaeec9592569078a64c",
+  "argsSha256": "1c33878dc8bd70da2e60f43a8997fc93e1120ea0988fb6286408745269c59c19",
+  "nativeBinarySha256": "e7116a009ef3458674cc6e6d6448b517116554787a025e128788d62bffbd2a70",
+  "sdkSha256": "cc29620eea08423a8d46f7cc1029319cef81aaa91bc2c5ad324a042fe10fd509",
+  "auditManifestSha256": "4ac0d3e0acd69c49964f9f44bd6c6d71aa099543ec3847141d7505f9b073efeb"
+}

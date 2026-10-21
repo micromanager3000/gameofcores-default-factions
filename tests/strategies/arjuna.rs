@@ -442,3 +442,75 @@ fn the_captured_field_advance_reserves_the_full_planning_tail() {
     assert!(!super::full_planning_ready(args[0], args[1], 53010.0));
     assert!(super::full_planning_ready(args[0], args[1], 65000.0));
 }
+
+#[test]
+fn artillery_orders_strike_walls_only_during_an_offensive_siege() {
+    for (walls,defending,want) in [(false,false,"fight"),(true,false,"capture"),(true,true,"fight")] {
+        let fixture=wall_artillery_fixture("gun",walls,defending,false,false);
+        let args=views(&fixture);
+        super::gun(args[0],args[1],args[2]);
+        let orders=emitted();
+        assert!(orders.iter().any(|o|o.get("do").str()==want && o.get("target").num()==1.0),
+            "walls={walls}, defending={defending}: {orders:?}");
+    }
+}
+
+#[test]
+fn artillery_already_at_the_enemy_town_switches_its_standing_fight_to_the_walls() {
+    for deployed in [false,true] {
+        let fixture=wall_artillery_fixture("gun",true,false,true,deployed);
+        let args=views(&fixture);
+        super::gun(args[0],args[1],args[2]);
+        let orders=emitted();
+        assert!(orders.iter().any(|o|o.get("do").str()=="capture" && o.get("target").num()==1.0),
+            "deployed={deployed}: {orders:?}");
+        if deployed {assert!(!orders.iter().any(|o|matches!(o.get("deploy"),Value::Bool(false))),
+            "a gun already at the siege keeps its deployment");}
+    }
+}
+
+#[test]
+fn generic_escorts_follow_the_program_catalogue_when_houses_change_seats() {
+    for seat in [0,4,7] {
+        for fleet in [false,true] {
+            let mut fixture=productive_local_fixture();
+            fixture[0].set("seconds",3);
+            fixture[1].set("seat",seat);
+            fixture[1].entry("units").entry("byType").set("freighter",1);
+            fixture[1].entry("techs").set("seaTraversal",true);
+            fixture[1].entry("techs").set("ranged",true);
+            fixture[1].entry("rts").entry("sea").set("ports",arr![0]);
+            fixture[1].entry("rts").set("licenses",arr!["hull"]);
+            fixture[1].set("build",obj! {"points"=>10,"wingRange"=>0,
+                "max"=>obj! {"hp"=>5,"speed"=>5,"strength"=>5,"carry"=>4,"vision"=>5,"range"=>2,"wings"=>0,"stealth"=>0},
+                "standard"=>obj! {"hp"=>2,"speed"=>2,"strength"=>2,"carry"=>2,"vision"=>2,"range"=>0,"wings"=>0,"stealth"=>0},
+                "price"=>obj! {"hp"=>1,"speed"=>1,"strength"=>1,"carry"=>1,"vision"=>1,"range"=>2,"wings"=>3,"stealth"=>2}});
+            if fleet {fixture[1].entry("types").set("warjunk",obj! {"name"=>"Warjunk"});}
+            let args=views(&fixture);
+            let orders=common::govern(args[0],args[1],0.4,||obj! {});
+            let escort=orders.get("spawn").items().iter().any(|s|s.get("type").str()=="escort");
+            assert_eq!(escort,!fleet,"seat={seat}, dedicated fleet={fleet}: {orders:?}");
+        }
+    }
+}
+
+#[test]
+fn an_idle_frontier_unit_returns_for_new_orders_after_its_old_attack_is_fulfilled() {
+    for carried in [false,true] {
+        let (mut unit,mut world,mut me)=stale_local_args(244.0);
+        me.set("capital",1);
+        let mut provinces=world.get("provinces").items().to_vec();
+        provinces[2].set("owner",6);provinces[3].set("owner",6);
+        world.set("provinces",provinces);
+        let plan=obj!{"attack"=>0,"stage"=>0,"defend"=>-1,"need"=>2,"at"=>1};
+        if carried {
+            me.entry("ramProvince").set("0",obj!{});
+            unit.set("ramUnit",obj!{"0"=>obj!{"bytes"=>Value::Bytes(plan::pack(&plan))}});
+        } else {
+            me.entry("ramProvince").set("0",pages(&plan));
+        }
+        let order=stale_order(unit,world,me).expect("the owned capital has a land route");
+        assert_eq!(order.get("do").str(),"fight","carried={carried}: {order:?}");
+        assert_eq!(order.get("target").num(),1.0,"a fulfilled attack must not repeat capture orders on owned land");
+    }
+}

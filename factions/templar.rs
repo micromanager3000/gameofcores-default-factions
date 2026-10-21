@@ -606,7 +606,7 @@ fn road(world: View, me: View, to: f64, after: f64) -> Option<Value> {
 // spend still loses all of its orders. Keep a peak-aware full estimate, while a
 // capped faction can resume with the guarded lean pass below.
 const PLAN_REMAINING_MARGIN: f64 = 6000.0;
-const PLAN_CALLBACK_OVERHEAD: f64 = 2500.0;
+const PLAN_CALLBACK_OVERHEAD: f64 = 3500.0;
 
 fn full_think_need(world: View, me: View) -> f64 {
     let measured = me.get("compute").get("thinkPeak").num_or(0.0);
@@ -1362,22 +1362,28 @@ fn artillery(units: View, world: View, me: View) {
         } else {
             me.get("capital").value()
         };
+        let verb=common::siege_verb(world,me,vnum(&target),common::defends(&p,u)>=0.0);
         let travelling = !eqv(u.get("at"), &target) || num(u.get("to")) >= 0.0;
         if travelling {
             if !budget.route(u, vnum(&target), world, me) { continue; }
             // A deployed gun has zero movement. Pack it in the same order that gives
             // it the new route, including when the target changed under its feet.
-            let o = carry(orders::to(u, "fight", vnum(&target), world, me, ()), u, &p, me);
+            let o = carry(orders::to(u, verb, vnum(&target), world, me, ()), u, &p, me);
             if o.is_some() || r.get("deployed").truthy() || r.get("deploying").truthy() {
                 let mut o = o.unwrap_or_else(|| obj! { "id" => u.get("id") });
                 o.set("deploy", false);
                 o.set("power", obj! { "drive" => 260, "armor" => 180, "weapon" => 650 });
                 order(o);
             }
-        } else if !r.get("deployed").truthy() && !r.get("deploying").truthy() {
-            // The destination is reached: spend the one-second setup time, then let
-            // reflex choose shell targets. Do not plant guns at their home province.
-            order(obj! { "id" => u.get("id"), "deploy" => true, "power" => obj! { "drive" => 120, "armor" => 180, "weapon" => 650 } });
+        } else {
+            let setup_needed=!r.get("deployed").truthy() && !r.get("deploying").truthy();
+            let update=orders::to(u,verb,vnum(&target),world,me,());
+            if setup_needed || update.is_some() {
+                let mut setup=update.unwrap_or_else(||obj! {"id"=>u.get("id")});
+                if setup_needed {setup.set("deploy",true);}
+                setup.set("power",obj! {"drive"=>120,"armor"=>180,"weapon"=>650});
+                order(setup);
+            }
         }
         budget.finish(began, true);
     }
@@ -1794,9 +1800,10 @@ fn reflex(units: View, near: View) -> Vec<Value> {
                 o.set("hold", true);
             }
         }
+        let naval=common::naval_reflex(u,ns,&mut o,&mut left,&mut ability_left);
         bank_left = left;
         o.set("power", obj! { "drive" => drive, "armor" => armor, "weapon" => weapon });
-        if best.is_some() || step || o.get("ability").truthy() || o.get("deploy").truthy() {
+        if naval || best.is_some() || step || o.get("ability").truthy() || o.get("deploy").truthy() {
             order(o);
         }
         turn_cost = turn_cost.max(1.5 * (began - cycles_left()));

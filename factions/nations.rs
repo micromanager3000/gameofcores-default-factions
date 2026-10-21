@@ -506,7 +506,7 @@ enum PlannerAdmission { Full, Raise(Value), Lean }
 fn planner_map_need(world: View, me: View) -> f64 {
     let base=if me.path("units.total").num_or(0.0)<20.0 {15000.0}else{20000.0};
     // Frontier ranking, survey, roads and shared-plan publication each revisit the map.
-    base+400.0*world.get("provinces").len() as f64+100.0*world.get("units").len() as f64
+    base+500.0*world.get("provinces").len() as f64+200.0*world.get("units").len() as f64
 }
 
 // Repair a planner allowance before opening the map and market. A capped call runs a separate local pass.
@@ -516,7 +516,8 @@ fn planner_admission(world: View, me: View, remaining: f64) -> PlannerAdmission 
     let bank = cpu.get("bank").num_or(0.0);
     let cap = (cpu.get("spendCap").num_or(0.0)-cycles_reserved()).max(0.0);
     if income <= 0.0 || cap <= 0.0 { return PlannerAdmission::Full; }
-    let remaining = remaining.min(cpu.path("available.think").num_or(remaining)).min(cap);
+    let available=(cpu.path("available.think").num_or(remaining+cycles_reserved())-cycles_reserved()).max(0.0);
+    let remaining = remaining.min(available).min(cap);
     let amount = |n: f64| if n <= 1.0 { n * income } else { n };
     let configured = (amount(cpu.path("limits.think").num_or(cap))-cycles_reserved()).max(0.0);
     let peak = me.path("compute.thinkPeak").num_or(0.0).max(me.path("compute.used.think").num_or(0.0));
@@ -524,7 +525,8 @@ fn planner_admission(world: View, me: View, remaining: f64) -> PlannerAdmission 
     let observed = if exhausted { peak.max(configured) } else { peak };
     let base: f64 = if me.path("units.total").num_or(0.0) < 20.0 { 15000.0 } else { 20000.0 };
     // Cheap recovery calls erase the recent peak. A full map, census, policy and return still need room.
-    let shape=planner_map_need(world,me);
+    // Preserve the funded map allowance when the governor protects more return cycles.
+    let shape=(planner_map_need(world,me)-(cycles_reserved()-5000.0).max(0.0)).max(0.0);
     let required = shape.max(observed * 1.2 + 4000.0);
     if remaining >= required { return PlannerAdmission::Full; }
     if bank < income * 2.0 || me.path("units.stalled").num_or(0.0) > 0.0 { return PlannerAdmission::Lean; }
@@ -734,7 +736,7 @@ fn strategy(world: View, me: View) -> Value {
             ("sentry", 4500.0, 5.0),
             ("spire", 6000.0, 4.0),
             ("needle", 5500.0, 3.0),
-            ("kite", 5000.0, 3.0),
+            ("kite", 7000.0, 3.0),
             ("scout", 5000.0, 8.0),
         ],
         me.get("rts").get("cpu").get("income").or(0.0),
@@ -1007,15 +1009,20 @@ mod market {
     /// One second of the market: whatever falls due, then a line for the memo.
     pub fn run(orders: &mut Value, world: View, me: View, clock: &mut Clock, now: f64, mood: &Mood, sold: &[&'static str]) {
         let mut doing: Option<String> = None;
+        let tail=15000.0+10.0*world.get("units").len() as f64;
+        macro_rules! room { () => { if rts(me) && cycles_left()<tail { return; } }; }
         remember(clock, me, now);
         // tolls stand until changed: posted again as our border moves
+        room!();
         if due(clock, "tl", 25.0, now) {
             tolls(orders, world, me);
         }
+        room!();
         if due(clock, "pa", 12.0, now) {
             doing = passage(orders, world, me, clock, now).or(doing);
         }
         // Buy an affordable tech every 12–20 seconds.
+        room!();
         if clock.at.get("bt").num_or(-1.0) <= now {
             let mut p = purse(orders, me, true);
             if let Some(d) = buy_tech(orders, world, me, &mut p, clock, now, sold) {
@@ -1024,32 +1031,40 @@ mod market {
                 doing = Some(d);
             }
         }
+        room!();
         if due(clock, "st", 30.0, now) {
             doing = sell_tech(orders, world, me).or(doing);
         }
+        room!();
         if due(clock, "fr", 10.0, now) {
             let mut p = purse(orders, me, true);
             doing = free_land(orders, world, me, &mut p).or(doing);
         }
+        room!();
         if due(clock, "br", 20.0, now) {
             let mut p = purse(orders, me, false);
             doing = bribe(orders, world, me, &mut p).or(doing);
         }
+        room!();
         if due(clock, "lg", 10.0, now) {
             let mut p = purse(orders, me, true);
             largesse(orders, world, me, &mut p);
         }
+        room!();
         if me.get("techs").get("influence").truthy() && common::every(now, 8.0, me.get("id").num()) {
             propaganda(orders, world, me);
         }
+        room!();
         if due(clock, "mi", 70.0, now) && !mood.threatened {
             // A lease needs cash for its first payments.
             let mut p = purse(orders, me, true);
             doing = lease_in(orders, world, me, &mut p, mood.target).or(doing);
         }
+        room!();
         if due(clock, "mo", 60.0, now) {
             doing = lease_out(orders, world, me).or(doing);
         }
+        room!();
         if due(clock, "ho", 150.0, now) && !mood.fight && mood.shade_ready {
             doing = hire_out(orders, world, me).or(doing);
         }
@@ -1057,23 +1072,28 @@ mod market {
         let spare = purse(orders, me, false);
         let hires = running(me).iter().filter(|c| c.get("get").get("hire").truthy()).count();
         let want = if spare >= 500.0 { 2 } else if mood.fight && purse(orders, me, mood.threatened) >= 170.0 { 1 } else { 0 };
+        room!();
         if hires < want && due(clock, "hi", 90.0, now) {
             doing = hire_in(orders, world, me, if spare >= 900.0 { 6.0 } else { 4.0 }).or(doing);
         }
+        room!();
         if due(clock, "ai", 60.0, now) {
             let mut p = purse(orders, me, true);
             doing = aid(orders, world, me, &mut p).or(doing);
         }
+        room!();
         if due(clock, "si", 200.0, now) {
             let mut p = purse(orders, me, false);
             doing = buy_sight(orders, world, me, &mut p, mood.target).or(doing);
         }
+        room!();
         if due(clock, "ld", 90.0, now) {
             let mut p = purse(orders, me, false);
             doing = buy_land(orders, world, me, &mut p).or(doing);
         }
         memo(orders, me, doing, mood);
         // the ledger in the console every five minutes, for whoever reads it
+        room!();
         if now % 300.0 == 0.0 && now > 0.0 {
             let t = me.get("tolls");
             log(format!(
@@ -1700,7 +1720,7 @@ fn carry_order(o: Option<Value>, u: View, pl: &std::rc::Rc<Value>, me: View) -> 
     Some(o)
 }
 
-fn infantry_plan(units: View, me: View) -> Option<std::rc::Rc<Value>> {
+fn unit_plan(units: View, me: View) -> Option<std::rc::Rc<Value>> {
     if !rts(me) {return Some(plan::for_units(me,units,View::undefined()));}
     let mut core=None;
     for u in units.iter() {
@@ -1723,9 +1743,9 @@ fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
     if short(me, 3000.0, 1200.0) {
         return Value::arr();
     }
-    let Some(pl)=infantry_plan(units,me) else {return Value::arr();};
+    let Some(pl)=unit_plan(units,me) else {return Value::arr();};
     for turn in 0..units.len() {
-        if rts(me) && cycles_left() < 2200.0 {
+        if rts(me) && cycles_left() < 2100.0 {
             break;
         }
         let u = nth(units, turn, world);
@@ -1832,11 +1852,10 @@ fn kite(units: View, world: View, me: View) {
     // a flier a minute up comes down on your nearest land before anything else, even short of cycles: its burn climbs
     // the longer it flies, and an unpaid one crashes
     land_hot(units);
-    if short(me, 2500.0, 1200.0) {
+    if short(me, 3500.0, 1200.0) {
         return;
     }
-    let pl = plan::for_units(me, units, View::undefined());
-    let by_id = realm::index(world);
+    let Some(pl)=unit_plan(units,me) else {return;};
     let goal = if num(pl.get("defend")) >= 0.0 {
         pl.get("defend")
     } else if num(pl.get("prey")) >= 0.0 {
@@ -1848,7 +1867,7 @@ fn kite(units: View, world: View, me: View) {
         return;
     }
     let goal = num(goal);
-    let q = by_id.get(goal);
+    let q=world.get("provinces").iter().find(|p|p.get("id").num()==goal).unwrap_or_default();
     let owner = q.get("owner").num();
     let raid = num(pl.get("defend")) < 0.0 && q.truthy() && owner >= 0.0 && owner != me.get("id").num() && realm::is_rival(world, me, owner);
     let verb = if raid { "raid" } else { "fight" };
@@ -1973,7 +1992,7 @@ fn sentry(units: View, world: View, me: View) -> Value {
         let mut o = if defend < 0.0 && committed {
             match common::front(u, world, me, &pl) {
                 Some(o) => o,
-                None => orders::to(u, if u.get("type").str() == "spire" || owner == me.get("id").num() { "fight" } else { "capture" }, at, world, me, ()),
+                None => orders::to(u, if owner == me.get("id").num() { "fight" } else if u.get("type").str() == "spire" { common::siege_verb(world,me,at,false) } else { "capture" }, at, world, me, ()),
             }
         } else {
             orders::hold(u, Point::new(0.0, 0.0), world, me, Some(at))
@@ -2130,6 +2149,7 @@ fn terrain_step(u: View, x: f64, y: f64) -> Option<Value> {
 }
 
 fn reflex(units: View, near: View) -> Value {
+    if cycles_left()<1800.0 {return Value::arr();}
     // Divide the pre-billed lane snapshot locally: affordable engagements reach all contacted units.
     let n = units.len();
     let b = if n > 0 { units.at(0).get("rts").get("budget") } else { View::undefined() };
@@ -2146,7 +2166,11 @@ fn reflex(units: View, near: View) -> Value {
     let count = min(n as f64, max(1.0, (b.get("reflex").or(0.0) / 850.0).floor())) as usize;
     let start = if n > 0 { ((units.at(0).get("rts").get("bank").or(0.0) / 175.0).floor() % n as f64) as usize } else { 0 };
     let mut turn_cost = 1800.0_f64;
-    for turn in 0..count {
+    // Land contacts keep their funded turns before the extra cost of naval aiming.
+    // Keep each class in circular order so repeated short calls can share the lane.
+    let turns=(0..n).filter(|turn| !units.at((start+turn)%n).path("rts.sea.ship").truthy())
+        .chain((0..n).filter(|turn| units.at((start+turn)%n).path("rts.sea.ship").truthy())).take(count);
+    for turn in turns {
         if cycles_left() < turn_cost {
             break;
         }
@@ -2244,7 +2268,8 @@ fn reflex(units: View, near: View) -> Value {
             o.set("ability", "scan");
         }
         if modules.has_str("cloak") { o.set("cloak", cloaking); }
-        if armed || driving || armored || o.get("cloak").truthy() || o.get("ability").truthy() {
+        let naval=common::naval_reflex(u,ns,&mut o,&mut pool.bank,&mut pool.abilities);
+        if naval || armed || driving || armored || o.get("cloak").truthy() || o.get("ability").truthy() {
             order(o);
         }
         turn_cost = turn_cost.max((began - cycles_left()) * 1.5);

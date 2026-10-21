@@ -1,3 +1,66 @@
+fn cleared_front_case() -> (Value, Value, Value, Value) {
+    let world = obj! {"seconds"=>86400,"provinces"=>arr![
+        obj! {"id"=>24,"owner"=>6},
+        obj! {"id"=>35,"owner"=>-1,"visible"=>true,"cores"=>4,"adj"=>arr![39],"units"=>obj! {"6"=>5}},
+        obj! {"id"=>39,"owner"=>-1,"visible"=>true,"cores"=>1,"adj"=>arr![35],"units"=>obj! {}}
+    ]};
+    let me = obj! {"id"=>6,"capital"=>38,"allies"=>arr![]};
+    let unit = obj! {"id"=>1584,"owner"=>6,"at"=>35,"to"=>-1,"doing"=>"idle","target"=>35,
+        "build"=>obj! {"strength"=>2},"ramUnit"=>obj! {}};
+    let plan = obj! {"attack"=>24,"stage"=>28,"defend"=>-1,"at"=>69692};
+    (world, me, unit, plan)
+}
+
+#[test]
+fn an_idle_column_recaptures_its_clear_neutral_land_after_the_carried_target_falls() {
+    let (world, me, unit, plan) = cleared_front_case();
+    let args = views(&[world, me, unit]);
+    let order = cleared_front(args[2], args[0], args[1], &plan).expect("local capture");
+    assert_eq!(order.get("do").str(), "capture");
+    assert_eq!(order.get("target").num(), 35.0);
+    assert!(order.get("via").is_empty(), "the column already stands there");
+    let bytes = order.get("ram").at(0).get("bytes");
+    let Value::Arr(bytes) = bytes else { panic!("carried plan bytes") };
+    let local = plan::unpack(&bytes.iter().map(|v| v.num() as u8).collect::<Vec<_>>());
+    assert_eq!(local.get("attack").num(), 35.0);
+    assert_eq!(local.get("at").num(), 86400.0);
+}
+
+#[test]
+fn a_cleared_local_column_can_continue_to_visible_empty_neutral_neighbors() {
+    let (mut world, me, unit, plan) = cleared_front_case();
+    let Value::Arr(provinces) = world.entry("provinces") else { panic!("provinces") };
+    provinces[1].set("owner", 6);
+    let args = views(&[world, me, unit]);
+    let order = cleared_front(args[2], args[0], args[1], &plan).expect("local advance");
+    assert_eq!(order.get("target").num(), 39.0);
+}
+
+#[test]
+fn local_advances_preserve_fresh_orders_defense_and_occupied_land() {
+    for reason in ["fresh", "defense", "moving", "working", "air", "ship", "enemy", "ally", "lease"] {
+        let (mut world, me, mut unit, mut plan) = cleared_front_case();
+        match reason {
+            "fresh" => plan.set("at", 86300),
+            "defense" => plan.set("defend", 35),
+            "moving" => unit.set("to", 39),
+            "working" => unit.set("doing", "capture"),
+            "air" => unit.entry("build").set("wings", 1),
+            "ship" => unit.entry("rts").entry("sea").set("ship", true),
+            reason => {
+                let Value::Arr(provinces) = world.entry("provinces") else { panic!("provinces") };
+                match reason {
+                    "enemy" => provinces[1].entry("units").set("2", 1),
+                    "ally" => provinces[1].set("owner", 2),
+                    _ => provinces[1].set("leased", arr![obj! {"to"=>6}]),
+                }
+            }
+        }
+        let args = views(&[world, me, unit]);
+        assert!(cleared_front(args[2], args[0], args[1], &plan).is_none(), "{reason}");
+    }
+}
+
 #[test]
 fn a_lone_spy_in_a_rival_capital_steals_instead_of_treating_itself_as_support() {
     let world = Value::parse(r#"{"seconds":100,"techs":{"artillery":{"need":100,"requires":[]}},"factions":[null,
@@ -206,4 +269,30 @@ fn a_local_nullptr_army_develops_the_core_it_just_held() {
     let args=views(&frontier_mining_fixture("screen"));
     let out=super::local_strategy(args[0],args[1]);
     assert!(out.get("spawn").items().iter().any(|s|s.get("type").str()=="miner"));
+}
+
+#[test]
+fn artillery_orders_strike_walls_only_during_an_offensive_siege() {
+    for (walls,defending,want) in [(false,false,"fight"),(true,false,"capture"),(true,true,"fight")] {
+        let fixture=wall_artillery_fixture("gun",walls,defending,false,false);
+        let args=views(&fixture);
+        super::gun(args[0],args[1],args[2]);
+        let orders=emitted();
+        assert!(orders.iter().any(|o|o.get("do").str()==want && o.get("target").num()==1.0),
+            "walls={walls}, defending={defending}: {orders:?}");
+    }
+}
+
+#[test]
+fn artillery_already_at_the_enemy_town_switches_its_standing_fight_to_the_walls() {
+    for deployed in [false,true] {
+        let fixture=wall_artillery_fixture("gun",true,false,true,deployed);
+        let args=views(&fixture);
+        super::gun(args[0],args[1],args[2]);
+        let orders=emitted();
+        assert!(orders.iter().any(|o|o.get("do").str()=="capture" && o.get("target").num()==1.0),
+            "deployed={deployed}: {orders:?}");
+        if deployed {assert!(!orders.iter().any(|o|matches!(o.get("deploy"),Value::Bool(false))),
+            "a gun already at the siege keeps its deployment");}
+    }
 }

@@ -115,3 +115,29 @@ fn artillery_commits_its_route_from_a_shared_plan() {
     assert_eq!(orders[0].get("target").num(), 1.0);
     assert!(!orders[0].get("deploy").truthy());
 }
+
+#[test]
+fn artillery_orders_strike_walls_only_during_an_offensive_siege() {
+    for (walls,defending,want) in [(false,false,"fight"),(true,false,"capture"),(true,true,"fight")] {
+        let fixture=wall_artillery_fixture("artillery",walls,defending,false,false);
+        let args=views(&fixture);
+        super::artillery(args[0],args[1],args[2]);
+        let orders=emitted();
+        assert!(orders.iter().any(|o|o.get("do").str()==want && o.get("target").num()==1.0),
+            "walls={walls}, defending={defending}: {orders:?}");
+    }
+}
+
+#[test]
+fn artillery_already_at_the_enemy_town_switches_its_standing_fight_to_the_walls() {
+    for deployed in [false,true] {
+        let fixture=wall_artillery_fixture("artillery",true,false,true,deployed);
+        let args=views(&fixture);
+        super::artillery(args[0],args[1],args[2]);
+        let orders=emitted();
+        assert!(orders.iter().any(|o|o.get("do").str()=="capture" && o.get("target").num()==1.0),
+            "deployed={deployed}: {orders:?}");
+        if deployed {assert!(!orders.iter().any(|o|matches!(o.get("deploy"),Value::Bool(false))),
+            "a gun already at the siege keeps its deployment");}
+    }
+}

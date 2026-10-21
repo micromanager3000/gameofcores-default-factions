@@ -1,0 +1,10 @@
+{
+  "scope": "A planner failure from our one-hour development continuation of the rejected C8 day endpoint. Only Atlas source changes. This input belongs to our public default-house code and is separate from replacement acceptance.",
+  "fixture": "atlantis-think-c9-hour-23872.json",
+  "argsSha256": "2ad06a82b449eaf645e95d1536f53a4138ce9e61cb930674be4df8f6cb98511f",
+  "sourceSha256": "dd7697cce4de5b352832f009f4c6d8ead2388e8a414e28add07188880f537511",
+  "tick": 443040,
+  "fuel": 23872,
+  "captureSha256": "1814d68b676c62c172f7c1f443d1115937b9fd9a875a87fc0ab205560df9947a",
+  "continuationManifestSha256": "addc36f16a013c22eb103a549fe5165ab9a6134ab17651237e7a099e77ebdd58"
+}

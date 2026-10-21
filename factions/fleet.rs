@@ -1242,7 +1242,7 @@ fn needle(units: View, world: View, me: View) {
 
 // Keep standing orders below the plan lookup runway.
 fn infantry(units: View, world: View, me: View, cloak: bool) -> Value {
-    if short(me, 2500.0, 1200.0) {
+    if short(me, 3000.0, 1200.0) {
         return Value::arr();
     }
     let pl = plan::for_units(me, units, View::undefined());
@@ -2229,6 +2229,7 @@ impl Pool {
 }
 
 fn reflex(units: View, near: View) -> Value {
+    if cycles_left()<1800.0 {return Value::arr();}
     // Share lane budgets across contacted units.
     let n = units.len();
     let b = if n > 0 { units.at(0).get("rts").get("budget") } else { View::undefined() };

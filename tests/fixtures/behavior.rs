@@ -196,6 +196,8 @@ fn front_case_observed(target_hp: f64, max: f64, stage_hp: f64, rival_hp: f64, n
         {{"id":3,"owner":2,"type":"line","at":5,"to":-1,"doing":"fight","target":5,"hp":{rival_hp}}},
         {{"id":4,"owner":2,"type":"miner","at":5,"to":-1,"doing":"gather","target":5,"hp":50}}]"#)));
     me.set("ramProvince", obj! {"0"=>arr![obj!{}],"4"=>arr![obj!{}]});
+    // The front's own odds run with the war doctrine off; the SDK's `war` tests cover the doctrine's.
+    me.set("lab", obj! {"doctrine"=>"off"});
     let args = views(&[world.clone(), me.clone()]);
     let mut plan = obj! {"attack"=>5,"stage"=>4};
     common::front_snapshot(&mut plan, args[0], args[1]);
@@ -248,7 +250,7 @@ fn front_snapshots_expire_and_never_apply_to_a_different_attack() {
 #[test]
 fn front_uses_the_full_plan_and_rejects_a_wrong_stage_or_future_snapshot() {
     let world = Value::parse(r#"{"seconds":10,"provinces":[{"id":4,"owner":1,"adj":[5]},{"id":5,"owner":2,"adj":[4]}]}"#);
-    let me = obj! {"id"=>1,"ramProvince"=>obj! {"4"=>arr![obj!{}]}};
+    let me = obj! {"id"=>1,"ramProvince"=>obj! {"4"=>arr![obj!{}]},"lab"=>obj! {"doctrine"=>"off"}};
     let unit = obj! {"id"=>1,"owner"=>1,"at"=>5,"to"=>-1,"hp"=>3,"hpMax"=>4,"doing"=>"capture","target"=>5};
     let args = views(&[unit,world,me]);
     let mut plan = obj! {"attack"=>5,"stage"=>4,"front"=>arr![5,4,3,20,10,1]};

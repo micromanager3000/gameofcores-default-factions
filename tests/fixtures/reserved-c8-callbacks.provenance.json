@@ -1,0 +1,107 @@
+{
+  "scope": "Captured inputs from our simulations of the public C8 house programs. These are regression cases from a rejected candidate, not player observations or new acceptance worlds. Unit and RAM values are retained exactly for metered callback replay.",
+  "factionRevision": "003ad896858a86be04eb612e090907b8f042e3c5",
+  "engineRevision": "90f1f8323767cbbb8de102a48b2d2aa88f3130fb",
+  "candidateFrozenManifestSha256": "79ded25656fa116aea2111df249adaea53d2f0615f0c99b85e073a4aaa7da6aa",
+  "fixtures": [
+    {
+      "name": "atlantis",
+      "function": "aeronaut",
+      "originalFuel": 2927,
+      "originWorld": "day-60041-r3",
+      "originTick": 233070,
+      "captureSha256": "7b47bdd02d2e7d30039a723250ba84fb8944b8d2b032a270d7fc61fab7b81eb3",
+      "capturedSourceSha256": "124c49a113bc50707df8c6c47c8246e038fa2dbdcc3cd07a60a7e64107c0daf6",
+      "verifiedArgsSha256": "982f9a142cb5409abe97f88c0d62106b6defc11821b8a541efee23fd769dfab7",
+      "fixture": "atlantis-aeronaut-reserved-c8-2927.json"
+    },
+    {
+      "name": "atlantis",
+      "function": "aeronaut",
+      "originalFuel": 3205,
+      "originWorld": "day-60013-r0",
+      "originTick": 61472,
+      "captureSha256": "e82af66eb9784ab7b5bde68d53e023bd64869cb007ac23d3604908198d4587f5",
+      "capturedSourceSha256": "124c49a113bc50707df8c6c47c8246e038fa2dbdcc3cd07a60a7e64107c0daf6",
+      "verifiedArgsSha256": "b8d5e00b168045ede991c69bb9bfa2fc12a5d7b44e2b433e364c12f0d87f7d1a",
+      "fixture": "atlantis-aeronaut-reserved-c8-3205.json"
+    },
+    {
+      "name": "atlantis",
+      "function": "think",
+      "originalFuel": 23864,
+      "originWorld": "day-60041-r3",
+      "originTick": 252240,
+      "captureSha256": "910989151154cad06123fac99ed232cbd8bddb2752d9ee7c89e9c22f12d9381c",
+      "capturedSourceSha256": "124c49a113bc50707df8c6c47c8246e038fa2dbdcc3cd07a60a7e64107c0daf6",
+      "verifiedArgsSha256": "37e57ad6f6fd5e31a9c3da1b2a432b7dbada78b1e1dd3ed04dc4f6fa3cc2c32e",
+      "fixture": "atlantis-think-reserved-c8-23864.json"
+    },
+    {
+      "name": "atlantis",
+      "function": "think",
+      "originalFuel": 23872,
+      "originWorld": "day-60013-r0",
+      "originTick": 58682,
+      "captureSha256": "8bb6bb6fe597e4d02ee6fc0a6b720e9242c26b6e8ad650b04e8ce437a2a1dcec",
+      "capturedSourceSha256": "124c49a113bc50707df8c6c47c8246e038fa2dbdcc3cd07a60a7e64107c0daf6",
+      "verifiedArgsSha256": "0d1670a2bace0dce6bb70887214b3d8780bcb047b28682d91a5b57fafe1a3032",
+      "fixture": "atlantis-think-reserved-c8-23872.json"
+    },
+    {
+      "name": "nations",
+      "function": "think",
+      "originalFuel": 94402,
+      "originWorld": "six-60013-r3",
+      "originTick": 32971,
+      "captureSha256": "b2b14b1fe27a975a7fd7fabfeb6e11170d164c9dfabc46d58ce6f1de03c8c653",
+      "capturedSourceSha256": "d3b838afef5b88560a61ecf1d33df14d0025762be7252e3e7a56620754c9c2f3",
+      "verifiedArgsSha256": "76fb85e8484e766a3b7ea621735bc8030e3754134fe4b051df989d1c2f0ca467",
+      "fixture": "nations-think-reserved-c8-94402.json"
+    },
+    {
+      "name": "nullptr",
+      "function": "ghost",
+      "originalFuel": 7888,
+      "originWorld": "six-60013-r3",
+      "originTick": 26797,
+      "captureSha256": "92dffd349a91fe38e75e508da23e86127d7d50bc1d7d30fc2e4955e8fe79b639",
+      "capturedSourceSha256": "e45f3559e5f93babbe2eeb0778ba5467c0179fe76e5fc7224b8a86dc552f83fb",
+      "verifiedArgsSha256": "82a7f62b4a4adbddc4fc2363ddd7aa7fc5b674e3f58fee17894828091d39536e",
+      "fixture": "nullptr-ghost-reserved-c8-7888.json"
+    },
+    {
+      "name": "nullptr",
+      "function": "ghost",
+      "originalFuel": 7904,
+      "originWorld": "day-60013-r0",
+      "originTick": 92394,
+      "captureSha256": "179940874985c19a161a9e91cc9152265dab4e10b9c3fc838baa1814661363fe",
+      "capturedSourceSha256": "e45f3559e5f93babbe2eeb0778ba5467c0179fe76e5fc7224b8a86dc552f83fb",
+      "verifiedArgsSha256": "3e362c16606e77b08db022da5bc16505dc650314c598013c23be33a9e6653012",
+      "fixture": "nullptr-ghost-reserved-c8-7904.json"
+    },
+    {
+      "name": "nullptr",
+      "function": "wing",
+      "originalFuel": 2722,
+      "originWorld": "day-60013-r0",
+      "originTick": 389029,
+      "captureSha256": "558cb1638e7c455e25e4bbf61faa825ecd2a895868bcdd6cb944b016a572c9bf",
+      "capturedSourceSha256": "e45f3559e5f93babbe2eeb0778ba5467c0179fe76e5fc7224b8a86dc552f83fb",
+      "verifiedArgsSha256": "5df65350ce1e3be5cf719187d8ef15e5378b254a246d802ac98bcde6208e309d",
+      "fixture": "nullptr-wing-reserved-c8-2722.json"
+    },
+    {
+      "name": "templar",
+      "function": "think",
+      "originalFuel": 54828,
+      "originWorld": "six-60029-r3",
+      "originTick": 27393,
+      "captureSha256": "18d8304e3c3f1edd7098d3cc3c2ac11813500cb6900dca95317484a91f9dc815",
+      "capturedSourceSha256": "f69518fdc98f003b864a74e87901c5463464d6957f5adfee3f2386eddd38545b",
+      "verifiedArgsSha256": "2d2d4ed34a0586fd0c4f5ab54cdec6fcf020ac5f9aadc3dd5c254d6e0e664c9a",
+      "fixture": "templar-think-reserved-c8-54828.json"
+    }
+  ]
+}

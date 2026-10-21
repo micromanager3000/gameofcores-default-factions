@@ -68,3 +68,27 @@ fn flight_views(values: &[Value]) -> Vec<View> {
     v[2].entry("rts").set("air",obj!{"contacts"=>contacts,"decks"=>decks});
     views(&v)
 }
+
+fn wall_artillery_fixture(kind: &str, walls: bool, defending: bool, at_target: bool, deployed: bool) -> Vec<Value> {
+    let target=1;
+    let plan=obj! {"attack"=>target,"target"=>target,"stage"=>0,"home"=>0,"defend"=>if defending {target}else{-1},
+        "need"=>1,"ready"=>2,"front"=>arr![1,0,0,20,10,1]};
+    let world=obj! {"seconds"=>1,"walls"=>walls,"factions"=>arr![Value::Null,
+        obj! {"id"=>1,"alive"=>true,"capital"=>0},obj! {"id"=>2,"alive"=>true,"capital"=>target}],
+        "provinces"=>arr![obj! {"id"=>0,"owner"=>1,"adj"=>arr![target],"hops"=>0},
+            obj! {"id"=>target,"owner"=>if defending {1}else{2},"visible"=>true,"capital"=>true,
+                "adj"=>arr![0],"hops"=>1,"townGarrison"=>0,"garrison"=>0,"units"=>obj! {"1"=>2}}]};
+    let mut shared_plan=Value::obj();
+    for op in mem::put(0,&plan,"local",None,8).expect("artillery plan fits") {
+        shared_plan.set(&op.get("write").num().to_string(),obj! {"bytes"=>op.get("bytes").clone(),"t"=>1});
+    }
+    let me=obj! {"id"=>1,"capital"=>0,"allies"=>arr![],"ramProvince"=>obj! {"0"=>shared_plan},
+        "units"=>obj! {"total"=>8,"byType"=>obj! {"miner"=>4}},
+        "rts"=>obj! {"cpu"=>obj! {"income"=>100000,"bank"=>1000000,"available"=>obj! {"control"=>100000}}}};
+    let units=arr![obj! {"id"=>103,"owner"=>1,"type"=>kind,"at"=>if at_target {target}else{0},"to"=>-1,
+        "doing"=>if deployed {"fight"}else{"idle"},"target"=>if deployed {target}else{-1},
+        "build"=>obj! {"hp"=>2,"speed"=>1,"strength"=>2,"carry"=>0,"range"=>2},
+        "ramUnit"=>obj! {"0"=>obj! {"bytes"=>Value::Bytes(plan::pack(&plan)),"t"=>1}},
+        "rts"=>obj! {"modules"=>arr!["artillery"],"deployed"=>deployed,"deploying"=>false}}];
+    vec![units,world,me]
+}

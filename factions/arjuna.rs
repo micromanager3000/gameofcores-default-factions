@@ -912,6 +912,12 @@ fn war_order(u: View, units: View, world: View, me: View) -> Option<Value> {
         if let Some(o) = stale_local_attack(u, units, world, me, &p) {
             return Some(o);
         }
+        if !defending && u.get("doing").str()=="idle" && u.get("to").num_or(-1.0)<0.0
+            && u.get("at").num()!=me.get("capital").num() && plan::age(&p,world).unwrap_or(0.0)>120.0
+            && !realm::index(world).at(u.get("at")).get("units").entries().any(|(owner,count)|
+                count.num_or(0.0)>0.0 && owner.parse::<f64>().is_ok_and(|owner|realm::is_rival(world,me,owner))) {
+            return orders::to(u,"fight",me.get("capital").num(),world,me,());
+        }
     }
     if target.is_nan() || target < 0.0 {
         return orders::to(u, "fight", n(me.get("capital")), world, me, ());
@@ -1032,7 +1038,8 @@ fn gun(units: View, world: View, me: View) {
             }
             continue;
         }
-        let o = carry(orders::to(u, "fight", vn(target), world, me, ()), u, &p, me);
+        let verb=common::siege_verb(world,me,vn(target),vn(&defend)>=0.0);
+        let o = carry(orders::to(u, verb, vn(target), world, me, ()), u, &p, me);
         if set_up {
             if !same_v(u.get("at"), target) || n(u.get("to")) >= 0.0 {
                 match o {
@@ -1043,13 +1050,14 @@ fn gun(units: View, world: View, me: View) {
                     }
                     None => order(pack_up()),
                 }
-            }
+            } else if let Some(o)=o { order(o); }
             continue;
         }
         // Only a gun already standing in the target province may set up. `to < 0` tells arrival from a route whose
         // first leg has not started.
         if same_v(u.get("at"), target) && n(u.get("to")) < 0.0 {
-            order(obj! { "id" => u.get("id"), "deploy" => true, "alert" => 8 });
+            let mut setup=o.unwrap_or_else(||obj! {"id"=>u.get("id")});
+            setup.set("deploy",true);setup.set("alert",8);order(setup);
         } else if let Some(mut o) = o {
             o.set("alert", 8);
             order(o);

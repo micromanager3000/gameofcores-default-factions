@@ -1,0 +1,42 @@
+{
+  "scope": "Actual failed callback from our simulated public defaults during rejected C7 reserved validation. No player or production data. The original validation seeds are consumed; replacement validation uses untouched seeds.",
+  "engineRevision": "90f1f8323767cbbb8de102a48b2d2aa88f3130fb",
+  "factionSourceSha256": "a7b7009ba416ed2516c8b638a160131109996241fa8a6ad9ba60a309e103bc44",
+  "sdkSha256": "cc29620eea08423a8d46f7cc1029319cef81aaa91bc2c5ad324a042fe10fd509",
+  "seed": 3037,
+  "rotation": 3,
+  "tick": 52006,
+  "faction": 4,
+  "program": "nations",
+  "function": "kite",
+  "observedFuel": 2782,
+  "baselineEnvelope": {
+    "ok": false,
+    "error": "ran out of cycles",
+    "line": 0,
+    "fuel": true,
+    "logs": [],
+    "used": 2782,
+    "instr": 178048,
+    "pages": 0,
+    "read": 966,
+    "ns": 225500,
+    "module": true
+  },
+  "argsSha256": "adc9247192c8b875f5928f9530aa5433a4d9d7757a42826b4ff8356fdb17969a",
+  "authoredChanges": [],
+  "regressionExpectations": {
+    "observedFuel2782": "Return successfully while preserving standing orders.",
+    "preservedUsefulBudgets": [
+      6000,
+      8000,
+      12000
+    ],
+    "nominalRequestedCycles": 7000,
+    "usefulOrder": {
+      "id": 817,
+      "do": "raid",
+      "target": 5
+    }
+  }
+}
