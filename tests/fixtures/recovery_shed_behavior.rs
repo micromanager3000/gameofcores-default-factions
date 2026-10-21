@@ -65,3 +65,21 @@ fn the_full_recovery_review_sheds_soldiers_before_the_haulers_that_pay_for_them(
     assert!(!gone.is_empty(), "an unpaid army past half the credit is shed");
     assert!(!gone.contains(&20.0) && !gone.contains(&21.0), "haulers stay while soldiers can go: {gone:?}");
 }
+
+#[test]
+fn shedding_before_any_stall_still_keeps_six_at_the_capital() {
+    let (mut world, mut me) = shed_case(16.0, false);
+    // every soldier at home: eight guards at the capital
+    let mut units = Value::arr();
+    for id in 0..5 {
+        units.push(obj! {"id"=>id,"owner"=>1,"type"=>"miner","at"=>0,"to"=>-1,"doing"=>"gather","build"=>obj!{}});
+    }
+    for id in 10..18 {
+        units.push(obj! {"id"=>id,"owner"=>1,"type"=>"guard","at"=>0,"to"=>-1,"doing"=>"fight","fighting"=>false,"build"=>obj!{}});
+    }
+    world.set("units", units);
+    me.entry("units").set("total", 13);
+    me.entry("units").entry("byType").set("guard", 8);
+    let gone = shed(&world, &me).get("disband").items().len();
+    assert!(gone > 0 && 8 - gone >= 6, "sheds only past a six-unit garrison: {gone} gone");
+}

@@ -2352,17 +2352,17 @@ fn govern_units(world: View, me: View, share: f64, strategy: impl FnOnce() -> Va
 			ram(&mut out, mem::put(RECOVERY_PAGE, &obj! { "r" => true, "s" => since }, "local", None, 1).unwrap_or_default());
 			let over_cap=army(me)>me.path("units.cap").num_or(512.0);
 			if short && (over_cap || shed_due(world,me,since,now)) {
-				// The farthest idle units go first, miners after the army, and the capital's garrison last: not at all
-				// while rivals are at its gates.
+				// The farthest idle units go first, miners after the army, and the capital's garrison last: it keeps
+				// [`GARRISON`] (all of it while rivals are at its gates).
 				let pressed=capital_pressed(world,me);let cap=me.get("capital").num();
-				let mut pick:Vec<(f64,Value)>=Vec::new();
+				let mut pick:Vec<(f64,Value)>=Vec::new();let mut garrison=0;
 				for u in world.get("units").iter().filter(|u|u.get("owner").num()==me.get("id").num()) {
 					if cycles_left()<8000.0 {break;}
 					let ty=u.get("type").str();
 					if u.get("hired").truthy() || ty=="hauler" || ty=="freighter" {continue;}
 					let home=u.get("at").num()==cap;
 					if ty=="miner" && (have.get("miner").num_or(0.0)<=4.0 || home) {continue;}
-					if home && pressed {continue;}
+					if home {garrison+=1;if pressed || garrison<=GARRISON {continue;}}
 					pick.push((shed_rank(world,me,u)-if ty=="miner"{500.0}else if home{1000.0}else{0.0},u.get("id").value()));
 				}
 				pick.sort_by(|a,b|b.0.total_cmp(&a.0));
