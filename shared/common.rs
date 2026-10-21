@@ -2593,7 +2593,11 @@ fn recover_with(world: View, me: View, e: &Economy, shortage: bool) -> Value {
 		let u = c.unit;
 		let work = sites.iter().any(|(id, _)| *id == u.get("at").num());
 		let miner = u.get("type").str() == "miner";
+		// A land carrier, or anything holding cargo, goes after the army and idle miners: shedding one cuts the
+		// deliveries that pay for the rest.
+		let carrier = (u.get("type").str() == "hauler" && !u.path("rts.sea.ship").truthy()) || logistics::cargo(u) > 0.0;
 		let score = if miner && work { if u.get("doing").str() == "gather" { 400.0 } else { 300.0 } }
+			else if carrier && !miner { 75.0 }
 			else if !miner && u.get("at").num() == me.get("capital").num() && !u.get("air").truthy() && !u.path("rts.sea.ship").truthy() { 200.0 }
 			else if u.path("rts.sea.ship").truthy() { 100.0 }
 			else if miner { 50.0 } else { -shed_rank(world, me, u) / 10.0 };

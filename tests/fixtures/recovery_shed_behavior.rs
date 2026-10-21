@@ -48,3 +48,20 @@ fn a_pressed_capital_keeps_its_garrison_and_pays_it_before_the_miners() {
     let (world, me) = shed_case(0.0, false);
     assert_eq!(shed(&world, &me).get("compute").get("cpu").get("upkeepOrder").at(0).str(), "miner", "miners first in peace");
 }
+
+#[test]
+fn the_full_recovery_review_sheds_soldiers_before_the_haulers_that_pay_for_them() {
+    let (mut world, mut me) = shed_case(16.0, false);
+    // two idle haulers out at the far depot, and the army unpaid
+    for id in [20, 21] {
+        world.entry("units").push(obj! {"id"=>id,"owner"=>1,"type"=>"hauler","at"=>2,"to"=>-1,"doing"=>"idle","build"=>obj!{"carry"=>5}});
+    }
+    me.entry("units").set("total", 11);
+    me.entry("units").set("stalled", 2);
+    me.entry("units").entry("byType").set("hauler", 2);
+    me.entry("rts").entry("cpu").set("bank", 1000);
+    let out = shed(&world, &me);
+    let gone: Vec<f64> = out.get("disband").items().iter().map(|v| v.num()).collect();
+    assert!(!gone.is_empty(), "an unpaid army past half the credit is shed");
+    assert!(!gone.contains(&20.0) && !gone.contains(&21.0), "haulers stay while soldiers can go: {gone:?}");
+}
