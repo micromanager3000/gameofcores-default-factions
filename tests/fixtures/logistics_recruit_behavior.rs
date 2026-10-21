@@ -1,5 +1,10 @@
 fn crew_recruit_case(haulers: usize, away: usize, queued: usize, cap: usize, bill: f64, draw: f64, loans: Option<Value>, planned: Value) -> Value {
+    crew_case(600000.0, haulers, away, queued, cap, bill, draw, loans, planned)
+}
+/// As [`crew_recruit_case`], with `stock` cycles in the fullest remote depot (20,000 sit in another).
+fn crew_case(stock: f64, haulers: usize, away: usize, queued: usize, cap: usize, bill: f64, draw: f64, loans: Option<Value>, planned: Value) -> Value {
     let (mut world, mut me, _) = fixture();
+    item(me.entry("rts").entry("logistics").entry("depots"), 2).set("cycles", stock);
     world.set("seconds", 3);
     let total=haulers+4;
     let mut units=Value::arr();
@@ -22,7 +27,7 @@ fn crew_recruit_case(haulers: usize, away: usize, queued: usize, cap: usize, bil
 
 #[test]
 fn logistics_does_not_replace_a_crew_away_on_hire() {
-    let orders=crew_recruit_case(4,4,0,30,2000.0,0.0,None,obj! {});
+    let orders=crew_recruit_case(5,4,0,30,2000.0,0.0,None,obj! {});
     assert!(orders.get("spawn").is_empty(),"returning hired bodies already fill the conservative crew allowance");
 }
 
@@ -70,9 +75,22 @@ fn typed_outgoing_hires_leave_room_for_a_needed_hauler() {
     let loans=obj! {"hauler"=>3,"screen"=>4};
     let orders=crew_recruit_case(2,7,0,30,2000.0,0.0,Some(loans.clone()),obj! {});
     assert_eq!(orders.get("spawn").at(0).get("type").str(),"hauler");
-    assert!(crew_recruit_case(3,7,0,30,2000.0,0.0,Some(loans),obj! {}).get("spawn").is_empty());
+    assert!(crew_recruit_case(6,7,0,30,2000.0,0.0,Some(loans),obj! {}).get("spawn").is_empty());
     assert!(crew_recruit_case(2,7,0,30,2000.0,0.0,None,obj! {}).get("spawn").is_empty(),
         "older views conservatively count every outgoing body against the crew allowance");
     let empty=crew_recruit_case(2,7,0,30,2000.0,0.0,Some(obj! {}),obj! {});
     assert_eq!(empty.get("spawn").at(0).get("type").str(),"hauler");
+}
+
+#[test]
+fn with_cargo_stranded_a_short_crew_hires_a_hauler_before_other_recruits() {
+    let spawn=arr![obj! {"type"=>"screen","build"=>obj! {"hp"=>2,"speed"=>2,"strength"=>2,"carry"=>0,"vision"=>2}}];
+    let planned=obj! {"spawn"=>spawn,"compute"=>obj! {"cpu"=>obj! {"limits"=>obj! {"fabrication"=>12000}}}};
+    // 4M stranded: the hauler replaces the soldier, even with a recruit queued
+    let orders=crew_case(4.0e6,2,0,1,30,2000.0,0.0,None,planned.clone());
+    assert_eq!(orders.get("spawn").len(),1);
+    assert_eq!(orders.get("spawn").at(0).get("type").str(),"hauler");
+    // a full crew leaves the soldier alone
+    let orders=crew_case(4.0e6,12,0,0,30,2000.0,0.0,None,planned);
+    assert_eq!(orders.get("spawn").at(0).get("type").str(),"screen");
 }

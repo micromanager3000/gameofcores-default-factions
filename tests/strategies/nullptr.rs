@@ -135,7 +135,8 @@ fn rich_cargo_recovery_rearms_a_screen_before_a_full_plan_fits() {
     assert_eq!(orders.get("spawn").at(0).get("type").str(), "screen");
     assert_eq!(orders.get("compute").get("cpu").get("limits").get("fabrication").num(), 5000.0);
     assert_eq!(orders.get("compute").get("types").get("screen").get("cycles").num(), 6000.0);
-    assert_eq!(orders.get("compute").get("types").get("hauler").get("cycles").num(), 10000.0);
+    // Eleven haulers at 1,600 cycles each.
+    assert_eq!(orders.get("compute").get("types").get("hauler").get("cycles").num(), 17600.0);
 }
 
 fn naval_rank_case(waters: usize, remaining: f64, land_border: bool) -> bool {
