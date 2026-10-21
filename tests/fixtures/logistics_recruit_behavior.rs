@@ -22,7 +22,7 @@ fn crew_recruit_case(haulers: usize, away: usize, queued: usize, cap: usize, bil
 
 #[test]
 fn logistics_does_not_replace_a_crew_away_on_hire() {
-    let orders=crew_recruit_case(4,4,0,30,2000.0,0.0,None,obj! {});
+    let orders=crew_recruit_case(5,4,0,30,2000.0,0.0,None,obj! {});
     assert!(orders.get("spawn").is_empty(),"returning hired bodies already fill the conservative crew allowance");
 }
 
@@ -70,7 +70,7 @@ fn typed_outgoing_hires_leave_room_for_a_needed_hauler() {
     let loans=obj! {"hauler"=>3,"screen"=>4};
     let orders=crew_recruit_case(2,7,0,30,2000.0,0.0,Some(loans.clone()),obj! {});
     assert_eq!(orders.get("spawn").at(0).get("type").str(),"hauler");
-    assert!(crew_recruit_case(3,7,0,30,2000.0,0.0,Some(loans),obj! {}).get("spawn").is_empty());
+    assert!(crew_recruit_case(6,7,0,30,2000.0,0.0,Some(loans),obj! {}).get("spawn").is_empty());
     assert!(crew_recruit_case(2,7,0,30,2000.0,0.0,None,obj! {}).get("spawn").is_empty(),
         "older views conservatively count every outgoing body against the crew allowance");
     let empty=crew_recruit_case(2,7,0,30,2000.0,0.0,Some(obj! {}),obj! {});

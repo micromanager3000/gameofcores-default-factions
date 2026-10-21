@@ -397,8 +397,8 @@ fn think_reentry(me: View) -> Value {
         cpu.set("upkeepOrder", vec!["miner", "hauler", "freighter", "screen"]);
     }
     let types = orders.entry("compute").entry("types");
-    types.set("hauler", obj! { "cycles"=>10000, "every"=>2 });
-    types.set("freighter", obj! { "cycles"=>12000, "every"=>2 });
+    types.set("hauler", obj! { "cycles"=>common::cargo_cycles(me, "hauler"), "every"=>2 });
+    types.set("freighter", obj! { "cycles"=>common::cargo_cycles(me, "freighter"), "every"=>2 });
     types.set("screen", obj! { "cycles"=>6000, "every"=>1 });
     orders.set("spawn", vec![obj! { "type"=>"screen", "build"=>build(SCREEN), "modules"=>modules }]);
     orders.set("memo", "Address Zero: rearming a screen for the carried front.");
