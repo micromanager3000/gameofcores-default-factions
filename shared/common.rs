@@ -2357,7 +2357,7 @@ fn govern_units(world: View, me: View, share: f64, strategy: impl FnOnce() -> Va
 				let pressed=capital_pressed(world,me);let cap=me.get("capital").num();
 				let mut pick:Vec<(f64,Value)>=Vec::new();let mut garrison=0;
 				for u in world.get("units").iter().filter(|u|u.get("owner").num()==me.get("id").num()) {
-					if cycles_left()<8000.0 {break;}
+					if cycles_left()<2500.0 {break;}
 					let ty=u.get("type").str();
 					if u.get("hired").truthy() || ty=="hauler" || ty=="freighter" {continue;}
 					let home=u.get("at").num()==cap;
