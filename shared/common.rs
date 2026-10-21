@@ -991,10 +991,15 @@ fn logistics_budget(world:View,me:View,share:f64,mut out:Value)->Value{
 	if cycles_left()<8000.0+800.0*me.path("rts.structures").len() as f64{return out;}
 	// Workers at work don't count against the army's allowance (`units.cap`), only against the unit limit.
 	let room=me.path("units.max").num_or(0.0).max(cap);
-	if stock>16000.0 && out.get("spawn").is_empty() && count<room && me.path("units.queued").num_or(0.0)==0.0 && me.get("bank").num_or(0.0)>me.path("costs.unit").num_or(1e9)+8.0 && me.path("rts.cpu.bank").num_or(0.0)>fabrication(me,1.0)+income*2.0 {
+	// Seven haulers for ten provinces, or one for each 3M cycles waiting in depots when that is more, up to 12.
+	let haulers=(me.get("provinces").num_or(1.0)*0.7).max(stock/3.0e6).clamp(2.0,12.0);
+	// With a million cycles (at list prices) stranded and the crew short, a hauler comes before this think's army
+	// recruits (never a miner) and needs only a little bank: houses that queued soldiers every think, or whose stranded
+	// cargo had emptied the bank, never hired one, and income collapsed beside full depots.
+	let haul_first=have.get("hauler").num_or(0.0)+loan("hauler")<haulers && stock>1.0e6*price_level(me) && me.path("units.queued").num_or(0.0)<3.0
+		&& !out.get("spawn").items().iter().any(|s|s.get("type").str()=="miner");
+	if stock>16000.0 && (out.get("spawn").is_empty() || haul_first) && count<room && (me.path("units.queued").num_or(0.0)==0.0 || haul_first) && me.get("bank").num_or(0.0)>me.path("costs.unit").num_or(1e9)+8.0 && me.path("rts.cpu.bank").num_or(0.0)>fabrication(me,1.0)+income*if haul_first {0.25} else {2.0} {
 		let mut port = None;
-		// Seven haulers for ten provinces, or one for each 3M cycles waiting in depots when that is more, up to 12.
-		let haulers=(me.get("provinces").num_or(1.0)*0.7).max(stock/3.0e6).clamp(2.0,12.0);
 		let ty = if have.get("hauler").num_or(0.0)+loan("hauler") < haulers { "hauler" }
 		else if me.path("techs.seaTraversal").truthy() && have.get("freighter").num_or(0.0)+loan("freighter") < 4.0
 			&& world.get("seconds").num_or(0.0) >= mem::get(me.get("ramCapital"), FREIGHT_PAGE).get("until").num_or(0.0) {
@@ -1011,7 +1016,7 @@ fn logistics_budget(world:View,me:View,share:f64,mut out:Value)->Value{
 		let mods=if ty=="freighter"{vec!["hull"]}else{vec![]};
 		let body=obj!{"hp"=>2,"speed"=>2,"strength"=>0,"carry"=>5,"vision"=>1};
 		let paid=(n-me.path("units.stalled").num_or(0.0)).max(1.0);let each=(unit_upkeep(me)/paid/(n/cap).max(1.0)).max(me.path("costs.upkeep").num_or(100.0));
-		if (each*count+body_upkeep_value(me,&body,mods.len() as f64))*((count+1.0)/cap).max(1.0)+building_upkeep(me)+me.path("costs.draw").entries().map(|(_,v)|v.num_or(0.0)).fold(0.0,f64::max)>income*share {return out;}
+		if (each*count+body_upkeep_value(me,&body,mods.len() as f64))*((count+1.0)/cap).max(1.0)+building_upkeep(me)+me.path("costs.draw").entries().map(|(_,v)|v.num_or(0.0)).fold(0.0,f64::max)>income*if haul_first {share.max(0.7)} else {share} {return out;}
 		let mut recruit = obj! {"type"=>ty,"build"=>body,"modules"=>mods};
 		if let Some(p) = port { recruit.set("port", p); }
 		out.set("spawn",vec![recruit]);
