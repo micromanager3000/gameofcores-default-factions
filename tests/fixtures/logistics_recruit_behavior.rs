@@ -94,3 +94,34 @@ fn with_cargo_stranded_a_short_crew_hires_a_hauler_before_other_recruits() {
     let orders=crew_case(4.0e6,12,0,0,30,2000.0,0.0,None,planned);
     assert_eq!(orders.get("spawn").at(0).get("type").str(),"screen");
 }
+
+#[test]
+fn rival_buildings_in_sight_do_not_stop_a_short_crew_hiring() {
+    // 40 rival sites in sight and 2 of the house's own, with 20,000 cycles left in the call: the bill is scanned in
+    // the cycles there are, not reserved at 800 a site listed
+    let case=|structures:usize|{
+        let (mut world,mut me,_)=fixture();
+        item(me.entry("rts").entry("logistics").entry("depots"),2).set("cycles",600000.0);
+        world.set("seconds",3);
+        let mut units=Value::arr();
+        for id in 0..6 {
+            units.push(obj! {"id"=>id,"owner"=>1,"at"=>0,"to"=>-1,"type"=>if id<4 {"miner"} else {"hauler"},
+                "build"=>obj! {"hp"=>2,"speed"=>2,"strength"=>0,"carry"=>5,"vision"=>1}});
+        }
+        world.set("units",units);
+        let mut sites=Value::arr();
+        for i in 0..structures {
+            sites.push(obj! {"id"=>i,"owner"=>if i<2 {1} else {2},"p"=>0,"state"=>"built","hp"=>100,"buildCost"=>6000});
+        }
+        me.entry("rts").set("structures",sites);
+        me.set("provinces",12);
+        me.entry("techs").set("seaTraversal",false);
+        me.entry("rts").entry("cpu").set("bank",1000000);
+        me.entry("rts").entry("cpu").entry("last").set("upkeep",2000.0);
+        me.set("units",obj! {"total"=>6,"hiredOut"=>0,"queued"=>0,"cap"=>30,"stalled"=>0,"byType"=>obj! {"miner"=>4,"hauler"=>2}});
+        let args=views(&[world,me]);
+        gameofcores::with_cycle_reserve(gameofcores::cycles_left()-20000.0,||common::govern(args[0],args[1],0.4,||obj! {}))
+    };
+    assert_eq!(case(2).get("spawn").at(0).get("type").str(),"hauler");
+    assert_eq!(case(42).get("spawn").at(0).get("type").str(),"hauler");
+}

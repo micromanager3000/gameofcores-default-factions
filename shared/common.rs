@@ -988,7 +988,8 @@ fn logistics_budget(world:View,me:View,share:f64,mut out:Value)->Value{
 	let count=n+away;let cap=me.path("units.cap").num_or(0.0);
 	let loans=me.path("units.hiredOutByType");let loan=|ty:&str|if loans.is_undef(){away}else{loans.get(ty).num_or(0.0)};
 	if stock>16000.0 && docks>=2 && !me.path("techs.seaTraversal").truthy(){out.set("research","seaTraversal");}
-	if cycles_left()<8000.0+800.0*me.path("rts.structures").len() as f64{return out;}
+	// The buildings' bill is scanned below in the cycles left: `rts.structures` lists rivals' sites in sight too.
+	if cycles_left()<8000.0{return out;}
 	// Workers at work don't count against the army's allowance (`units.cap`), only against the unit limit.
 	let room=me.path("units.max").num_or(0.0).max(cap);
 	// Seven haulers for ten provinces, or one for each 3M cycles waiting in depots when that is more, up to 12.
@@ -1015,8 +1016,10 @@ fn logistics_budget(world:View,me:View,share:f64,mut out:Value)->Value{
 		} else { return out; };
 		let mods=if ty=="freighter"{vec!["hull"]}else{vec![]};
 		let body=obj!{"hp"=>2,"speed"=>2,"strength"=>0,"carry"=>5,"vision"=>1};
-		let paid=(n-me.path("units.stalled").num_or(0.0)).max(1.0);let each=(unit_upkeep(me)/paid/(n/cap).max(1.0)).max(me.path("costs.upkeep").num_or(100.0));
-		if (each*count+body_upkeep_value(me,&body,mods.len() as f64))*((count+1.0)/cap).max(1.0)+building_upkeep(me)+me.path("costs.draw").entries().map(|(_,v)|v.num_or(0.0)).fold(0.0,f64::max)>income*if haul_first {share.max(0.7)} else {share} {return out;}
+		let Some(buildings)=building_upkeep_within(me,3000.0) else {return out;};
+		let units=(me.path("rts.cpu.last.upkeep").num_or(0.0)-buildings).max(0.0);
+		let paid=(n-me.path("units.stalled").num_or(0.0)).max(1.0);let each=(units/paid/(n/cap).max(1.0)).max(me.path("costs.upkeep").num_or(100.0));
+		if (each*count+body_upkeep_value(me,&body,mods.len() as f64))*((count+1.0)/cap).max(1.0)+buildings+me.path("costs.draw").entries().map(|(_,v)|v.num_or(0.0)).fold(0.0,f64::max)>income*if haul_first {share.max(0.7)} else {share} {return out;}
 		let mut recruit = obj! {"type"=>ty,"build"=>body,"modules"=>mods};
 		if let Some(p) = port { recruit.set("port", p); }
 		out.set("spawn",vec![recruit]);
@@ -1844,6 +1847,17 @@ pub fn building_upkeep(me: View) -> f64 {
 		.filter(|s| s.get("owner").num_or(-2.0) == id && s.get("state").str() != "ruin" && s.get("hp").num_or(0.0) > 0.0)
 		.map(|s| upkeep_of(me, s))
 		.sum()
+}
+
+/// [`building_upkeep`] in one scan that stops while `keep` cycles remain (None: it stopped before the end).
+pub fn building_upkeep_within(me: View, keep: f64) -> Option<f64> {
+	let id = me.get("id").num_or(-1.0);
+	let mut bill = 0.0;
+	for s in me.path("rts.structures").iter() {
+		if cycles_left() < keep { return None; }
+		if s.get("owner").num_or(-2.0) == id && s.get("state").str() != "ruin" && s.get("hp").num_or(0.0) > 0.0 { bill += upkeep_of(me, s); }
+	}
+	Some(bill)
 }
 
 /// What one of the house's sites pays a second to stand, in cycles (see [`building_upkeep`]).
