@@ -2048,7 +2048,8 @@ mod sky {
         // on the game's clock, so a write that didn't land (think short of cycles) can't repeat the line
         let now = world.get("seconds").num_or(0.0);
         if now > 0.0 && now % 300.0 == 0.0 {
-            log(format!("air: {} sorties, {} blows struck, {} vimanas, {} aloft", k, s, w.len(), aloft));
+            let fliers = if me.get("seat").num_or(-1.0) == 10.0 { "jets" } else { "vimanas" };
+            log(format!("air: {} sorties, {} blows struck, {} {fliers}, {} aloft", k, s, w.len(), aloft));
         }
         let rec = obj! { "s" => s, "k" => k, "w" => w };
         if rec.to_json() != was.to_json() {
