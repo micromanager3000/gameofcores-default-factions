@@ -9,6 +9,15 @@ function materialFor(color){
  if(['#e6dcc2','#d8d5b6','#d5cdbb'].includes(color))return 'cloth';
  return 'organic';
 }
+// The renderer turns a part about its pivot (gpu/unit-geometry.js), not its centre: x, then y, then z. A part meant to
+// sit at `at` once turned is authored with its centre turned back about the pivot. (A limb placed at the midpoint of
+// its ends and hung from its joint was flipped to point up, and a barrel turned about its trunnion swung sideways.)
+function about(at,pivot,rot){
+ const q=at.map((v,i)=>v-pivot[i]);
+ for(let axis=2;axis>=0;axis--){const j=(axis+1)%3,k=(axis+2)%3,c=Math.cos(-rot[axis]),s=Math.sin(-rot[axis]),x=q[j],y=q[k];q[j]=x*c-y*s;q[k]=x*s+y*c;}
+ return q.map((v,i)=>v+pivot[i]);
+}
+const between=(a,b,pivot,rot)=>about(a.map((v,i)=>(v+b[i])/2),pivot,rot);
 export class Sculpt {
  constructor(){this.parts=[];}
  part(shape,at,size,color,motion='',pivot=at,rotation=[0,0,0],amplitude=.5){const p={shape,at,size,color,motion,pivot,rotation,amplitude,on:[],material:materialFor(color),detail:0};if(motion==='kneeL'||motion==='kneeR')p.kneeDrop=.32;this.parts.push(p);return p;}
@@ -19,8 +28,8 @@ export class Sculpt {
  // and machinery so a unit reads as sculpted instead of assembled from blocks.
  capsule(at,size,c,m='',pivot=at,rot=[0,0,0]){const p=this.part('capsule',at,size,c,m,pivot,rot);p.rounded=true;return p;}
  taper(a,b,r,c,m='',pivot=a){
-  const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],len=Math.hypot(dx,dy,dz);
-  return this.capsule(a.map((x,i)=>(x+b[i])/2),[r*1.45,len+r*.35,r*1.45],c,m,pivot,[Math.atan2(dz,Math.hypot(dx,dy)),0,-Math.atan2(dx,dy)]);
+  const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],len=Math.hypot(dx,dy,dz),rot=[Math.atan2(dz,Math.hypot(dx,dy)),0,-Math.atan2(dx,dy)];
+  return this.capsule(between(a,b,pivot,rot),[r*1.45,len+r*.35,r*1.45],c,m,pivot,rot);
  }
  poly(at,points,depth,c,m='',pivot=at,rot=[0,0,0]){const p=this.part('poly',at,[.1,.1,depth],c,m,pivot,rot);p.points=points;return p;}
  // Closed oval sections around the local Y axis: [height, x radius, z radius].
@@ -29,7 +38,10 @@ export class Sculpt {
  // Closed longitudinal hull: rings are [x, height, half-beam].  This stays an
  // internal retained primitive; callers cannot submit it through model normalization.
  loft(rings,c,pivot=[0,0,0]){const p=this.part('loft',pivot,[1,1,1],c,'',pivot);p.rings=rings;return p;}
- rod(a,b,r,c,m='',pivot=a){const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],len=Math.hypot(dx,dy,dz);return this.box(a.map((x,i)=>(x+b[i])/2),[r,len,r],c,m,pivot,[Math.atan2(dz,Math.hypot(dx,dy)),0,-Math.atan2(dx,dy)]);}
+ // A round barrel, axle or pipe from a to b.
+ tube(a,b,r,c,m='',pivot=a){const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],rot=[-Math.atan2(dy,Math.hypot(dx,dz)),Math.atan2(dx,dz),0];return this.part('cylinder',between(a,b,pivot,rot),[r*2,r*2,Math.hypot(dx,dy,dz)],c,m,pivot,rot);}
+ about(at,pivot,rot){return about(at,pivot,rot);}
+ rod(a,b,r,c,m='',pivot=a){const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],len=Math.hypot(dx,dy,dz),rot=[Math.atan2(dz,Math.hypot(dx,dy)),0,-Math.atan2(dx,dy)];return this.box(between(a,b,pivot,rot),[r,len,r],c,m,pivot,rot);}
  wheel(at,r,c){
   const wheel=this.part('cylinder',at,[r*2,r*2,.13],c,'roll',at,[0,0,0],.4),z=at[2]+Math.sign(at[2]||1)*.075;
   this.part('cylinder',[at[0],at[1],z],[r*1.55,r*1.55,.025],c===DARK?IRON:DARK,'roll',at);
