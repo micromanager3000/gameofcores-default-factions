@@ -8,6 +8,11 @@
 // sorties: they launch together once cool, strike, turn back before their burn climbs, land on the nearest land of
 // theirs and cool off. Air weapons follow, for vimanas that shoot. The memo says where the vimanas fly.
 //
+// Highway to the Danger Node flies this program from seat 10, Top Gun's way: aces first, with Air weapons before
+// Artillery, more jets and more of them shooting. Its one bandit is The Kernel Manifesto (faction 5). Manifesto land
+// ranks first for its army and so for its jets, its campaign goes for the Manifesto's capital, and it takes no pact,
+// deal or message from the Manifesto, buys no passage or secret from it, and says so in public.
+//
 // Built on the SDK in the gameofcores crate (docs part sdk), with the strategy the founders share in the `common`
 // module at the end: targets, spawning room, cycles and research, deals and pacts, scouting and the puzzle solver.
 use std::rc::Rc;
@@ -52,10 +57,24 @@ fn doctrine(me: View, emu: bool) -> &'static [&'static str] {
         &EMU_TECHS
     } else if me.get("energy").get("powered").num_or(1.0) < 0.92 && !me.get("techs").get("turbines").truthy() {
         &POWER_SHORT_TECHS
+    } else if ace(me) {
+        &ACE_TECHS
     } else {
         &TECHS
     }
 }
+
+// Highway to the Danger Node, in seat 10: the pilots want guns on their jets before the artillery.
+const ACE_TECHS: [&str; 23] = [
+    "extraction", "dash", "ranged", "antiAir", "flight", "airWeapons", "artillery", "armor", "capture", "storage",
+    "computeBoost", "turbines", "scan", "repair", "pierce", "influence", "cloak", "stealth", "seaTraversal",
+    "mountainTraversal", "transmission", "cooling", "gate",
+];
+fn ace(me: View) -> bool { me.get("seat").num_or(-1.0) == 10.0 }
+// The Danger Node's bandit, The Kernel Manifesto: a founder's faction id is its seat. Its land scores HATE more.
+const MANIFESTO: f64 = 5.0;
+const HATE: f64 = 4.0;
+fn bandit(f: View) -> bool { f.num_or(-1.0) == MANIFESTO }
 
 // Emu High Command shares the campaign controller but invests in fast ground raids.
 const EMU_TECHS: [&str;19] = ["extraction","dash","ranged","armor","capture","repair","artillery","antiAir","pierce","seaTraversal","mountainTraversal","scan","influence","computeBoost","cloak","stealth","flight","airWeapons","gate"];
@@ -497,6 +516,7 @@ fn lean_research(orders:&mut Value,world:View,me:View,techs:&[&str]) {
 
 fn strategy(world: View, me: View) -> Value {
     let emu=me.get("seat").num_or(-1.0)==8.0;
+    let ace = ace(me);
     let doctrine = doctrine(me, emu);
     let rts = me.get("rts");
     if rts.truthy() && cycles_left() < 3000.0 {
@@ -508,16 +528,20 @@ fn strategy(world: View, me: View) -> Value {
     let has = |k: &str| t.get(k).truthy();
     let bt = me.get("units").get("byType");
     let rim = if full {common::frontier(world, me)} else {Vec::new()};
-    // the best land first, marked down where the army couldn't hold on to it (common::can_hold)
+    // the best land first, marked down where the army couldn't hold on to it (common::can_hold); the Danger Node's
+    // bandit's land first of all
     let hold = common::can_hold(world, me, false);
-    let mut ranked = if full {realm::rank(world, me, rim, |w, m, q| common::score(w, m, q) - if hold(q) { 0.0 } else { common::OVER_WATER })} else {Vec::new()};
+    let hate = |q: View| if ace && bandit(q.get("owner")) { HATE } else { 0.0 };
+    let mut ranked = if full {realm::rank(world, me, rim, |w, m, q| common::score(w, m, q) + hate(q) - if hold(q) { 0.0 } else { common::OVER_WATER })} else {Vec::new()};
     // An established archer column can finish a nearby capital instead of circling richer provinces.
     // Count capturers separately: aircraft and freight crews cannot occupy the town ring.
     let ground = (common::fighters(me) - bt.get("wing").or(0.0) - bt.get("ghost").or(0.0)).max(0.0);
     let campaign = full && rts_cpu(me).get("income").num_or(0.0) >= 60000.0
         && rts_cpu(me).get("bank").num_or(0.0) >= rts_cpu(me).get("income").num_or(0.0) * 2.0 && ground >= 12.0;
     if campaign {
-        let lead = common::dominant(world).map(|f| f.get("id").num());
+        // the leader's capital first, or the Danger Node's bandit's while the army can reach it
+        let lead = if ace && ranked.iter().any(|q| bandit(q.get("owner")) && hold(*q)) { Some(MANIFESTO) }
+            else { common::dominant(world).map(|f| f.get("id").num()) };
         let press_leader = lead.is_some_and(|id| id != me.get("id").num()
             && ranked.iter().any(|q| q.get("owner").num_or(-1.0) == id && hold(*q)));
         let capital = ranked.iter().copied().find(|q| q.get("capital").truthy() && hold(*q)
@@ -592,12 +616,14 @@ fn strategy(world: View, me: View) -> Value {
     }
     let wings = count("wing");
     // Recruit the first affordable vimana before replacing the whole ground army. The shared economy guard
-    // still charges its actual upkeep; additional wings require another 30,000 cycles of income each.
+    // still charges its actual upkeep; additional wings require another 30,000 cycles of income each. The Danger
+    // Node flies up to 12 jets, one for each 24,000, and every other one shoots.
+    let (most, per, share) = if ace { (12.0, 24000.0, 0.35) } else { (8.0, 30000.0, 0.25) };
     let want_wings = if !emu && has("flight") && total >= 8.0 && income >= 18000.0 {
-        jmin(jmin(8.0, jmax(1.0, (income / 30000.0).floor())), (total * 0.25).floor())
+        jmin(jmin(most, jmax(1.0, (income / per).floor())), (total * share).floor())
     } else { 0.0 };
     if wings < want_wings {
-        let archer = has("airWeapons") && (wings as i64) % 3 == 2;
+        let archer = has("airWeapons") && (wings as i64) % if ace { 2 } else { 3 } == if ace { 1 } else { 2 };
         spawn(&mut orders, "wing", if archer { WING_SHOT } else { WING }, mods(me, "wing"));
     }
     let column = if campaign { jmin(5.0, (income / 60000.0).floor()) } else { 0.0 };
@@ -648,6 +674,8 @@ fn strategy(world: View, me: View) -> Value {
     let air = if full && (wings > 0.0 || !last.get("sky").is_undef()) && cycles_left() > 9000.0 { sky::tally(world, me, &mut orders) } else { sky::Tally::default() };
     let memo = if emu {
         format!("Emu High Command: {} runners and {} skirmishers advancing on the frontier",js_num(screens),js_num(skirms))
+    } else if ace {
+        ace_memo(world, me, &plan, &strike, &air, wings, skirms, screens)
     } else if has("flight") {
         let at = |id: f64| realm::index(world).get(id).get("name").str().to_string();
         let doing = match &strike {
@@ -677,9 +705,12 @@ fn strategy(world: View, me: View) -> Value {
     warlord(&mut orders, world, me, &plan, &mut clock);
     if !emu { secrets(&mut orders, world, me, &mut clock); }
     if cycles_left() > 2000.0 {
-        let pact = |m: View| me.get("pacts").is_empty() && pact_leader.is_none_or(|l| !same(m.get("from"), l.get("id")));
+        let shunned = |m: View| ace && (bandit(m.get("from")) || m.get("pact").get("members").has_num(MANIFESTO));
+        let pact = |m: View| me.get("pacts").is_empty() && pact_leader.is_none_or(|l| !same(m.get("from"), l.get("id"))) && !shunned(m);
         common::answer(&mut orders, me, world, pact, doctrine);
+        if ace { shun(&mut orders, me); }
     }
+    if ace { mem::say_once(&mut orders, me, grudge(world, &plan).as_deref()); }
     if clock.changed {
         let ops = mem::put(CLOCK, &clock.at, "local", None, 2).unwrap_or_default();
         match orders.entry("ram") {
@@ -736,6 +767,7 @@ fn warlord(orders: &mut Value, world: View, me: View, plan: &Value, clock: &mut 
             .get("factions")
             .iter()
             .filter(|f| f.get("alive").truthy() && !same(f.get("id"), me_id) && !same(f.get("id"), owner) && !me.get("allies").has_num(n(f.get("id"))))
+            .filter(|f| !(ace(me) && bandit(f.get("id"))))
             .find(|f| borders(f.get("id"), me_id) && owned_next_to(target, f.get("id")));
         if let Some(host) = host {
             let deal = obj! { "give" => obj! { "coin" => 60 }, "ask" => obj! { "passage" => obj! { "units" => 12, "seconds" => 300 } } };
@@ -755,6 +787,55 @@ fn warlord(orders: &mut Value, world: View, me: View, plan: &Value, clock: &mut 
             sway::bribe(orders, n(w.get("id")), 60.0);
         }
     }
+}
+
+// The Danger Node's memo: where the jets fly, or how near Flight is.
+#[allow(clippy::too_many_arguments)]
+fn ace_memo(world: View, me: View, plan: &Value, strike: &Option<sky::Strike>, air: &sky::Tally, wings: f64, skirms: f64, screens: f64) -> String {
+    let ground = format!("{} marines, {} tow tractors", js_num(skirms), js_num(screens));
+    if !me.get("techs").get("flight").truthy() {
+        let r = me.get("research");
+        let fl = r.get("progress").get("flight").or(0.0) / r.get("need").get("flight").or(1000.0);
+        return format!("Danger Node: Flight at {}%. The need for speed | {ground}", js_num(round(fl * 100.0)));
+    }
+    let at = |id: f64| realm::index(world).get(id).get("name").str().to_string();
+    let doing = match strike {
+        Some(st) if st.verb == "raid" => format!("raiding {}", at(st.at)),
+        Some(st) if vn(plan.get("defend")) == st.at || same_v(me.get("capital"), &Value::Num(st.at)) => format!("defending {}", at(st.at)),
+        Some(st) => format!("striking {}", at(st.at)),
+        None => "flying the pattern over Miramar".to_string(),
+    };
+    format!(
+        "Danger Node: {} jets, {} aloft, {doing}; {} strikes in {} sorties | {ground}",
+        js_num(wings), js_num(air.aloft), js_num(air.strikes), js_num(air.sorties)
+    )
+}
+
+// The Danger Node's grudge: whatever common::answer took from The Kernel Manifesto this second, a deal or a message,
+// goes back refused.
+fn shun(orders: &mut Value, me: View) {
+    let theirs: Vec<Value> = me.get("inbox").iter().filter(|m| bandit(m.get("from"))).map(|m| m.get("id").value()).collect();
+    if theirs.is_empty() { return; }
+    let Value::Arr(taken) = orders.get("accept").clone() else { return };
+    let (refused, kept): (Vec<Value>, Vec<Value>) = taken.into_iter().partition(|id| theirs.contains(id));
+    if refused.is_empty() { return; }
+    orders.set("accept", Value::Arr(kept));
+    for id in refused { orders.entry("reject").push(id); }
+}
+
+// The Danger Node's public line about its bandit, while The Kernel Manifesto stands.
+fn grudge(world: View, plan: &Value) -> Option<String> {
+    let foe = world.get("factions").iter().find(|f| bandit(f.get("id")))?;
+    let name = foe.get("name").str();
+    if !foe.get("alive").truthy() {
+        return Some(format!("Splash one: {name} is down. Highway to the Danger Node flies the pattern."));
+    }
+    let target = realm::index(world).get(vn(plan.get("attack")));
+    Some(if bandit(target.get("owner")) {
+        format!("Bandit, bandit: {name} at {}. Highway to the Danger Node is weapons free.", target.get("name").str())
+    } else {
+        format!("Highway to the Danger Node has one bandit: {name}. No pact, no deal, no passage.")
+    })
 }
 
 // Indra's gifts: the techs of the sky (Flight, and Artillery and Air weapons after it), once another faction holds
@@ -780,7 +861,7 @@ fn secrets(orders: &mut Value, world: View, me: View, clock: &mut Clock) {
         }
         let mut seller: Option<View> = None;
         for f in world.get("factions").iter() {
-            if !f.get("alive").truthy() || n(f.get("id")) == me_id || !f.get("techs").has_str(t) {
+            if !f.get("alive").truthy() || n(f.get("id")) == me_id || !f.get("techs").has_str(t) || (ace(me) && bandit(f.get("id"))) {
                 continue;
             }
             let better = match seller {
@@ -797,7 +878,8 @@ fn secrets(orders: &mut Value, world: View, me: View, clock: &mut Clock) {
         if let Some(s) = seller {
             let name = all.get(t).get("name").str();
             let deal = obj! { "give" => obj! { "coin" => SECRET_PRICE }, "ask" => obj! { "techs" => vec![t] } };
-            diplomacy::send(orders, s.get("id"), format!("Arjuna asks the secret of {name}"), deal);
+            let who = if ace(me) { "Highway to the Danger Node" } else { "Arjuna" };
+            diplomacy::send(orders, s.get("id"), format!("{who} asks the secret of {name}"), deal);
             return;
         }
     }
@@ -1817,9 +1899,11 @@ mod sky {
     /// that can shoot a flier down (a rival flier, an anti-air type, or an archer of a faction with Anti-air at a
     /// quarter), less half a point a hop. Invaders in our own land count double and 3 more (6 at the capital), the
     /// land our army attacks 2 more. A rival town we see with no ground unit in it is worth a raid: 1.2 and half a
-    /// point a core, less the hops. The last strike stands while it scores within 1.5 of the best. `None` under 1.
+    /// point a core, less the hops. From seat 10, Highway to the Danger Node's, land The Kernel Manifesto (faction 5)
+    /// holds scores 2 more. The last strike stands while it scores within 1.5 of the best. `None` under 1.
     pub fn pick(world: View, me: View, plan: &Value, geo: &Geo, last: &Value) -> Option<Strike> {
         let me_id = me.get("id").num();
+        let grudge = me.get("seat").num_or(-1.0) == 10.0;
         let size = geo.home.len();
         let (mut prey, mut aa, mut ground) = (vec![0.0f64; size], vec![0.0f64; size], vec![0.0f64; size]);
         let factions = world.get("factions");
@@ -1904,6 +1988,7 @@ mod sky {
             } else {
                 continue;
             };
+            let s = if grudge && owner == 5.0 { s + 2.0 } else { s };
             // a sortie costs a vimana some 60,000 cycles: only a strike worth it (any defence of our land is)
             if s < if mine { 1.0 } else { 1.8 } {
                 continue;
@@ -1963,7 +2048,8 @@ mod sky {
         // on the game's clock, so a write that didn't land (think short of cycles) can't repeat the line
         let now = world.get("seconds").num_or(0.0);
         if now > 0.0 && now % 300.0 == 0.0 {
-            log(format!("air: {} sorties, {} blows struck, {} vimanas, {} aloft", k, s, w.len(), aloft));
+            let fliers = if me.get("seat").num_or(-1.0) == 10.0 { "jets" } else { "vimanas" };
+            log(format!("air: {} sorties, {} blows struck, {} {fliers}, {} aloft", k, s, w.len(), aloft));
         }
         let rec = obj! { "s" => s, "k" => k, "w" => w };
         if rec.to_json() != was.to_json() {

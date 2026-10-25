@@ -15,8 +15,9 @@ export const HOUSE_SCULPTS=[
  ['crash','watch','bomb','collector','zero','pointer','exception','bug'],
  ['highlander','dragoon','carronade','pinmaker','shopkeeper','merchantman','exciseman','smuggler'],
  ['truck','emu','forager','gunner'],['gardener','tree','eye','thorn','statue'],
+ ['aviator','deckhand','marine','bike','launcher','tug','jet','shades'],
 ];
-export function hasSculpt(id){if(typeof id!=='string'||!/^\d:[A-Za-z_][A-Za-z0-9_]{0,23}$/.test(id))return false;const [seat,body]=id.split(':');return HOUSE_SCULPTS[Number(seat)].includes(body);}
+export function hasSculpt(id){if(typeof id!=='string'||!/^\d{1,2}:[A-Za-z_][A-Za-z0-9_]{0,23}$/.test(id))return false;const [seat,body]=id.split(':');return Boolean(HOUSE_SCULPTS[Number(seat)]?.includes(body));}
 
 // Materials the viewer shades (gpu/unit-surfaces.js): iron and brass are polished and mirror the sky, cloth carries a
 // sheen in its own colour, leather a soft grain, organic (skin, hide, leaves) lets light round its edge. Emissive parts
@@ -316,7 +317,7 @@ function mounted(s,{coat,camel=false,rider={},weapon='spear',standard=false,armo
  tool(s,weapon,{x:.05,y:camel?1.52:1.20,z:.28});if(standard)banner(s,P,-.34,camel?2.42:2.12);
 }
 function cart(s,{tank=false,truck=false,cannon=false,rockets=false,culture=0}={}){
- const c=tank?'#60704c':culture===3?'#947855':WOOD;
+ const c=tank?'#60704c':culture===3?'#947855':culture===10?NAVY:WOOD;
  const turret=(pivot,build,muzzle)=>{const first=s.parts.length;build();s.tag(first,{joint:'turret',pivot});if(muzzle){s.muzzle=muzzle;s.muzzleJoint='turret';s.muzzlePivot=[...pivot];}};
  if(tank){
   // Tracks on five road wheels with a drive sprocket, a sloped hull with fenders, headlamps and exhausts; a cast
@@ -346,7 +347,7 @@ function cart(s,{tank=false,truck=false,cannon=false,rockets=false,culture=0}={}
  if(truck||rockets){
   // A cab with glazed windows and headlamps, a grille and fenders over a flat bed.
   s.box([0,.38,0],[1.52,.12,.74],DARK);
-  const body=culture===8?'#8c8a5b':'#68754d';s.box([.46,.70,0],[.52,.54,.66],body);s.box([.82,.54,0],[.26,.30,.62],body);
+  const body=culture===8?'#8c8a5b':culture===10?'#a9b0b5':'#68754d';s.box([.46,.70,0],[.52,.54,.66],body);s.box([.82,.54,0],[.26,.30,.62],body);
   s.box([.735,.82,0],[.02,.20,.54],'#98c7cf');for(const z of [-.335,.335])s.box([.46,.82,z],[.30,.18,.01],'#98c7cf');
   const fine=s.parts.length;s.box([.955,.54,0],[.02,.22,.40],IRON);for(const z of [-.36,.36])s.box([.62,.44,z],[.62,.05,.12],body);s.tag(fine,{detail:1});
   s.box([-.34,.50,0],[.86,.14,.74],c);s.tag(s.parts.length-1,{material:'wood'});
@@ -778,11 +779,50 @@ function garden(s,body){
  const bloom=s.parts.length;around(s,4,.09,1.50,(i,at,rot)=>s.poly(at,[-.07,0,.07,0,0,.17],.03,'#d3a7a4','sway',[0,1.50,0],rot));s.tag(bloom,{material:'organic',detail:1});
  lamp(s,[0,1.58,0],.05,{c:'#ffe58a',m:'sway',pivot:[0,1.50,0],halo:3.4});
 }
+// Highway to the Danger Node: Navy flight deck and Top Gun. Flight suits, deck jerseys, Marines, the bike and the jets.
+const NAVY='#7d868d',SAGE='#6f7a5a',WHITE='#e8e6e0',BLUE='#1f3a6e';
+function aviators(s,x=.03){s.box([x+.20,1.43,0],[.06,.07,.30],DARK);s.box([x+.215,1.43,0],[.03,.025,.08],GOLD);}
+function pistol(s,{x=.25,y=.9,z=.37}={}){
+ const first=s.parts.length;s.muzzle=[x+.36,y+.03,z];s.muzzleJoint='weapon';s.muzzlePivot=[x,y,z];
+ s.box([x+.14,y+.03,z],[.30,.08,.07],DARK);s.box([x+.02,y-.08,z],[.08,.17,.06],DARK);
+ s.tag(first,{detail:0,aim:'weapon',pivot:[x,y,z]});
+}
+function jetBody(s,{c=NAVY,parked=false}={}){
+ const y=parked?.62:.70;
+ s.capsule([-.05,y,0],[1.85,.26,.30],c);s.taper([.62,y,0],[1.10,y,0],.075,c);
+ for(const side of [-1,1])s.poly([-.20,y+.02,0],[-.55,0,.40,0,-.25,side*1.05,-.55,side*1.0],.04,c,'',[-.20,y+.02,0],[Math.PI/2,0,0]);
+ for(const z of [-.17,.17])s.poly([-.78,y+.10,z],[-.22,0,.18,0,-.08,.44],.04,c,'',[-.78,y+.10,z],[z<0?-.20:.20,0,0]);
+ s.orb([.38,y+.16,0],[.42,.20,.22],'#91bac6');
+ for(const z of [-.10,.10])s.part('cylinder',[-.98,y,z],[.15,.15,.06],DARK,'',[-.98,y,z],[0,Math.PI/2,0]);
+ if(parked)for(const [x,z] of [[.55,0],[-.35,-.32],[-.35,.32]]){s.rod([x,.18,z],[x,y-.10,z],.035,IRON);s.wheel([x,.13,z],.11,DARK);}
+}
+function danger(s,body){
+ if(body==='jet'){jetBody(s,{parked:true});s.box([-.20,1.00,0],[.20,.05,.30],RED);return;}
+ if(body==='tug'){
+  s.box([0,.32,0],[1.30,.26,.82],'#d9b23a');for(const x of [-.40,.40])for(const z of [-.44,.44])s.wheel([x,.20,z],.19,DARK);
+  s.box([-.32,.62,0],[.34,.34,.40],DARK);s.box([-.32,.82,0],[.42,.05,.48],'#d9b23a');s.rod([.66,.34,0],[1.08,.30,0],.07,IRON,'strike',[.66,.34,0]);
+  const driver=human(s,{coat:'#3c6fb0',hat:'cap',trim:WHITE,mounted:true});s.transform(driver,.55,[-.32,.44,0]);return;
+ }
+ if(body==='launcher'){cart(s,{rockets:true,culture:10});s.box([.42,.98,0],[.30,.04,.40],WHITE);return;}
+ if(body==='bike'){
+  for(const x of [-.55,.55])s.wheel([x,.30,0],.28,DARK);s.box([0,.48,0],[.95,.16,.16],RED);s.orb([.12,.66,0],[.45,.20,.26],RED);
+  s.taper([.55,.30,0],[.42,.86,0],.045,IRON);s.rod([.42,.86,-.26],[.42,.86,.26],.04,IRON);s.box([-.30,.62,0],[.40,.07,.24],DARK);
+  const rider=human(s,{coat:'#5b4632',hat:'none',trim:'#3b2f22',legs:'#2d3b55',mounted:true});s.transform(rider,.74,[-.14,.40,0]);aviators(s,-.14+.03*.74);
+  return;
+ }
+ const coat=body==='deckhand'?'#d9b23a':body==='marine'?'#59633f':body==='shades'?'#2b2f36':SAGE;
+ human(s,{coat,hat:body==='marine'?'helmet':body==='deckhand'?'cap':body==='shades'?'none':'helmet',trim:body==='shades'?WHITE:DARK,armor:body==='marine',legs:body==='aviator'?SAGE:DARK});
+ if(body==='aviator'){s.capsule([.03,1.52,0],[.36,.30,.33],WHITE);s.box([.20,1.46,0],[.05,.10,.27],'#c9a227');s.box([-.05,1.02,.27],[.18,.10,.02],BLUE);pistol(s);}
+ else if(body==='deckhand'){for(const z of [-.20,.20])s.orb([.03,1.44,z],[.11,.13,.08],DARK);tool(s,'hammer');s.box([-.30,.98,0],[.12,.10,.44],WHITE);}
+ else if(body==='marine')tool(s,'rifle');
+ else{aviators(s);s.box([.20,1.13,0],[.03,.30,.06],RED);s.box([-.25,.62,.38],[.36,.26,.10],DARK);pistol(s);}
+}
 function vessel(s,style,role='hull'){s.parts.push(...navalSculpt(style,role).parts);}
 function landRig(seat,body){
  // Names recur between factions: Arjuna's archer is on foot while Kublai's is
  // mounted.  Bind the locomotion class to the authored chassis, never a name alone.
  if((seat===0&&['archer','keshig','horseman','camel'].includes(body))||(seat===1&&['chariot','elephant'].includes(body))||(seat===2&&['turcopole','marshal'].includes(body))||(seat===5&&body==='cavalry')||(seat===7&&body==='dragoon'))return 'rider';
+ if(seat===10&&['bike','launcher','tug','jet'].includes(body))return 'vehicle';
  if(['trebuchet','ballista','engine','tank','katyusha','rockets','collector','carronade','truck'].includes(body))return 'vehicle';
  if(['ship','junk','merchantman'].includes(body))return 'ship';
  if(['qilin','tree','thorn','bug'].includes(body))return 'beast';
@@ -790,7 +830,7 @@ function landRig(seat,body){
  return 'biped';
 }
 // A house mark is deliberately structural, not a colour decal.  It sits above the
-// common role body so a monochrome army still separates into ten cultures at a glance.
+// common role body so a monochrome army still separates into eleven cultures at a glance.
 function houseSilhouette(s,seat,body){
  const back=-.31;
  if(seat===0){ // Horse-tail standard and curved composite bow case.
@@ -817,6 +857,9 @@ function houseSilhouette(s,seat,body){
   s.orb([back,.93,.29],[.44,.24,.16],'#496254');s.box([back,.93,.29],[.47,.045,.025],'#b85e4b');s.part('cylinder',[back,1.35,.30],[.27,.27,.035],GOLD,'',[back,1.35,.30],[Math.PI/2,0,0]);
  }else if(seat===8){ // Emu feather fan and exposed workshop exhaust.
   s.rod([back,.78,.29],[back,1.43,.29],.045,WOOD);for(const z of [-.14,0,.14])s.poly([back,1.43,.29+z],[-.13,0,.13,0,0,.35],.025,'#c7b57e','sway',[back,.78,.29]);
+ }else if(seat===10){ // Parachute pack with a white star on a blue roundel.
+  s.box([back,.98,.30],[.22,.42,.30],SAGE);s.part('cylinder',[back-.12,1.05,.30],[.20,.20,.03],BLUE,'',[back-.12,1.05,.30],[0,Math.PI/2,0]);
+  const pts=[];for(let i=0;i<10;i++){const a=Math.PI/2+i*Math.PI/5,r=i%2?.035:.085;pts.push(Math.cos(a)*r,Math.sin(a)*r);}s.poly([back-.14,1.05,.30],pts,.02,WHITE,'',[back-.14,1.05,.30],[0,Math.PI/2,0]);
  }else{ // Botanical glass petals: a rounded organic outline replaces a square pack.
   const petals=s.parts.length;for(const z of [-.26,0,.26])s.orb([back,.99,z],[.22,.08,.28],z?'#d3a7a4':IVORY,'sway',[back,.83,0]);s.rod([back,.78,0],[back,1.20,0],.025,'#587450');mat(s,petals,'organic');s.parts[petals+1].material='emissive';
  }
@@ -825,7 +868,7 @@ export function houseSculpt(id,flags=0,airRole='fighter'){
  if(!hasSculpt(id))return null;
  const [a,body]=id.split(':'),seat=Number(a),s=new Sculpt();
  if(flags&1){const model=airSculpt(seat,airRole);if(flags&2)model.parts.push({shape:'box',at:[-.33,.53,-.36],size:[.29,.30,.24],pivot:[-.33,.53,-.36],motion:'',color:'#b89458',on:[],material:'brass',detail:1});return {...model,rig:'air'};}
- [kublai,arjuna,templar,atlantis,fleet,manifesto,nullSociety,nations,(s,b)=>b==='truck'?cart(s,{truck:true,culture:8}):emu(s,{forager:b==='forager',gunner:b==='gunner'}),garden][seat](s,body);
+ [kublai,arjuna,templar,atlantis,fleet,manifesto,nullSociety,nations,(s,b)=>b==='truck'?cart(s,{truck:true,culture:8}):emu(s,{forager:b==='forager',gunner:b==='gunner'}),garden,danger][seat](s,body);
  houseSilhouette(s,seat,body);
  if(flags&2)s.box([-.33,.83,-.36],[.29,.30,.24],'#b89458');
  finish(s);

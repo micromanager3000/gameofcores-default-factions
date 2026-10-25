@@ -398,7 +398,7 @@ fn faction_shell(p: &mut Vec<Value>, kind: &str, style: usize) {
         "boiler" | "geo" => (-0.20, 0.18, 0.12, 1.70, 1.16), "reactor" => (0.18, -0.56, 0.12, 1.48, 1.20),
         "fusion" => (0., 0.76, 0.12, 1.58, 1.24), _ => (0., 0.38, 0.12, 1.80, 1.28),
     };
-    match style.min(9) {
+    match style.min(10) {
         // felt court / temple / Gothic chapter works
         0 => { shell_piece(p,"spire",x,y,z,w*1.06,0.54,d*0.94,"marble"); shell_piece(p,"spire",x-w*0.42,y,z,w*0.36,0.34,d*0.36,"faction"); shell_piece(p,"spire",x+w*0.48,y,z,0.14,1.62,0.,"gold"); },
         1 => { shell_piece(p,"pyramid",x,y,z,w*1.12,0.66,d,"sand"); shell_piece(p,"pyramid",x,y,z+0.50,w*0.72,0.60,d*0.68,"sand"); shell_piece(p,"pyramid",x,y,z+1.00,w*0.42,0.56,d*0.38,"faction"); },
@@ -411,6 +411,8 @@ fn faction_shell(p: &mut Vec<Value>, kind: &str, style: usize) {
         6 => { shell_piece(p,"platform",x-w*0.26,y,z+0.20,w*0.54,0.12,d*0.82,"dark"); shell_piece(p,"torus",x+w*0.24,y,z+0.48,w*0.68,0.30,0.,"glass"); shell_piece(p,"spire",x-w*0.52,y,z,0.12,1.74,0.,"faction"); },
         7 => { shell_piece(p,"hall",x,y,z,w,0.74,d,"brick"); shell_piece(p,"roof",x,y,z+0.74,w*1.06,0.48,d*1.06,"dark"); shell_piece(p,"drum",x+w*0.30,y,z+0.76,w*0.24,0.74,0.,"gold"); },
         8 => { shell_piece(p,"hall",x-w*0.10,y,z,w*1.08,0.52,d,"metal"); shell_piece(p,"drum",x+w*0.34,y,z,w*0.30,1.30,0.,"sand"); shell_piece(p,"spire",x-w*0.48,y,z,0.12,1.48,0.,"faction"); },
+        // flight-line hangar with a striped mast
+        10 => { shell_piece(p,"hall",x-w*0.08,y,z,w*1.04,0.58,d*0.92,"metal"); shell_piece(p,"roof",x-w*0.08,y,z+0.58,w*1.10,0.30,d*0.98,"faction"); shell_piece(p,"spire",x+w*0.52,y,z,0.12,1.56,0.,"marble"); },
         // living oval / flowering arch / translucent seed pod
         _ => { shell_piece(p,"garden",x,y,z,w*1.16,0.14,d,"jade"); shell_piece(p,"arch",x-w*0.28,y,z+0.14,w*0.50,1.02,d*0.30,"marble"); shell_piece(p,"arch",x+w*0.28,y,z+0.14,w*0.50,0.84,d*0.30,"marble"); },
     }
@@ -439,7 +441,7 @@ fn working_details(p: &mut Vec<Value>, kind: &str, style: usize) {
 
 /// A plant's appearance: its kind's machinery, more of it the bigger the plant, on the house's ground.
 pub fn look(kind: &str, cap: f64, style: usize) -> Value {
-    let base = ["stone", "marble", "stone", "metal", "wood", "brick", "dark", "brick", "sand", "marble"][style.min(9)];
+    let base = ["stone", "marble", "stone", "metal", "wood", "brick", "dark", "brick", "sand", "marble", "dark"][style.min(10)];
     let mut pieces: Vec<Value> = vec![obj! { "kind" => "platform", "x" => 0, "y" => 0, "z" => 0, "w" => 2.6, "h" => 0.12, "d" => 2.2, "tone" => base }];
     let mut add = |kind: &str, x: f64, y: f64, z: f64, w: f64, h: f64, d: f64, rot: f64, tone: &str| {
         let r = |v: f64| (v * 100.0).round() / 100.0;
@@ -454,7 +456,7 @@ pub fn look(kind: &str, cap: f64, style: usize) -> Value {
         "solar" => {
             for i in 0..n(0.8, 8) {
                 let q = i as f64;
-                let (x, y, rot) = match style.min(9) {
+                let (x, y, rot) = match style.min(10) {
                     // Gers and lotus courts collect light in a spoke pattern.
                     0 => { let a = q * 0.785; (a.cos() * 1.02, a.sin() * 0.72, q * 45.0) }
                     1 => { let a = q * 0.785 + 0.392; (a.cos() * 0.92, a.sin() * 0.78, q * 45.0 + 22.5) }
@@ -467,6 +469,8 @@ pub fn look(kind: &str, cap: f64, style: usize) -> Value {
                     6 => { let a = q * 0.785; (a.cos() * 1.08, a.sin() * 0.82, q * 45.0) },
                     7 => (-1.05 + (i % 4) as f64 * 0.68, -0.50 + (i / 4) as f64 * 1.02, 18.0),
                     8 => (-0.98 + (i % 4) as f64 * 0.66 + if i / 4 == 0 { 0.16 } else { -0.16 }, -0.55 + (i / 4) as f64 * 0.92, -8.0),
+                    // Two ranks angled like a carrier's deck.
+                    10 => (-1.02 + (i % 4) as f64 * 0.68, -0.58 + (i / 4) as f64 * 0.96, if i / 4 == 0 { 24.0 } else { -24.0 }),
                     _ => { let a = q * 0.785; (a.cos() * 0.94, a.sin() * 0.72, q * 45.0) },
                 };
                 add("panel", x, y, 0.12, 0.52, 0.12, 0.7, rot, "");

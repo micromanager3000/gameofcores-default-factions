@@ -12,6 +12,7 @@ The programs use the public `gameofcores` SDK. Aircraft builds, house themes, na
 | `examples/structures/` | Foundry, Lantern and Raiders programs for worlds with programmable structures enabled. |
 
 Emu shares Arjuna's program with a separate ground doctrine selected by seat.
+Highway to the Danger Node shares it too, with an ace doctrine selected by seat 10 and a grudge against The Kernel Manifesto.
 Tabula shares Atlantis through `steward`, using a broader research order.
 Their presentation also follows their own seat.
 
@@ -27,6 +28,7 @@ Their presentation also follows their own seat.
 | Compute of Nations | Combine leases, hired troops, bribes, technology trade and military expansion. |
 | Emu High Command | Prioritize quick ground troops and practical ground technologies. |
 | Tabula Rasa | Learn a broad set of practical technologies and adapt its specialist force. |
+| Highway to the Danger Node | Research Air weapons before Artillery and fly up to 12 jets, half of them shooting. Rank The Kernel Manifesto's land first, and take no pact, deal or message from it. |
 
 ## Armies
 
@@ -97,6 +99,10 @@ Quiet Fleet leaves standing infantry orders in place when a short call cannot af
 Compute of Nations checks its return budget between optional market jobs and keeps completed work.
 Shared code fenced `// @house` … `// @end` goes into the house programs only. The default program leaves out the sea
 escorts this way, but carries the same power grid planner as the founders.
+A house program carries only the styles it wears: those of the seats it founds and its home style (`wears` in `build.rs`
+and `tools/source.mjs`). Each style in `shared/theme.rs` is fenced `// @style N` … `// @end`, and its table entry has an
+`// @else ABSENT,` line that leaves the seat to the home style in a program without that style. That line is a comment,
+so the file compiles as it stands, with every style. The default program and the structure examples carry every style.
 Both the Rust package and the Node exporter produce the same source; `npm test` checks every program.
 
 Every house supports physical CPU cargo when `world.logistics` is present.

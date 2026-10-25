@@ -115,7 +115,26 @@ function garden(s,role){
  if(role==='fighter'){wing(s,-.08,.88,1.20,'#c1d09d',{swept:true,thin:true});for(const z of [-.32,.32])s.rod([.18,.64,z],[.92,.74,z],.065,WOOD,'strike',[.18,.64,z]);}
  if(role==='striker'){gondola(s,'#718966',1.54);for(const z of [-.38,.38]){s.rod([-.34,.57,z],[-.34,1.19,z],.05,WOOD);s.orb([-.34,1.21,z],[.34,.31,.34],'#d59a9e');bomb(s,.46,.23,z,'#799267');}}
 }
-const BUILDERS=[kublai,arjuna,templar,atlantis,fleet,manifesto,nullSociety,nations,emu,garden];
+// Highway to the Danger Node: Navy jets off a carrier deck, grey with twin tails, and a radar-domed spotter.
+const NAVY='#9aa3ab',WHITE='#e8e6e0',BLUE='#1f3a6e';
+function danger(s,role){
+ if(role==='scout'){
+  s.capsule([-.05,.68,0],[1.75,.30,.32],NAVY);wing(s,-.02,.74,1.20,NAVY,{thin:true});tail(s,-.86,.74,NAVY,.46);cockpit(s,.52,.80);
+  for(const z of [-.48,.48])engine(s,.12,.66,z,NAVY);
+  for(const z of [-.12,.12])s.rod([-.20,.84,z],[-.20,1.06,z],.035,IRON);
+  s.part('cylinder',[-.20,1.10,0],[.85,.85,.12],WHITE,'spin',[-.20,1.10,0],[Math.PI/2,0,0]);s.box([-.20,1.10,0],[.80,.03,.10],DARK,'spin',[-.20,1.10,0]);
+  return;
+ }
+ const fighter=role==='fighter';
+ s.capsule([-.05,.70,0],[1.85,.26,.30],NAVY);s.taper([.62,.70,0],[1.10,.70,0],.075,NAVY);
+ wing(s,-.18,.72,fighter?1.15:1.0,NAVY,{swept:true,thin:true});
+ for(const z of [-.17,.17])s.poly([-.78,.80,z],[-.22,0,.18,0,-.08,.44],.04,NAVY,'',[-.78,.80,z],[z<0?-.20:.20,0,0]);
+ cockpit(s,.38,.86,'#91bac6');
+ for(const z of [-.10,.10])s.part('cylinder',[-.98,.70,z],[.15,.15,.06],DARK,'',[-.98,.70,z],[0,Math.PI/2,0]);
+ if(fighter)for(const z of [-.30,.30])s.box([.45,.62,z],[.60,.05,.05],DARK,'recoil');
+ else for(const z of [-.62,-.40,.40,.62]){s.taper([-.40,.58,z],[.18,.58,z],.045,WHITE);s.box([-.42,.58,z],[.10,.06,.14],DARK);}
+}
+const BUILDERS=[kublai,arjuna,templar,atlantis,fleet,manifesto,nullSociety,nations,emu,garden,danger];
 // Raised rigging gives each house a distinct planform from the top-down RTS view.
 // It supplements, rather than replaces, the role-specific wings and payloads above.
 function housePlanform(s,seat,role){
@@ -129,6 +148,7 @@ function housePlanform(s,seat,role){
  else if(seat===6){for(const z of [-.54,.54])s.rod([-.29,y,0],[-.54,y+.23,z],.035,LIGHT);}
  else if(seat===7){s.part('cylinder',[-.33,y+.13,0],[.30,.30,.045],GOLD,'',[-.33,y+.13,0],[Math.PI/2,0,0]);}
  else if(seat===8){for(const z of [-.48,0,.48])s.poly([-.28,y,z],[-.17,0,.17,0,0,.28],.025,'#c7b57e');}
+ else if(seat===10){for(const z of [-.56,.56])s.part('cylinder',[-.30,y,z],[.24,.24,.03],BLUE,'',[-.30,y,z],[Math.PI/2,0,0]);s.box([-.30,y+.02,0],[.10,.02,1.30],WHITE);}
  else{} // Garden aircraft already use petal rotors as their complete organic planform.
 }
 export function airSculpt(seat,role='fighter'){

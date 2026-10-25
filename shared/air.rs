@@ -45,7 +45,7 @@ impl Airframe {
     }
 }
 
-pub(crate) const AIR_NAMES: [[&str; 3]; 10] = [
+pub(crate) const AIR_NAMES: [[&str; 3]; 11] = [
     ["Steppe falcon", "Sky keshig", "Thunderdrum airship"],
     ["Garuda eye", "Gandiva vimana", "Indra thunderchariot"],
     ["Pilgrim gryphon", "Crusader gryphon", "Sanctum sky chapel"],
@@ -68,6 +68,7 @@ pub(crate) const AIR_NAMES: [[&str; 3]; 10] = [
     ],
     ["Airborne emu", "Lewis gyro-emu", "Wheat-front cropduster"],
     ["Dandelion eye", "Petal glider", "Rose garden ark"],
+    ["Hawkeye spotter", "Tomcat interceptor", "Hornet striker"],
 ];
 
 #[must_use]
@@ -88,7 +89,7 @@ mod tests {
     use super::*;
     #[test]
     fn every_airframe_has_permanent_wings_and_a_legal_ten_point_body() {
-        for seat in 0..10 {
+        for seat in 0..11 {
             for role in [Role::Scout, Role::Fighter, Role::Striker] {
                 let frame = of(seat, role).expect("house");
                 let b = frame.build();
@@ -111,6 +112,6 @@ mod tests {
                 assert!(frame.name.len() <= 28);
             }
         }
-        assert!(of(10, Role::Scout).is_none());
+        assert!(of(11, Role::Scout).is_none());
     }
 }

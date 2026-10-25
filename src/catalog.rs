@@ -1,6 +1,6 @@
 //! Default faction identities and program assignments.
 
-pub const FACTION_DEFS: [(&str, &str, &str, &str); 10] = [
+pub const FACTION_DEFS: [(&str, &str, &str, &str); 11] = [
     ("Kublai Khan's Alt", "#ff5a5f", "conqueror", "Xanadu"),
     ("Arjuna's Halting Problem", "#4d9bff", "expander", "Kurukshetra"),
     ("Knights Templated", "#f0e6c8", "templar", "Sanctum"),
@@ -11,6 +11,7 @@ pub const FACTION_DEFS: [(&str, &str, &str, &str); 10] = [
     ("Compute of Nations", "#e8e36a", "merchant", "Kirkcaldy"),
     ("Emu High Command", "#19d1ff", "expander", "Campion"),
     ("Tabula Rasa", "#9be15d", "steward", "Flux"),
+    ("Highway to the Danger Node", "#ffa27a", "aviator", "Miramar"),
 ];
 
 pub const EXTRA_COLORS: [&str; 18] = [
@@ -45,7 +46,7 @@ pub const NEWCOMERS: [(&str, &str); 24] = [
     ("untitled-3", "New Folder"),
 ];
 
-pub const HOUSE: [(&str, &str); 9] = [
+pub const HOUSE: [(&str, &str); 10] = [
     ("conqueror", "kublai"),
     ("expander", "arjuna"),
     ("templar", "templar"),
@@ -55,4 +56,5 @@ pub const HOUSE: [(&str, &str); 9] = [
     ("saboteur", "nullptr"),
     ("merchant", "nations"),
     ("steward", "atlantis"),
+    ("aviator", "arjuna"),
 ];
