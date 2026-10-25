@@ -11,6 +11,7 @@ export const AIR_TITLES=[
  ['Survey balloon','Invisible Hand glider','Company sky freighter'],
  ['Airborne emu','Lewis gyro-emu','Wheat-front cropduster'],
  ['Dandelion eye','Petal glider','Rose garden ark'],
+ ['Hawkeye spotter','Tomcat interceptor','Hornet striker'],
 ];
 // hp, speed, strength, carry, vision, range, wings, stealth. Each costs ten build points.
 export const AIR_BUILDS={scout:[1,3,0,0,3,0,1,0],fighter:[2,3,2,0,0,0,1,0],striker:[2,1,2,0,0,1,1,0]};

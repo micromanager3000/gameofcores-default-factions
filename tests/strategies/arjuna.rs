@@ -514,3 +514,75 @@ fn an_idle_frontier_unit_returns_for_new_orders_after_its_old_attack_is_fulfille
         assert_eq!(order.get("target").num(),1.0,"a fulfilled attack must not repeat capture orders on owned land");
     }
 }
+
+// Highway to the Danger Node flies this program from seat 10, with The Kernel Manifesto (faction 5) its bandit.
+fn danger_world(manifesto_alive: bool) -> Value {
+    obj! {
+        "seconds" => 30,
+        // world.factions is indexed by faction id
+        "factions" => (0..11).map(|id| match id {
+            3 => obj! { "id" => 3, "name" => "Address Zero", "alive" => true, "shielded" => false },
+            5 => obj! { "id" => 5, "name" => "The Kernel Manifesto", "alive" => manifesto_alive, "shielded" => false },
+            10 => obj! { "id" => 10, "name" => "Highway to the Danger Node", "alive" => true, "shielded" => false },
+            _ => Value::Null,
+        }).collect::<Vec<_>>(),
+        "provinces" => arr![
+            obj! { "id" => 0, "name" => "Miramar", "owner" => 10, "adj" => arr![1, 2], "visible" => true },
+            obj! { "id" => 1, "name" => "Great Reading Room", "owner" => 5, "adj" => arr![0], "visible" => true, "cores" => 2 },
+            obj! { "id" => 2, "name" => "Address Zero", "owner" => 3, "adj" => arr![0], "visible" => true, "cores" => 2 }
+        ],
+        // two miners in each rival's province: equal prey
+        "units" => [(51, 5, 1), (52, 5, 1), (31, 3, 2), (32, 3, 2)].map(|(id, owner, at)| obj! {
+            "id" => id, "owner" => owner, "at" => at, "type" => "miner", "doing" => "gather", "build" => obj! { "carry" => 4 }
+        }).to_vec()
+    }
+}
+
+fn danger_me(seat: f64) -> Value {
+    obj! { "id" => 10, "seat" => seat, "capital" => 0, "allies" => arr![], "pacts" => arr![], "techs" => obj! {},
+        "inbox" => arr![
+            obj! { "id" => 7, "from" => 5, "give" => obj! { "coin" => 200 } },
+            obj! { "id" => 8, "from" => 3, "give" => obj! { "coin" => 200 } }
+        ] }
+}
+
+#[test]
+fn the_danger_node_flies_guns_before_artillery_and_arjuna_does_not() {
+    let args = views(&[danger_me(10.0), danger_me(1.0)]);
+    let (ace, arjuna) = (super::doctrine(args[0], false), super::doctrine(args[1], false));
+    let at = |list: &[&str], t: &str| list.iter().position(|x| *x == t).unwrap();
+    assert!(at(ace, "airWeapons") < at(ace, "artillery"));
+    assert!(at(arjuna, "artillery") < at(arjuna, "airWeapons"));
+}
+
+#[test]
+fn the_danger_node_refuses_whatever_the_manifesto_sends() {
+    let args = views(&[danger_me(10.0)]);
+    let mut orders = obj! { "accept" => arr![7, 8] };
+    super::shun(&mut orders, args[0]);
+    assert_eq!(orders.get("accept").to_json(), "[8]");
+    assert_eq!(orders.get("reject").to_json(), "[7]");
+}
+
+#[test]
+fn the_danger_node_names_its_bandit_in_public() {
+    let args = views(&[danger_world(true), danger_world(false)]);
+    let at = |id: f64| obj! { "attack" => id };
+    let hunting = super::grudge(args[0], &at(1.0)).unwrap();
+    assert_eq!(hunting, "Bandit, bandit: The Kernel Manifesto at Great Reading Room. Highway to the Danger Node is weapons free.");
+    let waiting = super::grudge(args[0], &at(2.0)).unwrap();
+    assert_eq!(waiting, "Highway to the Danger Node has one bandit: The Kernel Manifesto. No pact, no deal, no passage.");
+    assert!(super::grudge(args[1], &at(-1.0)).unwrap().starts_with("Splash one: The Kernel Manifesto is down."));
+    assert!(waiting.len() <= 250 && hunting.len() <= 250, "a public line fits its four RAM pages");
+}
+
+#[test]
+fn the_danger_nodes_jets_strike_manifesto_land_over_equal_prey() {
+    // Arjuna keeps its last strike, on Address Zero; the Danger Node turns for the Manifesto
+    for (seat, want) in [(10.0, 1.0), (1.0, 2.0)] {
+        let args = views(&[danger_world(true), danger_me(seat)]);
+        let geo = super::sky::Geo::new(args[0], args[1], super::sky::REACH);
+        let strike = super::sky::pick(args[0], args[1], &obj! { "attack" => -1 }, &geo, &obj! { "sky" => 2 });
+        assert_eq!(strike.map(|s| s.at), Some(want), "seat {seat}");
+    }
+}

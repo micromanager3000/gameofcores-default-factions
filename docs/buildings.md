@@ -53,12 +53,13 @@ built from the kit. Each landmark is drawn by hand.
 | Compute of Nations | Kirkcaldy exchange | Brick, gables, clock towers. |
 | Emu High Command | Campion command | Corrugated metal, gables, water towers. |
 | Tabula Rasa | Flux commons | White marble, flat roofs, obelisks, gardens. |
+| Highway to the Danger Node | Fightertown hangar | Metal hangars on dark tarmac, flat roofs, glass-cab control towers. |
 
 Roofs, domes, spires and banners take the owner's colour, so a city reads as its faction's from above.
 
 A program pays for its length in memory, so the designs are written small. Each house's kit, names and landmark are a
-line of `shared/buildings.txt`. A house program carries only its own line; the default program carries every line, so
-it builds in the style of its seat.
+line of `shared/buildings.txt`. A house program carries only its own line (Arjuna's also carries Highway to the Danger
+Node's, which it flies at seat 10); the default program carries every line, so it builds in the style of its seat.
 
 ## Operating them
 

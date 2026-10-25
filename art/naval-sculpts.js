@@ -15,6 +15,7 @@ export const SHIP_TITLES={
  indiaman:['Kirkcaldy trader','Wealth of Nations','Invisible Hand','Sounding surveyor','Aerostat tender','Customs cutter','Free-trade privateer'],
  emu:['Wheat scow','Lewis gun launch','Diving egg','Long-neck lookout','Airborne emu roost','Wheat patrol','Campion skimmer'],
  paper:['Blank-page skiff','Thorn ark','Seedpod diver','Awakening eye','Rose garden ark','Sensation lantern','Petal clipper'],
+ flattop:['Liberty boat','Missile cruiser','Attack sub','Radar picket','Supercarrier','Frigate','Patrol boat'],
 };
 export function shipTitle(style,role,variant=''){
  const i=variant==='picket'?5:variant==='raider'?6:NAVAL_ROLES.indexOf(role);
@@ -178,6 +179,24 @@ function paper(s,role,v){
  if(role==='sonar'||v==='picket'){s.orb([.47,1.02,0],[.50,.33,.39],IVORY,'spin',[.47,1.02,0]);s.orb([.69,1.03,.04],[.06,.22,.22],P,'spin',[.47,1.02,0]);}
  if(v==='raider')for(const z of [-.45,.45])s.poly([-.51,.46,z],[-.37,0,.35,0,0,.39],.025,'#c1d09d');
 }
+// Highway to the Danger Node: haze-grey Navy hulls, a supercarrier with its island, missile cells and radar.
+const HAZE='#7d868d',HDECK='#5f676d',WHITE='#e8e6e0';
+function flattop(s,role,v){
+ if(role==='sub'){capsule(s,{c:'#2e3438',length:2.45,beam:.46});s.box([.22,.64,0],[.42,.42,.16],'#2e3438');for(const z of [-1,1])s.box([.22,.74,z*.20],[.20,.04,.26],'#2e3438');periscope(s,.16,1.10);return;}
+ hull(s,{length:v==='raider'?1.05:1.30,beam:v==='raider'?.26:.38,c:HAZE,deck:HDECK,profile:'chine'});
+ if(role==='carrier'){
+  plate(s,[-1.32,-.58,1.18,-.50,1.36,0,1.18,.50,-1.32,.58],.70,.10,'#4c545a');
+  s.box([.05,.76,-.12],[2.2,.02,.04],WHITE,'',[.05,.76,-.12],[0,.16,0]);for(const x of [-.9,-.3,.3,.9])s.box([x,.76,.20],[.18,.02,.03],'#e0c04a');
+  s.box([-.15,1.00,.44],[.50,.55,.18],HAZE);s.box([-.20,1.36,.44],[.12,.30,.10],DARK);s.part('cylinder',[-.20,1.55,.44],[.30,.30,.04],IRON,'spin',[-.20,1.55,.44],[Math.PI/2,0,0]);
+  return;
+ }
+ s.box([-.12,.80,0],[.62,.42,.44],HAZE);s.box([-.10,1.06,0],[.40,.14,.36],HAZE);s.rod([-.10,1.10,0],[-.10,1.62,0],.045,IRON);s.box([-.10,1.48,0],[.40,.035,.035],IRON);
+ if(role==='gun'){
+  if(v==='raider'){gun(s,.55,.66);s.box([-.65,.66,0],[.30,.16,.30],DARK);}
+  else{s.box([.62,.76,0],[.30,.24,.22],P);s.box([.92,.80,0],[.40,.05,.05],IRON,'recoil',[.62,.76,0]);for(const x of [.30,.42])for(const z of [-.12,0,.12])s.box([x,.62,z],[.09,.03,.09],DARK);if(!v)for(const z of [-.14,.14])s.box([-.70,.70,z],[.36,.14,.12],WHITE);}
+ }
+ if(role==='sonar'||v==='picket'){s.box([-.10,1.66,0],[.55,.20,.06],WHITE,'spin',[-.10,1.66,0]);s.orb([.45,.95,0],[.30,.30,.30],WHITE);}
+}
 function sloop(s,role,v){
  if(role==='sub'){capsule(s);s.box([-.18,.59,0],[.43,.30,.27],P);periscope(s);return;}
  hull(s,{beam:v==='raider'?.27:.36,profile:'open'});
@@ -185,7 +204,7 @@ function sloop(s,role,v){
  sail(s,-.07,{height:1.70,width:.77,lateen:true});flag(s,-.78,1.2);
  if(role==='gun')gun(s,.51,.71);if(role==='sonar'||v==='picket')dish(s,.47,1.15);
 }
-const BUILDERS={sloop,ger,peacock,cog,steamer,junk,cruiser,pointer,indiaman,emu,paper};
+const BUILDERS={sloop,ger,peacock,cog,steamer,junk,cruiser,pointer,indiaman,emu,paper,flattop};
 // House-specific high silhouette. These are kept above the waterline so each hull
 // stays recognizable in a monochrome fleet while preserving its role equipment.
 function houseRig(s,style){
@@ -201,6 +220,8 @@ function houseRig(s,style){
  // Do not add a second head merely to satisfy a house signature.
  else if(style==='emu'){}
  else if(style==='paper'){for(const z of [-.28,0,.28])s.orb([-.30,.86,z],[.32,.08,.29],z?'#d3a7a4':IVORY,'sway',[-.30,.63,0]);}
+ // A haze-grey fantail with the ensign aft.
+ else if(style==='flattop'){s.rod([-.95,.57,0],[-.95,1.10,0],.03,IRON);s.poly([-.95,.86,0],[0,0,-.32,0,-.32,.22,0,.22],.03,P,'sway',[-.95,1.08,0]);}
 }
 export function navalSculpt(style,role='hull',riders=0,variant=''){
  const s=new Sculpt();(BUILDERS[style]||sloop)(s,NAVAL_ROLES.includes(role)?role:'hull',variant);

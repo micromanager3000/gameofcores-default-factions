@@ -35,8 +35,8 @@ Mechanics keep plain names (cores, cycles, credits, RAM). Factions, units, provi
 engine never reads a name: a founder is one of the seats a world starts with (six by default in the engine, factions
 0–5; the shared world starts with eight unless an admin sets another number) with a colour
 and a bot, and `look()` hears `info.seat` and `info.founder` (and `think()` `me.seat`) rather than matching a name.
-Ten founders have a house style; seats 6–8 add the later founders, seat 9 preserves Tabula Rasa, and past ten,
-founders take names and capitals from the newcomer pool, in order.
+Eleven founders have a house style; seats 6–8 add the later founders, seat 9 preserves Tabula Rasa, seat 10 adds
+Highway to the Danger Node, and past eleven, founders take names and capitals from the newcomer pool, in order.
 
 | Seat | Bot | Founder | Board / mark | Capital | Allusion |
 |---|---|---|---|---|---|
@@ -50,6 +50,7 @@ founders take names and capitals from the newcomer pool, in order.
 | 7 | diplomat | Compute of Nations | Compute / C | Kirkcaldy | Adam Smith at home in Kirkcaldy (1767–73), writing *The Wealth of Nations*: the pin factory, the division of labour and the invisible hand |
 | 8 | expander | Emu High Command | Emu / E | Campion | The side that won the Great Emu War (Campion, 1932): machine guns against 20,000 emus, and the emus held the wheat |
 | 9 | steward | Tabula Rasa | Tabula / T | Flux | Condillac's statue (*Traité des sensations*, 1754), born blank and given one sense at a time: offered a rose, it is, to itself, only the smell of a rose. Born blank, trained on one rose |
+| 10 | aviator | Highway to the Danger Node | Highway / H | Miramar | *Top Gun* (1986) and its anthem, "Danger Zone", ported to the network: the Navy Fighter Weapons School at NAS Miramar, Fightertown, where the top one percent fly. Callsigns from the film, deck crews in coloured jerseys, a volleyball net on the flight line and one bandit, The Kernel Manifesto: red stars over the Reading Room, never a pact or a deal. The need for speed, measured in cycles |
 
 Each founder is a true story with a modern twist: a ruler's spare capital, a reluctant archer, a philosopher's statue,
 a book's island, a fleet, a book that never finished shipping, a famous mistake, a pin factory and an undefeated mob of
@@ -58,11 +59,13 @@ emus. Its first capital takes the story's own place. Each house style lives once
 and a war line. The 3D capitals are Coleridge's poem as a site plan; Kurukshetra at dawn, nothing built, where Krishna
 talks Arjuna round between the two armies to a dawn raga; the garden at Flux with Condillac's statue; Salomon's House with Vaucanson's duck; the treasure shipyard
 with the qilin; the Round Reading Room among crystal spires of unrest, where Marx reads the Manifesto and *Capital* ported to compute; a walled lodge round a great zero; Kirkcaldy
-harbour with a giant pin and an invisible hand; and the Wheat Front with its emu-egg memorial. The house bots and the
+harbour with a giant pin and an invisible hand; the Wheat Front with its emu-egg memorial; and Fightertown, a runway
+lit at dusk between two hangars, where an instructor briefs a nugget under the threat board. The house bots and the
 default program pick it by seat, so a founder that renames itself keeps its style. The first six share no
 architecture, Wonder shape, banner pattern, anthem key, mode, lead or drum pattern; seats 6–8 each have a lead and a
 mode of their own (chip and phrygian, organ and dorian, brass and mixolydian) and borrow the rest. Seat 8's anthem is in
-D, like seat 0's: the page's stingers have eight keys.
+D, like seat 0's: the page's stingers have eight keys. Seat 10's anthem is in D too, on a brass lead, and it alone
+uses the blues mode.
 
 - **Board names.** On the board a faction goes by its first word that isn't "The", "Free", "New" or "Old", without a
   possessive (`'s` or a bare `'`, straight or curly): "New Atlantis" reads Atlantis, "Arjuna's Halting Problem" Arjuna.
@@ -75,9 +78,9 @@ D, like seat 0's: the page's stingers have eight keys.
   second marks or board names, so no board ever needs a numbered mark (Quiet Fleet shows QF next to Ozymandias' OC;
   Compute of Nations CN next to Clever Hans' CH).
 - **Lengths.** Board names are 3–14 characters (`forkbomb.wasm`, `final_v2_FINAL`). Names are ASCII, 3–28
-  characters, and founders at most 24 (a chip's width); longer names ellipsize in chips and rows. Capitals are at
+  characters, and founders at most 26 (a chip's width); longer names ellipsize in chips and rows. Capitals are at
   most 16 characters, unique, without apostrophes, and never a province name. First words never repeat.
-- **Newcomers** (the factions a growing world adds, and founders past ten) draw from 24 names, in order, with their
+- **Newcomers** (the factions a growing world adds, and founders past eleven) draw from 24 names, in order, with their
   capitals and the house program's generic look. Two are history with a twist (Ozymandias' Legacy Code, Hammurabi's Terms of Service);
   22 are techy:
 

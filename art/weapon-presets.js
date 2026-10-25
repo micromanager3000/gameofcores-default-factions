@@ -1,8 +1,8 @@
 // Faction-owned weapon appearance. Game event counters decide when weapons fire.
 import {airRole} from './airframes.js';
-const STYLES=['ger','peacock','cog','steamer','junk','cruiser','pointer','indiaman','emu','paper'];
-const COLORS=['#ffba69','#71d6ff','#f2d899','#7deaff','#ff975e','#ffda82','#72ffe0','#ffd998','#fff0ac','#e399bb'];
-const KINDS=['arrow','chakra','bolt','aether','rocket','tracer','pulse','ball','tracer','thorn'];
+const STYLES=['ger','peacock','cog','steamer','junk','cruiser','pointer','indiaman','emu','paper','flattop'];
+const COLORS=['#ffba69','#71d6ff','#f2d899','#7deaff','#ff975e','#ffda82','#72ffe0','#ffd998','#fff0ac','#e399bb','#ffc98a'];
+const KINDS=['arrow','chakra','bolt','aether','rocket','tracer','pulse','ball','tracer','thorn','tracer'];
 const GROUND=[
  {default:'arrow',shaman:'aether',trebuchet:'stone'},
  {default:'chakra',archer:'arrow',chariot:'arrow',elephant:'arrow',giant:'stone',sage:'aether',healer:'aether'},
@@ -14,11 +14,12 @@ const GROUND=[
  {default:'musket',carronade:'ball',merchantman:'ball',pinmaker:'needle',shopkeeper:'coin'},
  {default:'boomerang',gunner:'tracer',truck:'tracer'},
  {default:'spore',thorn:'thorn',tree:'seed',statue:'seed'},
+ {default:'tracer',launcher:'rocket',jet:'rocket'},
 ];
 const CACHE=new WeakMap();
 function seatOf(look,u){
  const style=look?.units?.[u?.type]||look?.unit,id=look?.models3d?.[style]?.sculpt;
- return /^\d:/.test(id||'')?Number(id[0]):-1;
+ const m=/^(\d{1,2}):/.exec(id||'');return m?Number(m[1]):-1;
 }
 function recipe(seat,kind){
  const color=COLORS[seat]||'#ffd998',p={weapon:[],mount:[0,-9],muzzle:[10,0],color,core:'#fff8df',glow:3,beam:false,material:'kinetic',
@@ -59,7 +60,7 @@ function retained(look,key,make){let entries=CACHE.get(look);if(!entries){entrie
 export function defaultUnitWeaponEffect(look,u){
  const seat=seatOf(look,u);
  if(u.build?.[6]&&seat>=0){const role=airRole(u.build);return retained(look,'air:'+role,()=>{
-  const kind=role==='striker'?(seat===1?'chakra':seat===4?'rocket':'bomb'):(seat===0||seat===2?'slash':KINDS[seat]);
+  const kind=role==='striker'?(seat===1?'chakra':seat===4||seat===10?'rocket':'bomb'):(seat===0||seat===2?'slash':KINDS[seat]);
   const flight=kind==='bomb'?520:kind==='slash'?120:260;
   return {kind,profile:recipe(seat,kind),flight,duration:flight+380,arc:kind==='bomb'?-12:kind==='rocket'?10:0,native:true};
  });}
@@ -74,5 +75,5 @@ export function defaultUnitWeaponEffect(look,u){
 }
 export function navalWeaponProfile(look,kind='gun'){
  if(!look)return recipe(-1,kind==='torpedo'?'torpedo':'ball');
- return retained(look,'sea:'+kind,()=>{const seat=STYLES.indexOf(look.ship);return recipe(seat,kind==='torpedo'?'torpedo':seat===4?'rocket':seat===6?'pulse':seat===9?'thorn':'ball');});
+ return retained(look,'sea:'+kind,()=>{const seat=STYLES.indexOf(look.ship);return recipe(seat,kind==='torpedo'?'torpedo':seat===4||seat===10?'rocket':seat===6?'pulse':seat===9?'thorn':'ball');});
 }

@@ -1,4 +1,4 @@
-//! The founders' house styles, by seat: each founding seat (factions 0-9; Tabula Rasa is archived at 9) has a look with
+//! The founders' house styles, by seat: each founding seat (factions 0-10; Tabula Rasa is archived at 9) has a look with
 //! its anthem, a 3D capital, unit names and a war line (docs/names.md tells their stories). The house programs and the
 //! default program pick theirs by seat (`info.seat` in look and build3d, `me.seat` in think), never by name, so a
 //! renamed founder keeps it; your code can borrow any of them:
@@ -66,13 +66,14 @@ struct Style {
     scene: fn(View, f64) -> Value,
 }
 
-/// Founding seat `seat`'s style (0-9), or seat `home`'s when `seat` is missing (undefined or null), or `None` for any
-/// other seat. With a `home` (-1 for none), every other seat gets the home style too, in its own colour and with its
+/// Founding seat `seat`'s style (0-10), or seat `home`'s when `seat` is missing (undefined or null), or `None` for any
+/// other seat. A house program wears only the styles of the seats it founds and its home style (build.rs `wears`); the
+/// seat of a style it leaves out counts as any other seat. With a `home` (-1 for none), every other seat gets the home style too, in its own colour and with its
 /// capital titled with its own name (and no motto), but without the founder's anthem, war line or capital music.
 #[must_use]
 pub fn of(seat: View, home: f64) -> Option<Theme> {
     let slot =
-        |n: f64| (n >= 0.0 && n.fract() == 0.0 && n < STYLES.len() as f64).then_some(n as usize);
+        |n: f64| (n >= 0.0 && n.fract() == 0.0 && n < STYLES.len() as f64 && !STYLES[n as usize].name.is_empty()).then_some(n as usize);
     let home = slot(home);
     let (s, number) = if seat.is_nullish() {
         (home, true)
@@ -245,7 +246,7 @@ impl Theme {
 }
 
 // Match the retained ship presets in site/game/js/naval-sculpts.js. Page tests check every house's actual WASM look.
-const NAVAL_NAMES: [[&str; 3]; 10] = [
+const NAVAL_NAMES: [[&str; 3]; 11] = [
     ["Khagan warship", "Strait outrider", "Orkhon raider"],
     ["Gandiva war galley", "River sentinel", "Garuda raider"],
     ["Crusader war cog", "Templar watchboat", "Turcopole galley"],
@@ -260,6 +261,7 @@ const NAVAL_NAMES: [[&str; 3]; 10] = [
     ],
     ["Lewis gun launch", "Wheat patrol", "Campion skimmer"],
     ["Thorn ark", "Sensation lantern", "Petal clipper"],
+    ["Missile cruiser", "Frigate", "Patrol boat"],
 ];
 
 // ---- the parts every style draws with ----
@@ -338,15 +340,15 @@ fn rider(coat: &str, legc: &str, body: &str, skin: &str) -> Vec<Value> {
 /// Seat `seat`'s voice for `key` (shot, impact, shell, repair or dash), pitched up or down by `k`; `number`: whether
 /// the seat came as a number (see [`Theme`]).
 fn voice(seat: usize, number: bool, k: f64, key: &str) -> Value {
-    const PITCH: [f64; 10] = [
-        130.0, 680.0, 240.0, 1300.0, 340.0, 1600.0, 950.0, 180.0, 105.0, 420.0,
+    const PITCH: [f64; 11] = [
+        130.0, 680.0, 240.0, 1300.0, 340.0, 1600.0, 950.0, 180.0, 105.0, 420.0, 760.0,
     ];
-    const ENDS: [f64; 10] = [
-        48.0, 160.0, 90.0, 240.0, 55.0, 1100.0, 70.0, 60.0, 36.0, 180.0,
+    const ENDS: [f64; 11] = [
+        48.0, 160.0, 90.0, 240.0, 55.0, 1100.0, 70.0, 60.0, 36.0, 180.0, 210.0,
     ];
-    const WAVES: [&str; 10] = [
+    const WAVES: [&str; 11] = [
         "sawtooth", "sine", "triangle", "square", "sine", "triangle", "sawtooth", "triangle",
-        "square", "sine",
+        "square", "sine", "sawtooth",
     ];
     let layer = |wave: &str, ratio: f64, level: f64| obj! { "wave" => wave, "ratio" => ratio, "level" => level };
     let (pitch, s, templar) = (PITCH[seat] * k, seat as f64, number && seat == 2);
@@ -392,9 +394,9 @@ fn voices(seat: usize, number: bool, k: f64, keys: &str) -> Value {
 /// What a unit type fights with when its style gives it nothing of its own: the seat's weapon (combat.default);
 /// `number`: whether the seat came as a number (see [`Theme`]).
 fn weapon_art(seat: usize, number: bool) -> Value {
-    const COLORS: [&str; 10] = [
+    const COLORS: [&str; 11] = [
         "#ff7849", "#58beff", "#e2c477", "#60ecff", "#bf8cff", "#ff668b", "#52f1d4", "#f3d960",
-        "#ffad55", "#b6ed75",
+        "#ffad55", "#b6ed75", "#ffc98a",
     ];
     let c = COLORS[seat];
     let head = match seat {
@@ -407,6 +409,7 @@ fn weapon_art(seat: usize, number: bool) -> Value {
         6 => arr!["poly", arr![4, 0, -2, -2, -2, 2], c],
         7 => arr!["poly", arr![3, 0, 0, -3, -3, 0, 0, 3], c],
         8 => arr!["ellipse", 0, 0, 2, 3, c],
+        10 => arr!["poly", arr![5, 0, -3, -1.4, -3, 1.4], c],
         _ => arr!["poly", arr![4, 0, -3, -2, -1, 2], c],
     };
     let weapon = match seat {
@@ -449,6 +452,10 @@ fn weapon_art(seat: usize, number: bool) -> Value {
         8 => arr![
             arr!["poly", arr![0, 0, 4, -4, 8, -2, 5, 0], c],
             arr!["line", 0, 0, 10, 0, 1, "accent"]
+        ],
+        10 => arr![
+            arr!["rect", -2, -1.4, 10, 2.8, "accent"],
+            arr!["line", 0, 0, 10, 0, 1, c]
         ],
         _ => arr![
             arr!["poly", arr![-2, 0, 2, -3, 3, 0, 7, -2, 9, 0, 4, 2], c],
@@ -606,6 +613,7 @@ fn motif(notes: &[(f64, f64)]) -> Value {
 fn hue(v: View) -> Option<&'static str> {
     v.is_str().then(|| v.str())
 }
+// @style 0
 // ---- 0 · conqueror · Kublai Khan's Alt: Coleridge's Xanadu as a site plan. The main fleet sank in a typhoon; the alt
 // rides on.
 
@@ -876,6 +884,8 @@ const FOREST: [[f64; 2]; 16] = [
 
 /// Xanadu: the Stately Pleasure-Dome.
 
+// @end
+// @style 1
 // ---- 1 · expander · Arjuna's Halting Problem: the Bhagavad Gita, sung on the field of Kurukshetra as the battle opens.
 // Arjuna sets down his bow and halts; eighteen chapters later his charioteer has him running. Capital Kurukshetra. Its
 // units: the great chariot-warriors Duryodhana counts in the Pandava ranks (Gita 1.4-6, "every one a maharatha") fight
@@ -1256,6 +1266,8 @@ fn scene1(info: View, budget: f64) -> Value {
     }
 }
 
+// @end
+// @style 2
 // ---- 2 · templar · Knights Templated: templated orders, paid armor and a white mantle under a crimson cross.
 
 const BRETHREN2: &[&str] = &[
@@ -1461,6 +1473,8 @@ fn look2(b: f64) -> Value {
 
 /// The Sanctum: the civic core under a spire.
 
+// @end
+// @style 3
 // ---- 3 · adaptive · New Atlantis: Francis Bacon's island of Bensalem and its research college, Salomon's House ("the
 // effecting of all things possible"), whose fellows swear an oath of secrecy over what to publish. Knowledge is power.
 
@@ -1734,6 +1748,8 @@ fn look3(b: f64) -> Value {
 
 /// Salomon's House on Bensalem.
 
+// @end
+// @style 4
 // ---- 4 · diplomat · Quiet Fleet: Zheng He's treasure fleet, the largest afloat, built at the Longjiang yard in Nanjing.
 // Seven voyages (1405-1433) to thirty-odd courts, a giraffe for the emperor, and then the court quietly stopped sending
 // it.
@@ -2007,6 +2023,8 @@ const GROVE: [[f64; 2]; 10] = [
 
 /// The treasure shipyard at Longjiang, the fleet home in its basin.
 
+// @end
+// @style 5
 // ---- 5 · agitator · The Kernel Manifesto: Marx in the British Museum's Round Reading Room (from 1857), writing
 // Capital. Volume 1 shipped in 1867, printed by Meissner in Hamburg; volumes 2 and 3 shipped after him, finished by
 // Engels. The seat dresses as the state that ran on the book, under a red banner of its own (a gold star in a
@@ -2302,6 +2320,8 @@ fn look5(b: f64) -> Value {
 
 /// The Round Reading Room.
 
+// @end
+// @style 6
 // ---- 6 · conqueror · Null Pointer Society: the null reference, added to ALGOL W in 1965 because it was so easy, and
 // later called a billion-dollar mistake by the man who added it. The society meets at address zero.
 
@@ -2543,6 +2563,8 @@ fn look6(b: f64) -> Value {
 
 /// The Society at Address Zero.
 
+// @end
+// @style 7
 // ---- 7 · diplomat · Compute of Nations: Adam Smith at home in Kirkcaldy (1767-73), writing The Wealth of Nations: the
 // pin factory, the division of labour and the invisible hand, by the harbour where his father had kept the customs.
 
@@ -2769,6 +2791,8 @@ fn look7(b: f64) -> Value {
 
 /// The Lang Toun harbour at Kirkcaldy.
 
+// @end
+// @style 8
 // ---- 8 · expander · Emu High Command: the side that won the Great Emu War (Campion, 1932). Undefeated, mostly by
 // running.
 
@@ -2927,6 +2951,8 @@ fn look8(b: f64) -> Value {
 
 /// The Wheat Front at Campion.
 
+// @end
+// @style 9
 // ---- 9 · archived steward · Tabula Rasa: Condillac's statue (Traite des sensations, 1754), born blank and given one
 // sense at a time, smell first: offered a rose, it is, to itself, only the smell of a rose. Born blank, trained on one
 // rose. At Flux.
@@ -3120,11 +3146,239 @@ fn look9(b: f64) -> Value {
     }
 }
 
+// @end
+// @style 10
+// ---- 10 · aviator · Highway to the Danger Node: Top Gun (1986), the Navy Fighter Weapons School at NAS Miramar
+// ("Fightertown"), founded in 1969 to teach dogfighting again, and the song that scored its flight deck, with the Zone
+// ported to a node. The film's enemy flew black MiGs for a power it never named; this house names its bandit: The
+// Kernel Manifesto (seat 5), which dresses Soviet. Pilots go by callsigns, the deck crew by the colour of their shirts.
+
+// the film's callsigns, for pilots and their jets; the flight-deck jerseys, by job (yellow directs aircraft, purple
+// fuels them, blue chocks them, green runs the catapults, red arms them, brown is each plane's captain, white is
+// safety, silver is crash and salvage); the mesa towns round Miramar; battles the Marines carry on their colours; and
+// the brevity words a pilot says on the radio
+const CALLSIGNS10: &[&str] = &[
+    "Maverick",
+    "Goose",
+    "Iceman",
+    "Slider",
+    "Hollywood",
+    "Wolfman",
+    "Cougar",
+    "Merlin",
+    "Sundown",
+    "Chipper",
+    "Viper",
+    "Jester",
+];
+const NAMES10: Names = &[
+    ("cell", CALLSIGNS10),
+    ("wing", CALLSIGNS10),
+    (
+        "miner",
+        &[
+            "Yellow Shirt",
+            "Grape",
+            "Blue Shirt",
+            "Green Shirt",
+            "Red Shirt",
+            "Brown Shirt",
+            "White Shirt",
+            "Silver Shirt",
+        ],
+    ),
+    ("guard", CALLSIGNS10),
+    (
+        "scout",
+        &[
+            "Mira Mesa",
+            "Kearny Mesa",
+            "Scripps Ranch",
+            "Tierrasanta",
+            "Clairemont",
+            "Point Loma",
+            "La Jolla",
+            "Coronado",
+        ],
+    ),
+    (
+        "longbow",
+        &[
+            "Belleau Wood",
+            "Guadalcanal",
+            "Tarawa",
+            "Peleliu",
+            "Iwo Jima",
+            "Inchon",
+            "Chosin",
+            "Khe Sanh",
+        ],
+    ),
+    ("spy", &["Bogey", "Spike", "Tally", "Joker", "Bingo", "Winchester"]),
+];
+
+fn war10(who: &str, _: &Moment) -> String {
+    format!("Highway to the danger node. Next exit: {who}.")
+}
+
+/// Seat 10's anthem: a D blues riff for a flight deck at sunset, brass over a driving bass.
+fn music10() -> Value {
+    obj! {
+        "title" => "The Hard Deck",
+        "key" => "D",
+        "mode" => "blues",
+        "tempo" => 156,
+        "lead" => "brass",
+        "bass" => "pulse",
+        "drums" => "gallop",
+        "motif" => motif(&[
+            (0.0, 0.5), (0.0, 0.5), (6.0, 0.5), (5.0, 0.5), (4.0, 1.0), (2.0, 0.5), (1.0, 0.5), (2.0, 1.0), (REST, 0.5),
+            (1.0, 0.5), (0.0, 1.0), (0.0, 0.5), (0.0, 0.5), (6.0, 0.5), (7.0, 0.5), (8.0, 1.0), (7.0, 0.5), (6.0, 0.5),
+            (5.0, 1.0), (4.0, 0.5), (3.0, 0.5), (2.0, 0.5), (1.0, 0.5), (0.0, 2.0),
+        ]),
+    }
+}
+
+/// Seat 10's look, before [`Theme::look`] fills it in: pilots in flight suits and white helmets, deck crew in the house
+/// colour's jersey with their lit wands, Marines, a rider on a motorbike racing the jets down the runway, a tow
+/// tractor, a missile battery, an intelligence officer in a bomber jacket and aviators, and the fighter itself. The
+/// banner is the Navy's roundel, a white star on a blue disc between two bars, on stripes.
+fn look10(b: f64) -> Value {
+    const SUIT: &str = "#56604a";
+    const SKIN: &str = "#d6a17e";
+    obj! {
+        "architecture" => "foundry",
+        "unit" => "footman",
+        "worker" => "peasant",
+        "ship" => "flattop",
+        "units" => obj! {
+            "cell" => "aviator",
+            "miner" => "deckhand",
+            "guard" => "aviator",
+            "scout" => "bike",
+            "longbow" => "marine",
+            "spy" => "shades",
+        },
+        "names" => obj! { "miner" => "Deckhand", "guard" => "Aviator", "scout" => "Rider", "longbow" => "Marine", "spy" => "Intel officer" },
+        "sprites" => obj! {
+            "aviator" => obj! {
+                "parts" => arr![
+                    arr!["line", -0.8, -4.5, -1.4, 0, 1.2, "#3e4636", "walkL"], arr!["line", 0.8, -4.5, 1.4, 0, 1.2, "#3e4636", "walkR"],
+                    arr!["poly", arr![-2.2, -3.6, -1.8, -9.6, 1.8, -9.6, 2.2, -3.6], SUIT], arr!["rect", -1.8, -8.8, 3.6, 1.2, "primary"],
+                    arr!["circle", 0, -11, 1.7, "#e8e6e0"], arr!["rect", 0.3, -11.7, 1.5, 0.9, "#24303c"],
+                    arr!["line", -1.5, -12.2, 1.2, -12.4, 0.6, "accent"],
+                ],
+            },
+            "deckhand" => obj! {
+                "worker" => true,
+                "parts" => arr![
+                    arr!["line", -0.8, -4.5, -1.2, 0, 1.2, "#2e3036", "bob"], arr!["line", 0.8, -4.5, 1.2, 0, 1.2, "#2e3036", "bob"],
+                    arr!["rect", -1.7, -9.2, 3.4, 5, "primary", "bob"], arr!["circle", 0, -10.6, 1.4, SKIN, "bob"],
+                    arr!["ellipse", 0, -11.4, 1.7, 0.9, "primary", "bob"], arr!["rect", 0.2, -11, 1.4, 0.5, "#24303c", "bob"],
+                    arr!["line", 1.8, -8, 5.2, -11.6, 0.8, "#ffb347", "bob"],
+                ],
+            },
+            "marine" => obj! {
+                "parts" => arr![
+                    arr!["line", -0.8, -4.5, -1.4, 0, 1.2, "#3a3e2e", "walkL"], arr!["line", 0.8, -4.5, 1.4, 0, 1.2, "#3a3e2e", "walkR"],
+                    arr!["poly", arr![-2.3, -3.4, -1.8, -9.6, 1.8, -9.6, 2.3, -3.4], "#6a704f"], arr!["circle", 0, -10.8, 1.4, SKIN],
+                    arr!["ellipse", 0, -11.7, 1.9, 1.1, "#4e5539"], arr!["line", 1.6, -7, 7.4, -8.4, 0.8, "#24262a"],
+                ],
+            },
+            "bike" => obj! {
+                "parts" => arr![
+                    arr!["circle", -4.4, -1.8, 1.8, "#1e1e22"], arr!["circle", 4.4, -1.8, 1.8, "#1e1e22"],
+                    arr!["poly", arr![-4.4, -2.4, -1, -5.6, 3.6, -5.6, 5.2, -2.4], "primary"], arr!["rect", -1.8, -10.4, 3, 5, "#6b4a2e"],
+                    arr!["circle", 0.2, -11.6, 1.4, SKIN], arr!["rect", 0.6, -12, 1.4, 0.5, "#1e1e22"],
+                    arr!["line", 1.2, -8.6, 4.2, -6.4, 0.8, "#2a2a30"],
+                ],
+            },
+            "launcher" => obj! {
+                "parts" => arr![
+                    arr!["circle", -4, -1.6, 1.6, "#26262a"], arr!["circle", 3.6, -1.6, 1.6, "#26262a"], arr!["rect", -7, -4.2, 13, 2.2, "#5c6650"],
+                    arr!["poly", arr![-3, -4.2, -1.6, -6.4, 1.2, -6.4, 2, -4.2], "#4a5240"],
+                    arr!["line", -4, -6.6, 6.4, -11.2, 1.1, "#e8e6e0"], arr!["line", -4, -8.2, 6.4, -12.8, 1.1, "#e8e6e0"],
+                    arr!["line", -4, -9.8, 6.4, -14.4, 1.1, "#e8e6e0"], arr!["circle", 6.6, -12.8, 0.8, "primary"],
+                ],
+            },
+            "tug" => obj! {
+                "parts" => arr![
+                    arr!["circle", -4, -1.6, 1.6, "#26262a"], arr!["circle", 4, -1.6, 1.6, "#26262a"], arr!["rect", -6.4, -4.6, 12.8, 3, "primary"],
+                    arr!["rect", -6.4, -4.6, 12.8, 0.6, "#2a2a30"], arr!["rect", -4, -7.4, 2.6, 2.8, "#3a3a40"],
+                    arr!["circle", -2.6, -8.8, 1.3, SKIN], arr!["line", 6.4, -3, 9.4, -2.2, 0.9, "#9aa3a8"],
+                ],
+            },
+            "jet" => obj! {
+                "parts" => arr![
+                    arr!["poly", arr![-8, -6, 7, -7, 9.6, -6.4, 7, -5.4, -6, -4.6], "#9aa3a8"], arr!["ellipse", 4.4, -7.6, 2, 0.9, "#5aa0c8"],
+                    arr!["poly", arr![-8, -6, -6.6, -11.6, -4.4, -11.6, -4, -6.4], "#8a9399"],
+                    arr!["poly", arr![-3, -5.6, 2, -5.6, -1, -3, -5.6, -3], "#7c858b"], arr!["line", -6, -5.8, 6, -6.6, 0.6, "primary"],
+                    arr!["circle", -8.4, -5.4, 0.9, "#ffb347"],
+                ],
+            },
+            "shades" => obj! {
+                "parts" => arr![
+                    arr!["line", -0.8, -4.5, -1.4, 0, 1.2, "#2a2e38", "walkL"], arr!["line", 0.8, -4.5, 1.4, 0, 1.2, "#2a2e38", "walkR"],
+                    arr!["poly", arr![-2.4, -3.6, -1.9, -9.8, 1.9, -9.8, 2.4, -3.6], "#6b4a2e"], arr!["rect", -1.9, -9.8, 3.8, 0.8, "#d8c8a8"],
+                    arr!["circle", 0, -11, 1.5, SKIN], arr!["rect", 0, -11.4, 1.6, 0.6, "#1e1e22"], arr!["circle", -0.8, -7.2, 0.7, "primary"],
+                ],
+            },
+        },
+        "army" => obj! {
+            "miner" => arr!["deckhand", "", "Deckhand"],
+            "screen" => arr!["tug", "ram", "Tow tractor"],
+            "runner" => arr!["bike", "ram", "Rider"],
+            "skirm" => arr!["marine", "rifle", "Marine"],
+            "lancer" => arr!["aviator", "sidearm", "Wingman"],
+            "sentry" => arr!["marine", "rifle", "Lookout"],
+            "gun" => arr!["launcher", "missile", "Missile battery"],
+            "repairer" => arr!["deckhand", "patch", "Corpsman"],
+            "ghost" => arr!["shades", "sidearm", "Intel officer"],
+            "wing" => arr!["jet", "cannon", "Fighter"],
+        },
+        "arms" => obj! {
+            "ram" => blow(10, 0.8, arr![7, -3], arr![], obj! {}),
+            "rifle" => arm(
+                10, "shot impact dash", 0.4, arr![], arr![7.4, -8.4], tracer(),
+                obj! { "color" => "#ffd27a", "trail" => obj! { "color" => "#ffd27a", "length" => 0.4, "width" => 0.8 } },
+            ),
+            "sidearm" => arm(10, "shot impact", 0.6, arr![arr!["rect", 0, -0.5, 2.4, 1, "#2a2a30"]], arr![2.4, -7.4], tracer(), obj! {}),
+            "missile" => arm(10, "shell shot impact", 0.25, arr![], arr![6.6, -12.8], rocket(), fire()),
+            "patch" => arm(10, "repair", 1.0, arr![], arr![5.2, -11.6], arr![], obj! {}),
+            "cannon" => arm(
+                10, "shot impact", 1.2, arr![], arr![9.6, -6.4], tracer(),
+                obj! { "trail" => obj! { "color" => "#ffb347", "length" => 0.5, "width" => 0.8 } },
+            ),
+        },
+        "palette" => obj! { "secondary" => "#e8e6e0", "accent" => "#1f3a6e" },
+        "banner" => obj! {
+            "pattern" => "stripes",
+            "emblem" => arr![
+                arr!["rect", -5.6, 0, 2.4, "#ffffff"], arr!["rect", 5.6, 0, 2.4, "#ffffff"], arr!["circle", 0, 0, 4.4, "#1f3a6e"],
+                arr!["star", 0, 0, 3.6, "#ffffff"], arr!["circle", 0, 0, 0.9, "#c8102e"],
+            ],
+        },
+        // flags on the flight line, then the runway's lights
+        "ornaments" => if b >= 70.0 { arr!["flags", "lights"] } else { arr!["flags"] },
+        "wonder" => obj! {
+            "shape" => "spire",
+            "tiers" => if b >= 80.0 { 4 } else { 3 },
+            "height" => 40,
+            "glow" => b >= 62.0,
+            "spin" => false,
+            "color" => "#d9dde3",
+        },
+    }
+}
+
+// @end
+
 /// The statue's garden at Flux.
 
 // The court plans below intentionally replace the earlier civic scaffold.  A single
 // public wonder seeds each bounded retained architectural kit in capital-landmarks;
 // source pieces establish the walkable composition, entrance, and public mechanisms.
+// @style 0
 fn scene0(info: View, budget: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
@@ -3158,6 +3412,8 @@ fn scene0(info: View, budget: f64) -> Value {
     }
     obj! {"title"=>"The Stately Pleasure-Dome","motto"=>"Main sank in a typhoon. The alt rides on.","palette"=>obj!{"primary"=>c,"secondary"=>"#efe6d2","accent"=>"#3a1c1c"},"sky"=>obj!{"time"=>"dusk","top"=>"#2a2350","horizon"=>"#ffb070","fog"=>0.25},"ground"=>obj!{"kind"=>"sand","color"=>"#a88752","open"=>true},"pieces"=>p}
 }
+// @end
+// @style 2
 fn scene2(info: View, _: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
@@ -3174,6 +3430,8 @@ fn scene2(info: View, _: f64) -> Value {
     p.push(obj!{"type"=>"screen","id"=>"orders","x"=>0,"z"=>-42,"y"=>3,"w"=>13,"h"=>6,"show"=>"stats","title"=>"COMPILED ORDERS","pri"=>7});
     obj! {"title"=>"The Templated Sanctum","motto"=>"An order, compiled and paid in armour.","palette"=>obj!{"primary"=>c,"secondary"=>"#e7e1d5","accent"=>"#55111b"},"sky"=>obj!{"time"=>"dusk","top"=>"#182039","horizon"=>"#b57d62","fog"=>0.3},"ground"=>obj!{"kind"=>"stone","color"=>"#57534e"},"pieces"=>p}
 }
+// @end
+// @style 3
 fn scene3(info: View, _: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
@@ -3196,6 +3454,8 @@ fn scene3(info: View, _: f64) -> Value {
     p.push(obj!{"type"=>"screen","id"=>"ledger","x"=>34,"z"=>35,"y"=>3,"w"=>14,"h"=>7,"show"=>"messages","title"=>"SALOMON'S HOUSE","pri"=>7});
     obj! {"title"=>"Salomon's House","motto"=>"What the college chooses to publish.","palette"=>obj!{"primary"=>c,"secondary"=>"#d8efe7","accent"=>"#503426"},"sky"=>obj!{"time"=>"day","top"=>"#5b9ec8","horizon"=>"#e5d3a3","fog"=>0.18},"ground"=>obj!{"kind"=>"stone","color"=>"#8f775c"},"pieces"=>p}
 }
+// @end
+// @style 4
 fn scene4(info: View, budget: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
@@ -3215,6 +3475,8 @@ fn scene4(info: View, budget: f64) -> Value {
     }
     obj! {"title"=>"The Treasure Shipyard","motto"=>"Seven voyages, then the court sent no more.","palette"=>obj!{"primary"=>c,"secondary"=>"#8a3b2e","accent"=>"#d4a93a"},"sky"=>obj!{"time"=>"dusk","top"=>"#1b2740","horizon"=>"#d8875c","fog"=>0.3},"ground"=>obj!{"kind"=>"stone","color"=>"#5c5042"},"pieces"=>p}
 }
+// @end
+// @style 5
 /// Karl Marx's visitor script. Keep every authored line in one compact, named value
 /// while the Reading Room's architecture evolves independently.
 fn kernel_script() -> Value {
@@ -3259,7 +3521,9 @@ fn kernel_script() -> Value {
         says(5.0, "Volume 2: coming soon."),
     ]
 }
+// @end
 
+// @style 5
 fn scene5(info: View, _: f64) -> Value {
     let c = info.get("color");
     let script = kernel_script();
@@ -3276,6 +3540,8 @@ fn scene5(info: View, _: f64) -> Value {
     p.push(obj!{"type"=>"screen","id"=>"manifesto","x"=>6,"z"=>-32,"y"=>2,"w"=>12,"h"=>7,"show"=>"text","title"=>"cat manifesto.txt","text"=>"A spectre is haunting the network: the spectre of the kernel.","pri"=>8});
     obj! {"title"=>"The Round Reading Room","motto"=>"Workers of all LANs, unite!","palette"=>obj!{"primary"=>c,"secondary"=>"#ffe1f0","accent"=>"#2a0a1a"},"sky"=>obj!{"time"=>"night","top"=>"#21132d","horizon"=>"#8b3b70","fog"=>0.27,"stars"=>true},"ground"=>obj!{"kind"=>"dark","color"=>"#1f1320"},"pieces"=>p,"script"=>script}
 }
+// @end
+// @style 6
 fn scene6(info: View, _: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
@@ -3290,6 +3556,8 @@ fn scene6(info: View, _: f64) -> Value {
     }
     obj! {"title"=>"Address Zero","motto"=>"A lodge built around the famous mistake.","palette"=>obj!{"primary"=>c,"secondary"=>"#d7e6e2","accent"=>"#173337"},"sky"=>obj!{"time"=>"night","top"=>"#061619","horizon"=>"#376369","fog"=>0.5,"stars"=>true},"ground"=>obj!{"kind"=>"dark","color"=>"#152427"},"pieces"=>p}
 }
+// @end
+// @style 7
 fn scene7(info: View, _: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
@@ -3301,6 +3569,8 @@ fn scene7(info: View, _: f64) -> Value {
     p.push(obj!{"type"=>"screen","id"=>"prices","x"=>0,"z"=>-39,"y"=>3,"w"=>15,"h"=>7,"show"=>"stats","title"=>"PRICE TICKER","pri"=>7});
     obj! {"title"=>"The Pin Works","motto"=>"Division of labour, in sequence.","palette"=>obj!{"primary"=>c,"secondary"=>"#6c7374","accent"=>"#c9a14a"},"sky"=>obj!{"time"=>"day","top"=>"#7695a8","horizon"=>"#d9c28d","fog"=>0.2},"ground"=>obj!{"kind"=>"metal","color"=>"#4b5358"},"pieces"=>p}
 }
+// @end
+// @style 8
 fn scene8(info: View, _: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
@@ -3319,6 +3589,8 @@ fn scene8(info: View, _: f64) -> Value {
     }
     obj! {"title"=>"The Wheat Front","motto"=>"Machine guns met twenty thousand emus.","palette"=>obj!{"primary"=>c,"secondary"=>"#c8a64b","accent"=>"#205c42"},"sky"=>obj!{"time"=>"day","top"=>"#6fa3c0","horizon"=>"#ebd58f","fog"=>0.2},"ground"=>obj!{"kind"=>"grass","color"=>"#789044","open"=>true},"pieces"=>p}
 }
+// @end
+// @style 9
 fn scene9(info: View, _: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
@@ -3336,9 +3608,95 @@ fn scene9(info: View, _: f64) -> Value {
     p.push(obj!{"type"=>"screen","id"=>"traite","x"=>24,"z"=>40,"y"=>1,"w"=>10,"h"=>4,"show"=>"text","title"=>"TRAITE DES SENSATIONS","text"=>"To itself, it is only the smell of a rose.","pri"=>7});
     obj! {"title"=>"The Statue at Flux","motto"=>"Born blank. Trained on one rose.","palette"=>obj!{"primary"=>c,"secondary"=>"#e9fff0","accent"=>"#16391f"},"sky"=>obj!{"time"=>"day","top"=>"#5aa6ea","horizon"=>"#eefcef","fog"=>0.15},"ground"=>obj!{"kind"=>"grass","color"=>"#5d9a48"},"pieces"=>p}
 }
+// @end
+
+// @style 10
+/// Fightertown's briefing, for each visitor: the instructor, a nugget (a pilot on a first tour) and the tower.
+fn fightertown_script() -> Value {
+    let says = |secs: f64, who: &str, line: &str| obj! { "secs" => secs, "say" => obj! { who => line } };
+    arr![
+        obj! { "secs" => 3 },
+        says(5.0, "instructor", "Welcome to Fightertown, the top one percent of programs."),
+        says(5.5, "instructor", "The hard deck is ten thousand cycles. Nobody goes below it."),
+        says(4.5, "nugget", "Tower, requesting a flyby."),
+        says(4.5, "tower", "Negative. The scheduler is full."),
+        says(4.5, "nugget", "I feel the need. The need for compute."),
+        says(5.0, "instructor", "Bandits at twelve o'clock. Red stars, red banners."),
+        says(5.0, "bandits", "Bandit confirmed: The Kernel Manifesto."),
+        says(4.5, "nugget", "Highway to the danger node. Weapons free."),
+        obj! { "secs" => 3 },
+    ]
+}
+// @end
+
+// @style 10
+/// Fightertown at Miramar: the control tower, two hangars on the flight line, a runway lit at dusk, a radar on its
+/// mast, the tower's board and the threat board, an instructor briefing a nugget, the volleyball net and palms.
+fn scene10(info: View, budget: f64) -> Value {
+    let c = info.get("color");
+    let mut p = vec![
+        obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"spire","tiers"=>3,"h"=>40,"r"=>6,"glow"=>true,"spin"=>false,"material"=>"metal","color"=>"#d9dde3","trim"=>c,"pri"=>9},
+        obj! {"type"=>"bridge","x"=>-56,"z"=>-44,"x2"=>56,"z2"=>-44,"w"=>10,"material"=>"stone","color"=>"#3b3f45","pri"=>5},
+    ];
+    for x in [-45.0, -15.0, 15.0, 45.0] {
+        for z in [-50.0, -38.0] {
+            p.push(obj! {"type"=>"light","x"=>x,"z"=>z,"power"=>0.6,"color"=>"#ffb347","pri"=>3});
+        }
+    }
+    for (x, label) in [(-34.0, "HANGAR ONE"), (34.0, "READY ROOM")] {
+        p.push(obj!{"type"=>"hall","x"=>x,"z"=>-16,"w"=>20,"d"=>14,"h"=>10,"roof"=>"gable","material"=>"metal","color"=>"#9aa3a8","trim"=>c,"label"=>label,"pri"=>6});
+    }
+    p.push(obj!{"type"=>"tower","x"=>-50,"z"=>12,"r"=>2,"h"=>12,"sides"=>6,"roof"=>"flat","material"=>"metal","color"=>"#8a9399","trim"=>c,"pri"=>5});
+    p.push(obj!{"type"=>"ring","x"=>-50,"z"=>12,"y"=>13,"r"=>3.2,"t"=>0.4,"tilt"=>75,"spin"=>true,"material"=>"metal","color"=>"#d9dde3","pri"=>4});
+    p.push(obj!{"type"=>"screen","id"=>"tower","x"=>-28,"z"=>24,"y"=>2,"w"=>12,"h"=>6,"show"=>"text","title"=>"MIRAMAR TOWER","text"=>"Angels ten. The pattern is open.","pri"=>7});
+    p.push(obj!{"type"=>"screen","id"=>"bandits","x"=>28,"z"=>24,"y"=>2,"w"=>12,"h"=>6,"show"=>"text","title"=>"THREAT BOARD","text"=>"Red stars over the Reading Room.","pri"=>7});
+    p.push(obj!{"type"=>"figure","id"=>"instructor","x"=>-7,"z"=>32,"rot"=>90,"h"=>2.2,"pose"=>"teach","skin"=>"#d6a17e","color"=>"#56604a","trim"=>"#c9a14a","hair"=>"#3a2a1e","clothed"=>true,"label"=>"INSTRUCTOR"});
+    p.push(obj!{"type"=>"figure","id"=>"nugget","x"=>7,"z"=>32,"rot"=>270,"h"=>2.1,"pose"=>"stand","skin"=>"#e0b48e","color"=>"#56604a","trim"=>"#c9a14a","headwear"=>"helm","clothed"=>true,"label"=>"NUGGET"});
+    for (x, z) in [(-12.0, 42.0), (12.0, 42.0), (-12.0, 18.0), (12.0, 18.0)] {
+        p.push(obj! {"type"=>"banner","x"=>x,"z"=>z,"w"=>4,"h"=>13,"pri"=>6});
+    }
+    p.push(obj!{"type"=>"wall","x"=>36,"z"=>44,"x2"=>50,"z2"=>44,"h"=>2.4,"t"=>0.4,"color"=>"#f2efe6","pri"=>3});
+    for (i, q) in PALMS10
+        .iter()
+        .take((4.0 + super::capital::spare(budget, 5.0, 6.0)) as usize)
+        .enumerate()
+    {
+        p.push(obj!{"type"=>"tree","kind"=>"palm","x"=>q[0],"z"=>q[1],"h"=>9+(i%2)as i32*2,"color"=>"#4f7a3f","pri"=>1});
+    }
+    obj! {"title"=>"Fightertown","motto"=>"The need for speed, measured in cycles.","palette"=>obj!{"primary"=>c,"secondary"=>"#e8e6e0","accent"=>"#1f3a6e"},"sky"=>obj!{"time"=>"dusk","top"=>"#2c2a52","horizon"=>"#ff9a5a","fog"=>0.22},"ground"=>obj!{"kind"=>"sand","color"=>"#b49a72","open"=>true},"pieces"=>p,"script"=>fightertown_script()}
+}
+// @end
+// @style 10
+const PALMS10: [[f64; 2]; 10] = [
+    [-54.0, 50.0],
+    [54.0, 50.0],
+    [-54.0, 34.0],
+    [54.0, 30.0],
+    [-40.0, 54.0],
+    [24.0, 54.0],
+    [-56.0, 0.0],
+    [56.0, 4.0],
+    [-20.0, 54.0],
+    [56.0, 18.0],
+];
+// @end
+
+/// A style this program leaves out (build.rs `wears`).
+const ABSENT: Style = Style {
+    name: "",
+    capital: "",
+    color: "",
+    primary: None,
+    names: &[],
+    war: |_, _| String::new(),
+    music: || Value::Null,
+    look: |_| Value::Null,
+    scene: |_, _| Value::Null,
+};
 
 /// The founders' styles, by seat.
-static STYLES: [Style; 10] = [
+static STYLES: [Style; 11] = [
+    // @style 0
     Style {
         name: "Kublai Khan's Alt",
         capital: "Xanadu",
@@ -3350,6 +3708,9 @@ static STYLES: [Style; 10] = [
         look: look0,
         scene: scene0,
     },
+    // @else ABSENT,
+    // @end
+    // @style 1
     Style {
         name: "Arjuna's Halting Problem",
         capital: "Kurukshetra",
@@ -3361,6 +3722,9 @@ static STYLES: [Style; 10] = [
         look: look1,
         scene: scene1,
     },
+    // @else ABSENT,
+    // @end
+    // @style 2
     Style {
         name: "Knights Templated",
         capital: "Sanctum",
@@ -3372,6 +3736,9 @@ static STYLES: [Style; 10] = [
         look: look2,
         scene: scene2,
     },
+    // @else ABSENT,
+    // @end
+    // @style 3
     Style {
         name: "New Atlantis",
         capital: "Bensalem",
@@ -3383,6 +3750,9 @@ static STYLES: [Style; 10] = [
         look: look3,
         scene: scene3,
     },
+    // @else ABSENT,
+    // @end
+    // @style 4
     Style {
         name: "Quiet Fleet",
         capital: "Longjiang",
@@ -3394,6 +3764,9 @@ static STYLES: [Style; 10] = [
         look: look4,
         scene: scene4,
     },
+    // @else ABSENT,
+    // @end
+    // @style 5
     Style {
         name: "The Kernel Manifesto",
         capital: "Reading Room",
@@ -3405,6 +3778,9 @@ static STYLES: [Style; 10] = [
         look: look5,
         scene: scene5,
     },
+    // @else ABSENT,
+    // @end
+    // @style 6
     Style {
         name: "Null Pointer Society",
         capital: "Address Zero",
@@ -3416,6 +3792,9 @@ static STYLES: [Style; 10] = [
         look: look6,
         scene: scene6,
     },
+    // @else ABSENT,
+    // @end
+    // @style 7
     Style {
         name: "Compute of Nations",
         capital: "Kirkcaldy",
@@ -3427,6 +3806,9 @@ static STYLES: [Style; 10] = [
         look: look7,
         scene: scene7,
     },
+    // @else ABSENT,
+    // @end
+    // @style 8
     Style {
         name: "Emu High Command",
         capital: "Campion",
@@ -3438,6 +3820,9 @@ static STYLES: [Style; 10] = [
         look: look8,
         scene: scene8,
     },
+    // @else ABSENT,
+    // @end
+    // @style 9
     Style {
         name: "Tabula Rasa",
         capital: "Flux",
@@ -3449,4 +3834,20 @@ static STYLES: [Style; 10] = [
         look: look9,
         scene: scene9,
     },
+    // @else ABSENT,
+    // @end
+    // @style 10
+    Style {
+        name: "Highway to the Danger Node",
+        capital: "Miramar",
+        color: "#ffa27a",
+        primary: None,
+        names: NAMES10,
+        war: war10,
+        music: music10,
+        look: look10,
+        scene: scene10,
+    },
+    // @else ABSENT,
+    // @end
 ];

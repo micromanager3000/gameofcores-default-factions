@@ -13,7 +13,7 @@ const here = new URL('../', import.meta.url), root = new URL('../gameofcores/', 
 const cores = fileURLToPath(new URL('target/release/cores', root)), lines = readFileSync(new URL('shared/buildings.txt', here), 'utf8').split('\n').filter(x => x && !x.startsWith('#'));
 const roles = ['landmark', 'hall', 'yard', 'works', 'bastion', 'bay'];
 const energy = ['solar', 'boiler', 'wind', 'hydro', 'tidal', 'geo', 'reactor', 'fusion', 'battery'];
-const factions = ["Kublai Khan's Alt", "Arjuna's Halting Problem", 'Knights Templated', 'New Atlantis', 'Quiet Fleet', 'The Kernel Manifesto', 'Null Pointer Society', 'Compute of Nations', 'Emu High Command', 'Tabula Rasa'];
+const factions = ["Kublai Khan's Alt", "Arjuna's Halting Problem", 'Knights Templated', 'New Atlantis', 'Quiet Fleet', 'The Kernel Manifesto', 'Null Pointer Society', 'Compute of Nations', 'Emu High Command', 'Tabula Rasa', 'Highway to the Danger Node'];
 const text = new TextEncoder(), decode = new TextDecoder();
 
 function fixtureSource() {
@@ -41,7 +41,7 @@ export function generateStructureArtFixture(destination = new URL('fixtures/stru
   const dir = mkdtempSync(join(tmpdir(), 'goc-structure-fixture-')), rs = join(dir, 'fixture.rs'), wasm = join(dir, 'fixture.wasm');
   try {
     const authored = fixtureSource(); writeFileSync(rs, authored); execFileSync(cores, ['compile', rs, wasm], {cwd: root.pathname, stdio: 'pipe'}); const bytes = readFileSync(wasm), appearances = {energy:{}, roles:{}};
-    for (let style = 0; style < 10; style++) { appearances.energy[style] = Object.fromEntries(energy.map(kind => [kind, call(bytes, {style, kind, capacity:8})])); appearances.roles[style] = Object.fromEntries(roles.map((role, i) => [role, call(bytes, {style, role:i})])); }
+    for (let style = 0; style < factions.length; style++) { appearances.energy[style] = Object.fromEntries(energy.map(kind => [kind, call(bytes, {style, kind, capacity:8})])); appearances.roles[style] = Object.fromEntries(roles.map((role, i) => [role, call(bytes, {style, role:i})])); }
     const value = {version:1, sourceHash:createHash('sha256').update(authored).digest('hex'), factions, energy, roles, appearances}; mkdirSync(dirname(destination), {recursive:true}); writeFileSync(destination, JSON.stringify(value)); return value;
   } finally { if (!process.env.KEEP_STRUCTURE_FIXTURE) rmSync(dir, {recursive:true, force:true}); }
 }
