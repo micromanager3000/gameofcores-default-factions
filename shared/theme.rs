@@ -3617,7 +3617,7 @@ fn scene10(info: View, budget: f64) -> Value {
         obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"spire","tiers"=>3,"h"=>40,"r"=>6,"glow"=>true,"spin"=>false,"material"=>"metal","color"=>"#d9dde3","trim"=>c,"pri"=>9},
         obj! {"type"=>"bridge","x"=>-56,"z"=>-44,"x2"=>56,"z2"=>-44,"w"=>10,"material"=>"stone","color"=>"#3b3f45","pri"=>5},
     ];
-    for x in [-50.0, -30.0, -10.0, 10.0, 30.0, 50.0] {
+    for x in [-48.0, -24.0, 0.0, 24.0, 48.0] {
         for z in [-49.5, -38.5] {
             p.push(obj! {"type"=>"light","x"=>x,"z"=>z,"power"=>0.8,"color"=>c,"pri"=>3});
         }
