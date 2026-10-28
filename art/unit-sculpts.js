@@ -1,4 +1,4 @@
-import { Sculpt } from './sculpt.js';
+import { Sculpt, alloy, lit, mat, lamp, streak, finish } from './sculpt.js';
 import { airSculpt } from './air-sculpts.js';
 import { navalSculpt } from './naval-sculpts.js';
 export { navalSculpt } from './naval-sculpts.js';
@@ -15,33 +15,13 @@ export const HOUSE_SCULPTS=[
  ['crash','watch','bomb','collector','zero','pointer','exception','bug'],
  ['highlander','dragoon','carronade','pinmaker','shopkeeper','merchantman','exciseman','smuggler'],
  ['truck','emu','forager','gunner'],['gardener','tree','eye','thorn','statue'],
- ['aviator','deckhand','marine','bike','launcher','tug','jet','shades'],
+ ['mav','nugget','cold','bike','launcher','tug','jet','swan'],
 ];
 export function hasSculpt(id){if(typeof id!=='string'||!/^\d{1,2}:[A-Za-z_][A-Za-z0-9_]{0,23}$/.test(id))return false;const [seat,body]=id.split(':');return Boolean(HOUSE_SCULPTS[Number(seat)]?.includes(body));}
 
-// Materials the viewer shades (gpu/unit-surfaces.js): iron and brass are polished and mirror the sky, cloth carries a
-// sheen in its own colour, leather a soft grain, organic (skin, hide, leaves) lets light round its edge. Emissive parts
-// light themselves and flare as their unit strikes or is struck; a halo is the soft glow around one. Alloy and void are
-// the Null Pointer Society's. finish() draws every halo after the body it sits on.
 const LEATHER='#6b4a33',FUR='#5a4636',WARM='#ffcf7a',FIRE='#ff9b45',KNEE=.32*.74;
-function alloy(s,start){for(const p of s.parts.slice(start))if(!p.halo)p.material='alloy';}
-function lit(s,start){for(const p of s.parts.slice(start))if(!p.halo)p.material='emissive';}
-function mat(s,start,material,detail){for(const p of s.parts.slice(start))if(!p.halo){p.material=material;if(detail!==undefined)p.detail=detail;}}
-// A light: an emissive bead and the halo around it, on the same joint.
-function lamp(s,at,r,{c=P,m='',pivot=at,halo=3.2,stretch=[1,1,1],detail=0}={}){
- const bead=s.capsule(at,stretch.map(k=>r*k),c,m,pivot);bead.material='emissive';bead.detail=detail;
- if(halo){const h=s.orb(at,stretch.map(k=>r*k*halo),c,m,pivot);h.halo=true;h.detail=detail;}
- return bead;
-}
-// A glow along a blade, lance or coil: a stretched halo centred on `at`, turned by `angle` to lie along it. A part turns
-// about its joint's pivot, so the centre is turned back first.
-function streak(s,at,size,angle,{c=P,m='',pivot=at,detail=0}={}){
- const dx=at[0]-pivot[0],dy=at[1]-pivot[1],cos=Math.cos(-angle),sin=Math.sin(-angle);
- const h=s.part('ellipsoid',[pivot[0]+dx*cos-dy*sin,pivot[1]+dx*sin+dy*cos,at[2]],size,c,m,pivot,[0,0,angle]);h.halo=true;h.detail=detail;return h;
-}
 // A ring of parts turning about a vertical axis: each is authored at angle 0 and turned into place about the axis.
 function around(s,n,r,y,build){for(let i=0;i<n;i++){const a=i*2*Math.PI/n;build(i,[r,y,0],[0,-a,0]);}}
-function finish(s){const solid=s.parts.filter(p=>!p.halo),halos=s.parts.filter(p=>p.halo);for(const h of halos)h.material='halo';s.parts=[...solid,...halos];}
 // A spoked wheel: iron tyre, wooden face, three spokes across it and a hub. Spokes and hub are close detail.
 function wheel(s,at,r,{c=WOOD,rim=IRON,hub=GOLD}={}){
  const out=Math.sign(at[2]||1);
@@ -58,7 +38,7 @@ function cape(s,x,{c=P,long=.92,wide=.62,clasp=GOLD,back=.27,emblem=null}={}){
  if(emblem){s.box([pivot[0],1.0,-.03],[.07,.34,.02],emblem,'sway',pivot,turn);s.box([pivot[0],1.06,-.03],[.26,.07,.02],emblem,'sway',pivot,turn);}
  s.tag(first,{material:'cloth'});const fine=s.parts.length;for(const z of [-.2,.2])s.box([x-.02,1.31,z],[.07,.07,.07],clasp);s.tag(fine,{detail:1});
 }
-function human(s,{coat=P,skin='#d6a17e',legs=DARK,boots=LEATHER,hat='cap',trim=S,armor=false,robe=false,lean=0,frame='common',mounted=false,detail=true,pauldron=armor,cloak=null,emblem=null}={}){
+function human(s,{coat=P,skin='#d6a17e',legs=DARK,boots=LEATHER,hat='cap',trim=S,armor=false,robe=false,lean=0,frame='common',mounted=false,detail=true,pauldron=armor,cloak=null,emblem=null,hair=DARK,tache=false}={}){
  const start=s.parts.length;
  // Every frame owns its torso and head.  The shared tool sockets deliberately stay
  // put so a role can change equipment without turning each faction into the same pawn.
@@ -128,6 +108,22 @@ function human(s,{coat=P,skin='#d6a17e',legs=DARK,boots=LEATHER,hat='cap',trim=S
   for(const z of [-.18,.16])lamp(s,[lean+.08,1.50,z],.045,{c:'#ffe58a',halo:3.4,detail:1});
   // Eyes that glow out of the leaves.
   for(const z of [-.12,.12])lamp(s,[lean+.31,1.30,z],.035,{c:'#e9ff9a',halo:2.8,stretch:[.6,1,1]});
+ }else if(frame==='pilot'){
+  // A leather flight jacket over the flight suit: a knit waistband, a fleece collar, a brass zip, a name tag, and a
+  // squadron patch and shoulder straps lit in the faction's colour. The head is bare under a ball cap or the pilot's own hair, and the
+  // mirrored aviators catch the faction's colour too.
+  s.capsule([lean,.70,0],[.36,.28,.34],legs);
+  const jacket=s.parts.length;s.capsule([lean,1.0,0],[.54,.42,.48],coat);s.capsule([lean,.86,0],[.47,.16,.43],coat);mat(s,jacket,'leather');
+  const knit=s.parts.length;s.box([lean,.79,0],[.47,.07,.43],trim);mat(s,knit,'cloth',1);
+  const collar=s.parts.length;s.capsule([lean-.03,1.21,0],[.41,.11,.45],'#c9b79a');mat(s,collar,'organic');
+  const fine=s.parts.length;s.box([lean+.255,1.0,0],[.015,.34,.03],GOLD);s.box([lean+.25,1.09,.13],[.02,.06,.12],IVORY);s.tag(fine,{detail:2});s.parts[fine].material='brass';
+  const patch=s.parts.length;s.part('cylinder',[lean+.25,1.05,-.13],[.11,.11,.02],P,'',[lean+.25,1.05,-.13],[0,Math.PI/2,0]).detail=1;for(const z of [-.24,.24])s.box([lean-.02,1.19,z],[.17,.03,.07],P);lit(s,patch);
+  s.capsule([lean+.03,1.40,0],[.29,.34,.28],skin);s.box([lean+.19,1.38,0],[.05,.06,.07],skin).detail=1;
+  if(hat==='cap'){const cap=s.parts.length;s.orb([lean,1.51,0],[.32,.16,.31],P);s.box([lean+.20,1.49,0],[.20,.03,.24],P);mat(s,cap,'cloth');}
+  else{const top=s.parts.length;s.orb([lean-.01,1.50,0],[.31,.19,.30],hair);mat(s,top,'organic');}
+  if(tache){const lip=s.parts.length;s.box([lean+.195,1.33,0],[.035,.035,.13],hair);mat(s,lip,'organic',1);}
+  aviators(s,lean);
+  customHead=true;
  }else {
   s.capsule([lean,.99,0],[.52,.38,.46],coat,'',[lean,.92,0]);s.capsule([lean,.73,0],[.36,.34,.34],coat,'',[lean,.92,0]);
   if(robe)s.lathe([lean,.18,0],[[0,.32,.29],[.12,.38,.34],[.64,.25,.23]],coat);s.box([lean,.80,0],[.47,.052,.51],trim);
@@ -779,43 +775,84 @@ function garden(s,body){
  const bloom=s.parts.length;around(s,4,.09,1.50,(i,at,rot)=>s.poly(at,[-.07,0,.07,0,0,.17],.03,'#d3a7a4','sway',[0,1.50,0],rot));s.tag(bloom,{material:'organic',detail:1});
  lamp(s,[0,1.58,0],.05,{c:'#ffe58a',m:'sway',pivot:[0,1.50,0],halo:3.4});
 }
-// Highway to the Danger Node: Navy flight deck and Top Gun. Flight suits, deck jerseys, Marines, the bike and the jets.
-const NAVY='#7d868d',SAGE='#6f7a5a',WHITE='#e8e6e0',BLUE='#1f3a6e';
-function aviators(s,x=.03){s.box([x+.20,1.43,0],[.06,.07,.30],DARK);s.box([x+.215,1.43,0],[.03,.025,.08],GOLD);}
+// Highway to the Danger Node: every soldier is a Top Gun pilot in a leather flight jacket and mirrored aviators, lit like
+// a flight deck at dusk. Mav carries a pistol and his helmet, Cold is blond with a carbine, Swan has the moustache, a
+// radio headset and a kneeboard, and the nugget (a pilot on a first tour) works the deck in a ball cap with a wrench and
+// a lit marshalling wand. Mav rides the motorbike, the nugget drives the tow tractor, and the parked jet is the Tomcat on
+// its gear.
+const NAVY='#7d868d',SAGE='#6f7a5a',WHITE='#e8e6e0',BOOTS='#2b2622',AMBER='#ffb347';
+const PILOTS={mav:{coat:'#5b4632',hair:'#3a2a1e'},cold:{coat:'#3f3329',hair:'#d8c08a'},swan:{coat:'#6b4a33',hair:'#4a3526',tache:true},nugget:{coat:'#7a5a3c',hat:'cap'}};
+// Mirrored aviators: two dark lenses on a brass frame, with a glint of the faction's colour across them.
+function aviators(s,x=0){
+ const lens=s.parts.length;for(const z of [-.08,.08])s.box([x+.19,1.43,z],[.04,.09,.13],'#1b262d');mat(s,lens,'glass');
+ streak(s,[x+.21,1.44,0],[.06,.12,.42],0,{detail:1});
+ const frame=s.parts.length;s.box([x+.19,1.455,0],[.02,.015,.05],GOLD);for(const z of [-.15,.15])s.box([x+.08,1.45,z],[.22,.015,.015],GOLD);mat(s,frame,'brass',2);
+}
+function pilot(s,body,{mounted=false}={}){
+ const look=PILOTS[body],start=human(s,{coat:look.coat,hair:look.hair,tache:!!look.tache,hat:look.hat||'none',trim:'#2f2a24',legs:SAGE,boots:BOOTS,frame:'pilot',detail:false,mounted});
+ for(const p of s.parts.slice(start))if(p.color===look.coat)p.material='leather';
+ return start;
+}
+// The flight helmet: white, with a gold visor and a stripe lit in the faction's colour.
+function helmet(s,at,{m='',pivot=at}={}){
+ const shell=s.parts.length;s.orb(at,[.30,.28,.26],WHITE,m,pivot);mat(s,shell,'iron');
+ const visor=s.parts.length;s.box([at[0]+.13,at[1]+.01,at[2]],[.05,.10,.20],'#c9a227',m,pivot);mat(s,visor,'glass');
+ const stripe=s.parts.length;s.box([at[0],at[1]+.135,at[2]],[.26,.025,.05],P,m,pivot);lit(s,stripe);
+}
 function pistol(s,{x=.25,y=.9,z=.37}={}){
  const first=s.parts.length;s.muzzle=[x+.36,y+.03,z];s.muzzleJoint='weapon';s.muzzlePivot=[x,y,z];
- s.box([x+.14,y+.03,z],[.30,.08,.07],DARK);s.box([x+.02,y-.08,z],[.08,.17,.06],DARK);
+ s.box([x+.14,y+.03,z],[.30,.08,.07],DARK);s.box([x+.02,y-.08,z],[.08,.17,.06],DARK);mat(s,first,'iron');
  s.tag(first,{detail:0,aim:'weapon',pivot:[x,y,z]});
 }
-function jetBody(s,{c=NAVY,parked=false}={}){
- const y=parked?.62:.70;
- s.capsule([-.05,y,0],[1.85,.26,.30],c);s.taper([.62,y,0],[1.10,y,0],.075,c);
- for(const side of [-1,1])s.poly([-.20,y+.02,0],[-.55,0,.40,0,-.25,side*1.05,-.55,side*1.0],.04,c,'',[-.20,y+.02,0],[Math.PI/2,0,0]);
- for(const z of [-.17,.17])s.poly([-.78,y+.10,z],[-.22,0,.18,0,-.08,.44],.04,c,'',[-.78,y+.10,z],[z<0?-.20:.20,0,0]);
- s.orb([.38,y+.16,0],[.42,.20,.22],'#91bac6');
- for(const z of [-.10,.10])s.part('cylinder',[-.98,y,z],[.15,.15,.06],DARK,'',[-.98,y,z],[0,Math.PI/2,0]);
- if(parked)for(const [x,z] of [[.55,0],[-.35,-.32],[-.35,.32]]){s.rod([x,.18,z],[x,y-.10,z],.035,IRON);s.wheel([x,.13,z],.11,DARK);}
-}
 function danger(s,body){
- if(body==='jet'){jetBody(s,{parked:true});s.box([-.20,1.00,0],[.20,.05,.30],RED);return;}
- if(body==='tug'){
-  s.box([0,.32,0],[1.30,.26,.82],'#d9b23a');for(const x of [-.40,.40])for(const z of [-.44,.44])s.wheel([x,.20,z],.19,DARK);
-  s.box([-.32,.62,0],[.34,.34,.40],DARK);s.box([-.32,.82,0],[.42,.05,.48],'#d9b23a');s.rod([.66,.34,0],[1.08,.30,0],.07,IRON,'strike',[.66,.34,0]);
-  const driver=human(s,{coat:'#3c6fb0',hat:'cap',trim:WHITE,mounted:true});s.transform(driver,.55,[-.32,.44,0]);return;
- }
- if(body==='launcher'){cart(s,{rockets:true,culture:10});s.box([.42,.98,0],[.30,.04,.40],WHITE);return;}
- if(body==='bike'){
-  for(const x of [-.55,.55])s.wheel([x,.30,0],.28,DARK);s.box([0,.48,0],[.95,.16,.16],RED);s.orb([.12,.66,0],[.45,.20,.26],RED);
-  s.taper([.55,.30,0],[.42,.86,0],.045,IRON);s.rod([.42,.86,-.26],[.42,.86,.26],.04,IRON);s.box([-.30,.62,0],[.40,.07,.24],DARK);
-  const rider=human(s,{coat:'#5b4632',hat:'none',trim:'#3b2f22',legs:'#2d3b55',mounted:true});s.transform(rider,.74,[-.14,.40,0]);aviators(s,-.14+.03*.74);
+ if(body==='jet'){
+  // The Tomcat on its gear with its wings spread, and the boarding ladder down.
+  s.parts.push(...airSculpt(10,'fighter').parts.map(p=>p.motion==='sweep'?{...p,motion:''}:p));
+  const gear=s.parts.length;for(const [x,z] of [[.80,0],[-.40,-.26],[-.40,.26]]){s.rod([x,.14,z],[x,.58,z],.035,IRON);s.part('cylinder',[x,.12,z],[.22,.22,.08],DARK);}mat(s,gear,'iron');
+  const ladder=s.parts.length;s.rod([.56,.04,-.26],[.44,.80,-.17],.03,'#e0c04a');s.tag(ladder,{detail:1});
   return;
  }
- const coat=body==='deckhand'?'#d9b23a':body==='marine'?'#59633f':body==='shades'?'#2b2f36':SAGE;
- human(s,{coat,hat:body==='marine'?'helmet':body==='deckhand'?'cap':body==='shades'?'none':'helmet',trim:body==='shades'?WHITE:DARK,armor:body==='marine',legs:body==='aviator'?SAGE:DARK});
- if(body==='aviator'){s.capsule([.03,1.52,0],[.36,.30,.33],WHITE);s.box([.20,1.46,0],[.05,.10,.27],'#c9a227');s.box([-.05,1.02,.27],[.18,.10,.02],BLUE);pistol(s);}
- else if(body==='deckhand'){for(const z of [-.20,.20])s.orb([.03,1.44,z],[.11,.13,.08],DARK);tool(s,'hammer');s.box([-.30,.98,0],[.12,.10,.44],WHITE);}
- else if(body==='marine')tool(s,'rifle');
- else{aviators(s);s.box([.20,1.13,0],[.03,.30,.06],RED);s.box([-.25,.62,.38],[.36,.26,.10],DARK);pistol(s);}
+ if(body==='tug'){
+  // A yellow tow tractor with headlamps, a lit stripe and a turning amber beacon.
+  const hull=s.parts.length;s.box([0,.32,0],[1.30,.26,.82],'#d9b23a');s.box([-.32,.62,0],[.34,.34,.40],DARK);s.box([-.32,.82,0],[.42,.05,.48],'#d9b23a');mat(s,hull,'iron');
+  for(const x of [-.40,.40])for(const z of [-.44,.44])s.wheel([x,.20,z],.19,DARK);
+  s.rod([.66,.34,0],[1.08,.30,0],.07,IRON,'strike',[.66,.34,0]);
+  const stripe=s.parts.length;for(const z of [-.415,.415])s.box([0,.40,z],[1.10,.05,.02],P);lit(s,stripe);
+  for(const z of [-.24,.24])lamp(s,[.66,.38,z],.04,{c:WARM,halo:3.2});
+  s.rod([-.32,.85,0],[-.32,.98,0],.03,DARK);lamp(s,[-.26,1.0,0],.045,{c:AMBER,m:'spin',pivot:[-.32,1.0,0],halo:3.4});
+  const driver=pilot(s,'nugget',{mounted:true});s.transform(driver,.55,[-.32,.44,0]);return;
+ }
+ if(body==='launcher'){
+  cart(s,{rockets:true,culture:10});s.box([.42,.98,0],[.30,.04,.40],WHITE);
+  const stripe=s.parts.length;for(const z of [-.375,.375])s.box([-.34,.50,z],[.80,.04,.02],P);lit(s,stripe);
+  lamp(s,[.48,1.05,0],.04,{c:AMBER,m:'spin',pivot:[.42,1.05,0],halo:3.4});return;
+ }
+ if(body==='bike'){
+  // Mav on his motorbike: red and black, a headlamp, a tail light and a lit stripe down the fairing.
+  for(const x of [-.55,.55])s.wheel([x,.30,0],.28,DARK);
+  const frame=s.parts.length;s.box([0,.48,0],[.95,.16,.16],RED);s.orb([.12,.66,0],[.45,.20,.26],RED);s.box([-.30,.62,0],[.40,.07,.24],DARK);mat(s,frame,'iron');
+  s.taper([.55,.30,0],[.42,.86,0],.045,IRON);s.rod([.42,.86,-.26],[.42,.86,.26],.04,IRON);
+  const stripe=s.parts.length;for(const z of [-.13,.13])s.box([.12,.66,z],[.40,.03,.02],P);lit(s,stripe);
+  lamp(s,[.62,.72,0],.05,{c:WARM,halo:3.4});lamp(s,[-.52,.64,0],.035,{c:'#ff4a3a',halo:3});
+  const rider=pilot(s,'mav',{mounted:true});s.transform(rider,.74,[-.14,.40,0]);
+  return;
+ }
+ pilot(s,body);
+ const off=[0,1.15,-.31];
+ if(body==='mav')pistol(s);
+ else if(body==='cold')tool(s,'rifle');
+ else if(body==='swan'){
+  // The backseater's radio headset and kneeboard.
+  const set=s.parts.length;s.rod([.02,1.60,-.16],[.02,1.60,.16],.03,DARK);for(const z of [-.155,.155])s.capsule([.03,1.42,z],[.11,.13,.06],DARK);mat(s,set,'iron');
+  const mic=s.parts.length;s.rod([.05,1.38,.16],[.20,1.31,.08],.015,DARK);mat(s,mic,'iron',1);
+  const board=s.parts.length;s.box([.24,.86,-.37],[.20,.26,.03],IVORY,'strideR',off);s.box([.24,.99,-.37],[.06,.03,.04],GOLD,'strideR',off);s.tag(board,{detail:1});
+  pistol(s);
+ }else{
+  // A wrench in one hand and a lit marshalling wand in the other.
+  const wrench=s.parts.length,grip=[.25,.9,.37];s.rod([.25,.72,.37],[.33,1.12,.37],.045,IRON,'strike',grip);
+  s.poly([.34,1.16,.37],[-.08,-.04,.08,-.04,.08,.10,.03,.10,.03,.02,-.03,.02,-.03,.10,-.08,.10],.05,IRON,'strike',grip);mat(s,wrench,'iron');
+  s.rod([.22,.80,-.37],[.22,.90,-.37],.04,DARK,'strideR',off);lamp(s,[.22,1.08,-.37],.04,{m:'strideR',pivot:off,halo:2.2,stretch:[1,8,1]});
+ }
 }
 function vessel(s,style,role='hull'){s.parts.push(...navalSculpt(style,role).parts);}
 function landRig(seat,body){
@@ -857,9 +894,9 @@ function houseSilhouette(s,seat,body){
   s.orb([back,.93,.29],[.44,.24,.16],'#496254');s.box([back,.93,.29],[.47,.045,.025],'#b85e4b');s.part('cylinder',[back,1.35,.30],[.27,.27,.035],GOLD,'',[back,1.35,.30],[Math.PI/2,0,0]);
  }else if(seat===8){ // Emu feather fan and exposed workshop exhaust.
   s.rod([back,.78,.29],[back,1.43,.29],.045,WOOD);for(const z of [-.14,0,.14])s.poly([back,1.43,.29+z],[-.13,0,.13,0,0,.35],.025,'#c7b57e','sway',[back,.78,.29]);
- }else if(seat===10){ // Parachute pack with a white star on a blue roundel.
-  s.box([back,.98,.30],[.22,.42,.30],SAGE);s.part('cylinder',[back-.12,1.05,.30],[.20,.20,.03],BLUE,'',[back-.12,1.05,.30],[0,Math.PI/2,0]);
-  const pts=[];for(let i=0;i<10;i++){const a=Math.PI/2+i*Math.PI/5,r=i%2?.035:.085;pts.push(Math.cos(a)*r,Math.sin(a)*r);}s.poly([back-.14,1.05,.30],pts,.02,WHITE,'',[back-.14,1.05,.30],[0,Math.PI/2,0]);
+ }else if(seat===10){ // The flight helmet: in Mav's hand, slung at every other pilot's hip. Vehicles carry their own lights.
+  if(body==='mav')helmet(s,[.12,.86,-.44],{m:'strideR',pivot:[0,1.15,-.31]});
+  else if(PILOTS[body])helmet(s,[-.10,.70,-.36]);
  }else{ // Botanical glass petals: a rounded organic outline replaces a square pack.
   const petals=s.parts.length;for(const z of [-.26,0,.26])s.orb([back,.99,z],[.22,.08,.28],z?'#d3a7a4':IVORY,'sway',[back,.83,0]);s.rod([back,.78,0],[back,1.20,0],.025,'#587450');mat(s,petals,'organic');s.parts[petals+1].material='emissive';
  }

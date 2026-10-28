@@ -1,5 +1,5 @@
 // Wings are a permanent body stat. The build selects a scout, fighter or strike silhouette.
-import {Sculpt} from './sculpt.js';
+import {Sculpt,lit,mat,lamp,finish} from './sculpt.js';
 const P='primary',S='secondary',WOOD='#785239',DARK='#26333a',IRON='#788b95',GOLD='#dab866',IVORY='#e6dcc2',RED='#b93b3c',LIGHT='#a3fff0';
 import {AIR_ROLES} from './airframes.js';
 export {AIR_ROLES,AIR_TITLES,AIR_BUILDS,airRole,airDefinition} from './airframes.js';
@@ -115,24 +115,79 @@ function garden(s,role){
  if(role==='fighter'){wing(s,-.08,.88,1.20,'#c1d09d',{swept:true,thin:true});for(const z of [-.32,.32])s.rod([.18,.64,z],[.92,.74,z],.065,WOOD,'strike',[.18,.64,z]);}
  if(role==='striker'){gondola(s,'#718966',1.54);for(const z of [-.38,.38]){s.rod([-.34,.57,z],[-.34,1.19,z],.05,WOOD);s.orb([-.34,1.21,z],[.34,.31,.34],'#d59a9e');bomb(s,.46,.23,z,'#799267');}}
 }
-// Highway to the Danger Node: Navy jets off a carrier deck, grey with twin tails, and a radar-domed spotter.
-const NAVY='#9aa3ab',WHITE='#e8e6e0',BLUE='#1f3a6e';
-function danger(s,role){
- if(role==='scout'){
-  s.capsule([-.05,.68,0],[1.75,.30,.32],NAVY);wing(s,-.02,.74,1.20,NAVY,{thin:true});tail(s,-.86,.74,NAVY,.46);cockpit(s,.52,.80);
-  for(const z of [-.48,.48])engine(s,.12,.66,z,NAVY);
-  for(const z of [-.12,.12])s.rod([-.20,.84,z],[-.20,1.06,z],.035,IRON);
-  s.part('cylinder',[-.20,1.10,0],[.85,.85,.12],WHITE,'spin',[-.20,1.10,0],[Math.PI/2,0,0]);s.box([-.20,1.10,0],[.80,.03,.10],DARK,'spin',[-.20,1.10,0]);
-  return;
+// Highway to the Danger Node: Navy jets off a carrier deck in haze grey, lit like a flight deck at dusk: afterburners,
+// wingtip lights and tail flashes burn in the faction's colour, and the airframes are polished metal. The Tomcat is the
+// F-14: two engines set wide apart with a flat body between them, a long nose under a two-seat canopy, twin tails and
+// swing wings, spread on the deck and swept back once it is in the air (the sweep motion). The Hornet keeps fixed wings
+// and its engines side by side. The Hawkeye is the radar picket, with a turning dome and four fins.
+const NAVY='#9aa3ab',GULL='#7f8890',WHITE='#e8e6e0',BLUE='#1f3a6e',CANOPY='#9cccd3',SWEEP=.85;
+function nozzle(s,x,y,z){s.capsule([x,y,z],[.16,.17,.17],DARK);lamp(s,[x-.08,y,z],.075,{halo:3.2,stretch:[1.6,1,1]});}
+function roundel(s,x,y,z){s.part('cylinder',[x,y,z],[.20,.20,.02],BLUE,'',[x,y,z],[Math.PI/2,0,0]);}
+// A canted fin on its root, with a lit band across its tip.
+function fin(s,x,y,z,cant,c=GULL,h=.44){
+ const pivot=[x,y,z],rot=[cant,0,0];s.poly(pivot,[-.24,0,.14,0,-.04,h,-.20,h],.035,c,'',pivot,rot);
+ const flash=s.parts.length;s.box([x-.12,y+h-.05,z],[.17,.06,.045],P,'',pivot,rot);lit(s,flash);
+}
+// A flat plate in the wing plane: points are [x, z] pairs around `at`.
+function plane(s,at,points,c,depth=.035,m='',pivot=at){return s.poly(at,points,depth,c,m,pivot,[Math.PI/2,0,0]);}
+function tomcat(s){
+ s.box([-.34,.69,0],[1.30,.09,.36],NAVY);s.capsule([.42,.73,0],[1.10,.22,.25],NAVY);s.taper([.92,.72,0],[1.40,.71,0],.072,NAVY);
+ for(const side of [-1,1]){
+  const z=side*.26;
+  s.capsule([-.42,.66,z],[1.34,.21,.21],GULL);s.box([.20,.67,z*1.04],[.40,.21,.18],GULL);
+  const mouth=s.parts.length;s.box([.405,.67,z*1.04],[.02,.17,.14],DARK);s.parts[mouth].detail=1;
+  nozzle(s,-1.10,.66,z);
+  // The glove runs forward along the intake; the wing swings from its outer corner.
+  plane(s,[0,.705,0],[.62,side*.13,-.30,side*.13,-.30,side*.47,-.06,side*.47],NAVY);
+  const pivot=[-.16,.705,side*.44],wing=s.parts.length;
+  plane(s,pivot,[.26,0,-.18,0,-.24,side*.98,-.04,side*.98],NAVY,.035,'sweep');
+  lamp(s,[-.13,.705,side*1.40],.035,{m:'sweep',pivot,halo:3.0});
+  for(const p of s.parts.slice(wing))p.amplitude=SWEEP;
+  fin(s,-.86,.76,z,side*.22);
+  plane(s,[-.98,.66,side*.36],[.22,0,-.18,0,-.30,side*.40,-.10,side*.40],GULL);
+  roundel(s,-.18,.73,side*.34);
  }
- const fighter=role==='fighter';
- s.capsule([-.05,.70,0],[1.85,.26,.30],NAVY);s.taper([.62,.70,0],[1.10,.70,0],.075,NAVY);
- wing(s,-.18,.72,fighter?1.15:1.0,NAVY,{swept:true,thin:true});
- for(const z of [-.17,.17])s.poly([-.78,.80,z],[-.22,0,.18,0,-.08,.44],.04,NAVY,'',[-.78,.80,z],[z<0?-.20:.20,0,0]);
- cockpit(s,.38,.86,'#91bac6');
- for(const z of [-.10,.10])s.part('cylinder',[-.98,.70,z],[.15,.15,.06],DARK,'',[-.98,.70,z],[0,Math.PI/2,0]);
- if(fighter)for(const z of [-.30,.30])s.box([.45,.62,z],[.60,.05,.05],DARK,'recoil');
- else for(const z of [-.62,-.40,.40,.62]){s.taper([-.40,.58,z],[.18,.58,z],.045,WHITE);s.box([-.42,.58,z],[.10,.06,.14],DARK);}
+ // Two seats under one long canopy: the pilot forward, the radar officer behind.
+ const glass=s.parts.length;s.orb([.66,.84,0],[.30,.14,.16],CANOPY);s.orb([.40,.85,0],[.30,.14,.16],CANOPY);mat(s,glass,'glass');
+ s.box([.53,.86,0],[.035,.12,.17],GULL);
+ const missiles=s.parts.length;for(const z of [-.10,.10])s.taper([-.70,.60,z],[-.05,.60,z],.045,WHITE);s.tag(missiles,{detail:1});
+ s.box([.70,.66,-.10],[.40,.035,.035],DARK,'recoil');
+}
+function hornet(s){
+ s.capsule([.05,.70,0],[1.75,.24,.28],NAVY);s.taper([.80,.71,0],[1.30,.70,0],.07,NAVY);
+ // Leading-edge extensions run from the cockpit back into the wing roots.
+ plane(s,[0,.70,0],[.85,0,.10,.30,-.12,.30,-.12,-.30,.10,-.30],NAVY);
+ for(const side of [-1,1]){
+  const z=side*.10;
+  s.capsule([-.66,.68,z],[.62,.18,.18],GULL);nozzle(s,-1.0,.68,z);
+  plane(s,[-.22,.70,side*.20],[.26,0,-.22,0,-.36,side*.92,-.18,side*.92],NAVY);
+  lamp(s,[-.27,.70,side*1.11],.03,{halo:2.8});
+  fin(s,-.62,.78,side*.13,side*.36,GULL,.40);
+  plane(s,[-.86,.68,side*.18],[.18,0,-.14,0,-.24,side*.36,-.08,side*.36],GULL);
+  bomb(s,-.24,.56,side*.55);s.taper([-.42,.70,side*1.15],[-.02,.70,side*1.15],.03,WHITE);
+  roundel(s,-.28,.72,side*.58);
+ }
+ const glass=s.parts.length;s.orb([.48,.84,0],[.40,.15,.17],CANOPY);mat(s,glass,'glass');
+}
+function hawkeye(s){
+ s.capsule([-.05,.68,0],[1.75,.30,.32],NAVY);const glass=s.parts.length;s.orb([.62,.78,0],[.34,.20,.26],CANOPY);mat(s,glass,'glass');
+ plane(s,[-.02,.86,0],[.16,-1.25,.16,1.25,-.12,1.25,-.12,-1.25],NAVY);
+ for(const side of [-1,1]){
+  const z=side*.48;
+  s.capsule([.08,.80,z],[.62,.17,.17],GULL);s.part('cylinder',[.42,.80,z],[.46,.46,.02],DARK,'',[.42,.80,z],[0,Math.PI/2,0]);
+  lamp(s,[-.10,.86,side*1.24],.03,{halo:2.8});roundel(s,.02,.88,side*.86);
+ }
+ // The rotodome turns on its pylons; a band of light runs round it and its sweep glows over the deck.
+ for(const z of [-.12,.12])s.rod([-.20,.84,z],[-.20,1.06,z],.035,IRON);
+ s.part('cylinder',[-.20,1.10,0],[.85,.85,.12],WHITE,'spin',[-.20,1.10,0],[Math.PI/2,0,0]);
+ const band=s.parts.length;s.part('cylinder',[-.20,1.10,0],[.88,.88,.035],P,'spin',[-.20,1.10,0],[Math.PI/2,0,0]);lit(s,band);
+ const sweep=s.part('ellipsoid',[.10,1.10,0],[.62,.05,.16],P,'spin',[-.20,1.10,0]);sweep.halo=true;
+ s.box([-.82,.86,0],[.30,.04,1.0],GULL);for(const z of [-.50,-.18,.18,.50])s.poly([-.82,.88,z],[-.16,0,.12,0,-.02,.30,-.14,.30],.03,GULL);
+}
+function danger(s,role){
+ const start=s.parts.length;
+ (role==='scout'?hawkeye:role==='fighter'?tomcat:hornet)(s);
+ for(const p of s.parts.slice(start))if(p.material==='organic'||p.material==='cloth')p.material='iron';
 }
 const BUILDERS=[kublai,arjuna,templar,atlantis,fleet,manifesto,nullSociety,nations,emu,garden,danger];
 // Raised rigging gives each house a distinct planform from the top-down RTS view.
@@ -148,10 +203,10 @@ function housePlanform(s,seat,role){
  else if(seat===6){for(const z of [-.54,.54])s.rod([-.29,y,0],[-.54,y+.23,z],.035,LIGHT);}
  else if(seat===7){s.part('cylinder',[-.33,y+.13,0],[.30,.30,.045],GOLD,'',[-.33,y+.13,0],[Math.PI/2,0,0]);}
  else if(seat===8){for(const z of [-.48,0,.48])s.poly([-.28,y,z],[-.17,0,.17,0,0,.28],.025,'#c7b57e');}
- else if(seat===10){for(const z of [-.56,.56])s.part('cylinder',[-.30,y,z],[.24,.24,.03],BLUE,'',[-.30,y,z],[Math.PI/2,0,0]);s.box([-.30,y+.02,0],[.10,.02,1.30],WHITE);}
- else{} // Garden aircraft already use petal rotors as their complete organic planform.
+ // Garden aircraft already use petal rotors as their complete organic planform; the Danger Node's jets carry their
+ // roundels on their own wings.
 }
 export function airSculpt(seat,role='fighter'){
  if(!BUILDERS[seat]||!AIR_ROLES.includes(role))return null;
- const s=new Sculpt();BUILDERS[seat](s,role);housePlanform(s,seat,role);return {parts:s.parts,rig:'air'};
+ const s=new Sculpt();BUILDERS[seat](s,role);housePlanform(s,seat,role);finish(s);return {parts:s.parts,rig:'air'};
 }

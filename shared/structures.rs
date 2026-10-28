@@ -386,7 +386,7 @@ pub const ROLES: [Role; 6] = [Role::Landmark, Role::Hall, Role::Yard, Role::Work
 #[derive(Clone, Copy)]
 struct Pc { kind: u8, x: f64, y: f64, z: f64, w: f64, h: f64, d: f64, rot: f64, tone: u8 }
 const KINDS: &str = "pplatform hhall ttower rroof aarch ccolumn wwall xaccent Ddome sspire Ppyramid ddrum Ttiers kstack ggarden bbanner llight Sstatue";
-const TONES: &str = "Ffaction sstone mmarble bbrick wwood Mmetal ggold Gglass kdark jjade nsand";
+const TONES: &str = "Ffaction sstone mmarble bbrick wwood Mmetal ggold Gglass kdark jjade nsand Lglow";
 fn word(table: &str, c: u8) -> &str { table.split(' ').find(|w| w.as_bytes()[0] == c).map_or("", |w| &w[1..]) }
 struct Art(Vec<Pc>);
 impl Art {
@@ -562,8 +562,9 @@ fn house_massing(a: &mut Art, style: usize, role: Role) {
         7 => { a.add(b'h', x, y, 0.16, w*1.28, h*0.66, d*1.10, b'b'); a.add(b'r', x, y, 0.16+h*0.64, w*1.38, h*0.46, d*1.20, b'k'); a.add(b'c', x-w*0.42, y-d*0.44, 0.16, 0.16, h*1.20, 0., b'g'); a.add(b'c', x, y-d*0.44, 0.16, 0.16, h*1.20, 0., b'g'); a.add(b'c', x+w*0.42, y-d*0.44, 0.16, 0.16, h*1.20, 0., b'g'); }
         // A field compound of shallow corrugated sheds, a tank, and a radio mast.
         8 => { a.add(b'h', x-w*0.23, y, 0.16, w*0.64, h*0.48, d*0.78, b'M'); a.add(b'r', x-w*0.23, y, 0.16+h*0.46, w*0.72, 0.26, d*0.88, b'M'); a.add(b'h', x+w*0.34, y+d*0.20, 0.16, w*0.42, h*0.40, d*0.54, b'M'); a.add(b'd', x+w*0.48, y-d*0.30, 0.16, w*0.24, h*1.20, 0., b'M'); a.add(b's', x-w*0.48, y-d*0.30, 0.16, 0.12, h*1.48, 0., b'F'); }
-        // A flight-line hangar: a long metal shed with its door on the apron, a control tower with a glass cab.
-        10 => { a.add(b'h', x-w*0.14, y, 0.16, w*0.84, h*0.62, d*0.92, b'M'); a.add(b'r', x-w*0.14, y, 0.16+h*0.60, w*0.90, h*0.32, d*0.98, b'F'); a.add(b'x', x-w*0.14, y-d*0.47, 0.16, w*0.64, h*0.50, 0.06, b'k'); a.add(b't', x+w*0.46, y+d*0.26, 0.16, 0.22, h*1.30, 0., b'm'); a.add(b'x', x+w*0.46, y+d*0.26, 0.16+h*1.30, 0.42, 0.24, 0.42, b'G'); }
+        // A flight-line hangar: a long metal shed with its door on the apron lit across the top, and a control tower
+        // whose glass cab sits on a ring that glows in the house colour.
+        10 => { a.add(b'h', x-w*0.14, y, 0.16, w*0.84, h*0.62, d*0.92, b'M'); a.add(b'r', x-w*0.14, y, 0.16+h*0.60, w*0.90, h*0.32, d*0.98, b'F'); a.add(b'x', x-w*0.14, y-d*0.47, 0.16, w*0.64, h*0.50, 0.06, b'k'); a.add(b'x', x-w*0.14, y-d*0.48, 0.16+h*0.50, w*0.64, 0.05, 0.07, b'L'); a.add(b't', x+w*0.46, y+d*0.26, 0.16, 0.22, h*1.30, 0., b'm'); a.add(b'x', x+w*0.46, y+d*0.26, 0.12+h*1.30, 0.48, 0.05, 0.48, b'L'); a.add(b'x', x+w*0.46, y+d*0.26, 0.16+h*1.30, 0.42, 0.24, 0.42, b'G'); }
         // Living branches make an irregular canopy over clustered flowers and trunks.
         _ => { a.add(b'g', x, y, 0.16, w*1.18, 0.14, d, b'g'); a.add(b'a', x-w*0.30, y, 0.16, w*0.48, h*1.14, d*0.28, b'm'); a.add(b'a', x+w*0.30, y+d*0.12, 0.16, w*0.48, h*0.88, d*0.28, b'm'); a.add(b'D', x, y-d*0.22, 0.20, w*0.32, h*0.56, 0., b'G'); a.add(b'D', x+w*0.42, y+d*0.22, 0.20, w*0.26, h*0.46, 0., b'F'); }
     }
@@ -581,7 +582,7 @@ fn house_massing(a: &mut Art, style: usize, role: Role) {
         6 => { a.add(b'h', -1.25, 0.35, 0.16, 0.64, 2.18, 0.64, b'G'); a.add(b'h', 1.25, 0.35, 0.16, 0.64, 1.72, 0.64, b'G'); }
         7 => { a.add(b'h', -1.22, 0.35, 0.16, 0.98, 0.86, 0.78, b'b'); a.add(b'r', -1.22, 0.35, 1.02, 1.08, 0.46, 0.88, b'k'); a.add(b'h', 1.22, 0.35, 0.16, 0.98, 0.86, 0.78, b'b'); a.add(b'r', 1.22, 0.35, 1.02, 1.08, 0.46, 0.88, b'k'); }
         8 => { a.add(b'h', -1.24, 0.35, 0.16, 1.05, 0.58, 0.82, b'M'); a.add(b'd', 1.24, 0.35, 0.16, 0.88, 1.02, 0., b'M'); }
-        10 => { a.add(b'h', -1.24, 0.35, 0.16, 0.98, 0.50, 0.80, b'M'); a.add(b'r', -1.24, 0.35, 0.66, 1.04, 0.30, 0.86, b'F'); a.add(b'h', 1.24, 0.35, 0.16, 0.98, 0.50, 0.80, b'M'); a.add(b'r', 1.24, 0.35, 0.66, 1.04, 0.30, 0.86, b'F'); }
+        10 => { for x in [-1.24, 1.24] { a.add(b'h', x, 0.35, 0.16, 0.98, 0.50, 0.80, b'M'); a.add(b'r', x, 0.35, 0.66, 1.04, 0.30, 0.86, b'F'); a.add(b'x', x, -0.06, 0.54, 0.80, 0.04, 0.05, b'L'); } }
         _ => { a.add(b'g', -1.25, 0.35, 0.16, 0.98, 0.12, 0.84, b'g'); a.add(b'a', -1.25, 0.48, 0.16, 0.94, 1.22, 0.28, b'm'); a.add(b'g', 1.25, 0.35, 0.16, 0.98, 0.12, 0.84, b'g'); a.add(b'a', 1.25, 0.48, 0.16, 0.94, 1.22, 0.28, b'm'); }
     }
 }
@@ -611,8 +612,8 @@ fn house_mark(a: &mut Art, style: usize, role: Role) {
         7 => { a.add(b'h', x, y, 0.16, 0.82, 0.56, 0.72, b'b'); a.add(b'r', x, y, 0.72, 0.90, 0.42, 0.78, b'k'); a.add(b'd', x + 0.72, y, 0.16, 0.34, 1.22, 0., b'g'); }
         // Campion: corrugated water tank, wind vane and field antenna.
         8 => { a.add(b'd', x, y, 0.16, 0.66, 0.72, 0., b'M'); a.add(b'D', x, y, 0.88, 0.72, 0.22, 0., b'M'); a.add(b's', x + 0.72, y, 0.16, 0.12, 1.38, 0., b'F'); }
-        // Highway to the Danger Node: a windsock on a white mast and a red beacon.
-        10 => { a.add(b'c', x, y, 0.16, 0.10, 1.30, 0., b'm'); a.add(b'x', x + 0.24, y, 1.26, 0.46, 0.14, 0.14, b'F'); a.add(b'l', x, y, 1.46, 0.16, 0.20, 0., b'F'); }
+        // Highway to the Danger Node: a windsock on a white mast and a beacon in the house colour.
+        10 => { a.add(b'c', x, y, 0.16, 0.10, 1.30, 0., b'm'); a.add(b'x', x + 0.24, y, 1.26, 0.46, 0.14, 0.14, b'F'); a.add(b'l', x, y, 1.46, 0.16, 0.20, 0., b'L'); }
         // Flux: planted bowl, translucent canopy and an airy white arch.
         _ => { a.add(b'g', x, y, 0.16, 1.10, 0.12, 0.86, b'g'); a.add(b'a', x, y + 0.30, 0.16, 0.92, 1.06, 0.28, b'm'); a.add(b'D', x, y, 0.28, 0.68, 0.28, 0., b'G'); }
     }
@@ -632,7 +633,7 @@ fn house_footing(a: &mut Art, style: usize, role: Role, k: &Kit) {
         6 => { a.add(b'p', -w*0.20, 0., 0.10, w*0.54, 0.10, d*0.82, b'k'); a.add(b'x', w*0.23, 0., 0.28, w*0.42, 0.10, d*0.68, b'G'); },
         7 => { a.add(b'p', 0., 0., 0.02, w, 0.12, d, b'b'); a.add(b'x', 0., -d*0.40, 0.14, w*0.38, 0.12, 0.24, b'g'); },
         8 => { a.add(b'p', 0., 0., 0.02, w, 0.10, d, b'n'); a.add(b'x', 0., -d*0.36, 0.12, w*0.70, 0.10, 0.32, b'M'); },
-        10 => { a.add(b'p', 0., 0., 0.02, w, 0.10, d, b'k'); a.add(b'x', 0., -d*0.40, 0.12, w*0.78, 0.04, 0.10, b'm'); },
+        10 => { a.add(b'p', 0., 0., 0.02, w, 0.10, d, b'k'); a.add(b'x', 0., -d*0.40, 0.12, w*0.78, 0.04, 0.10, b'L'); },
         _ => { a.add(b'g', 0., 0., 0.02, w*0.94, 0.12, d*0.82, b'g'); a.add(b'a', 0., -d*0.28, 0.14, w*0.44, 0.52, 0.24, b'm'); },
     }
 }
