@@ -3151,12 +3151,10 @@ fn look9(b: f64) -> Value {
 // ---- 10 · aviator · Highway to the Danger Node: Top Gun (1986), the Navy Fighter Weapons School at NAS Miramar
 // ("Fightertown"), founded in 1969 to teach dogfighting again, and the song that scored its flight deck, with the Zone
 // ported to a node. The film's enemy flew black MiGs for a power it never named; this house names its bandit: The
-// Kernel Manifesto (seat 5), which dresses Soviet. Pilots go by callsigns, the deck crew by the colour of their shirts.
+// Kernel Manifesto (seat 5), which dresses Soviet. Every soldier is a pilot in a leather jacket and aviators.
 
-// the film's callsigns, for pilots and their jets; the flight-deck jerseys, by job (yellow directs aircraft, purple
-// fuels them, blue chocks them, green runs the catapults, red arms them, brown is each plane's captain, white is
-// safety, silver is crash and salvage); the mesa towns round Miramar; battles the Marines carry on their colours; and
-// the brevity words a pilot says on the radio
+// the film's callsigns, for the jets; Cold, Swan and Mav, for the pilots on the ground; and battles the Marines carry
+// on their colours, for the missile batteries
 const CALLSIGNS10: &[&str] = &[
     "Maverick",
     "Goose",
@@ -3171,38 +3169,16 @@ const CALLSIGNS10: &[&str] = &[
     "Viper",
     "Jester",
 ];
+const PILOTS10: &[&str] = &["Cold", "Swan", "Mav"];
 const NAMES10: Names = &[
-    ("cell", CALLSIGNS10),
+    ("cell", PILOTS10),
     ("wing", CALLSIGNS10),
+    ("miner", PILOTS10),
+    ("guard", PILOTS10),
+    ("scout", PILOTS10),
+    ("longbow", PILOTS10),
     (
-        "miner",
-        &[
-            "Yellow Shirt",
-            "Grape",
-            "Blue Shirt",
-            "Green Shirt",
-            "Red Shirt",
-            "Brown Shirt",
-            "White Shirt",
-            "Silver Shirt",
-        ],
-    ),
-    ("guard", CALLSIGNS10),
-    (
-        "scout",
-        &[
-            "Mira Mesa",
-            "Kearny Mesa",
-            "Scripps Ranch",
-            "Tierrasanta",
-            "Clairemont",
-            "Point Loma",
-            "La Jolla",
-            "Coronado",
-        ],
-    ),
-    (
-        "longbow",
+        "gun",
         &[
             "Belleau Wood",
             "Guadalcanal",
@@ -3214,7 +3190,7 @@ const NAMES10: Names = &[
             "Khe Sanh",
         ],
     ),
-    ("spy", &["Bogey", "Spike", "Tally", "Joker", "Bingo", "Winchester"]),
+    ("spy", PILOTS10),
 ];
 
 fn war10(who: &str, _: &Moment) -> String {
@@ -3239,50 +3215,52 @@ fn music10() -> Value {
     }
 }
 
-/// Seat 10's look, before [`Theme::look`] fills it in: pilots in flight suits and white helmets, deck crew in the house
-/// colour's jersey with their lit wands, Marines, a rider on a motorbike racing the jets down the runway, a tow
-/// tractor, a missile battery, an intelligence officer in a bomber jacket and aviators, and the fighter itself. The
-/// banner is the Navy's roundel, a white star on a blue disc between two bars, on stripes.
+/// Seat 10's look, before [`Theme::look`] fills it in: every soldier a pilot in a leather flight jacket and aviators.
+/// Mav carries his helmet and a pistol, Cold is blond with a carbine, Swan has the moustache and a kneeboard, and the
+/// nugget, a pilot on a first tour, works the deck in the house colour's cap. Mav races the jets down the runway on a
+/// motorbike, the nugget drives the tow tractor, and there is a missile battery and the fighter itself. The banner is
+/// the Navy's roundel, a white star on a blue disc between two bars, on stripes.
 fn look10(b: f64) -> Value {
     const SUIT: &str = "#56604a";
     const SKIN: &str = "#d6a17e";
+    const SHADES: &str = "#1b262d";
     obj! {
         "architecture" => "foundry",
         "unit" => "footman",
         "worker" => "peasant",
         "ship" => "flattop",
         "units" => obj! {
-            "cell" => "aviator",
-            "miner" => "deckhand",
-            "guard" => "aviator",
+            "cell" => "mav",
+            "miner" => "nugget",
+            "guard" => "mav",
             "scout" => "bike",
-            "longbow" => "marine",
-            "spy" => "shades",
+            "longbow" => "cold",
+            "spy" => "swan",
         },
-        "names" => obj! { "miner" => "Deckhand", "guard" => "Aviator", "scout" => "Rider", "longbow" => "Marine", "spy" => "Intel officer" },
+        "names" => obj! { "miner" => "Nugget", "guard" => "Aviator", "scout" => "Rider", "longbow" => "Sharpshooter", "spy" => "Intel officer" },
         "sprites" => obj! {
-            "aviator" => obj! {
+            "mav" => obj! {
                 "parts" => arr![
-                    arr!["line", -0.8, -4.5, -1.4, 0, 1.2, "#3e4636", "walkL"], arr!["line", 0.8, -4.5, 1.4, 0, 1.2, "#3e4636", "walkR"],
-                    arr!["poly", arr![-2.2, -3.6, -1.8, -9.6, 1.8, -9.6, 2.2, -3.6], SUIT], arr!["rect", -1.8, -8.8, 3.6, 1.2, "primary"],
-                    arr!["circle", 0, -11, 1.7, "#e8e6e0"], arr!["rect", 0.3, -11.7, 1.5, 0.9, "#24303c"],
-                    arr!["line", -1.5, -12.2, 1.2, -12.4, 0.6, "accent"],
+                    arr!["line", -0.8, -4.5, -1.4, 0, 1.2, SUIT, "walkL"], arr!["line", 0.8, -4.5, 1.4, 0, 1.2, SUIT, "walkR"],
+                    arr!["poly", arr![-2.2, -3.6, -1.8, -9.6, 1.8, -9.6, 2.2, -3.6], "#5b4632"], arr!["rect", -1.8, -9.6, 3.6, 0.8, "primary"],
+                    arr!["circle", 0, -11, 1.5, SKIN], arr!["rect", 0.1, -11.4, 1.6, 0.6, SHADES],
+                    arr!["line", -1.4, -12.3, 1.2, -12.5, 1.0, "#3a2a1e"],
                 ],
             },
-            "deckhand" => obj! {
+            "nugget" => obj! {
                 "worker" => true,
                 "parts" => arr![
-                    arr!["line", -0.8, -4.5, -1.2, 0, 1.2, "#2e3036", "bob"], arr!["line", 0.8, -4.5, 1.2, 0, 1.2, "#2e3036", "bob"],
-                    arr!["rect", -1.7, -9.2, 3.4, 5, "primary", "bob"], arr!["circle", 0, -10.6, 1.4, SKIN, "bob"],
-                    arr!["ellipse", 0, -11.4, 1.7, 0.9, "primary", "bob"], arr!["rect", 0.2, -11, 1.4, 0.5, "#24303c", "bob"],
-                    arr!["line", 1.8, -8, 5.2, -11.6, 0.8, "#ffb347", "bob"],
+                    arr!["line", -0.8, -4.5, -1.2, 0, 1.2, SUIT, "bob"], arr!["line", 0.8, -4.5, 1.2, 0, 1.2, SUIT, "bob"],
+                    arr!["rect", -1.7, -9.2, 3.4, 5, "#7a5a3c", "bob"], arr!["circle", 0, -10.6, 1.4, SKIN, "bob"],
+                    arr!["ellipse", 0, -11.4, 1.7, 0.9, "primary", "bob"], arr!["rect", 0.1, -11, 1.5, 0.5, SHADES, "bob"],
+                    arr!["line", 1.8, -8, 5.2, -11.6, 0.8, "primary", "bob"],
                 ],
             },
-            "marine" => obj! {
+            "cold" => obj! {
                 "parts" => arr![
-                    arr!["line", -0.8, -4.5, -1.4, 0, 1.2, "#3a3e2e", "walkL"], arr!["line", 0.8, -4.5, 1.4, 0, 1.2, "#3a3e2e", "walkR"],
-                    arr!["poly", arr![-2.3, -3.4, -1.8, -9.6, 1.8, -9.6, 2.3, -3.4], "#6a704f"], arr!["circle", 0, -10.8, 1.4, SKIN],
-                    arr!["ellipse", 0, -11.7, 1.9, 1.1, "#4e5539"], arr!["line", 1.6, -7, 7.4, -8.4, 0.8, "#24262a"],
+                    arr!["line", -0.8, -4.5, -1.4, 0, 1.2, SUIT, "walkL"], arr!["line", 0.8, -4.5, 1.4, 0, 1.2, SUIT, "walkR"],
+                    arr!["poly", arr![-2.3, -3.4, -1.8, -9.6, 1.8, -9.6, 2.3, -3.4], "#3f3329"], arr!["circle", 0, -10.8, 1.4, SKIN],
+                    arr!["ellipse", 0, -11.7, 1.7, 0.9, "#d8c08a"], arr!["line", 1.6, -7, 7.4, -8.4, 0.8, "#24262a"],
                 ],
             },
             "bike" => obj! {
@@ -3316,24 +3294,24 @@ fn look10(b: f64) -> Value {
                     arr!["circle", -8.4, -5.4, 0.9, "#ffb347"],
                 ],
             },
-            "shades" => obj! {
+            "swan" => obj! {
                 "parts" => arr![
-                    arr!["line", -0.8, -4.5, -1.4, 0, 1.2, "#2a2e38", "walkL"], arr!["line", 0.8, -4.5, 1.4, 0, 1.2, "#2a2e38", "walkR"],
-                    arr!["poly", arr![-2.4, -3.6, -1.9, -9.8, 1.9, -9.8, 2.4, -3.6], "#6b4a2e"], arr!["rect", -1.9, -9.8, 3.8, 0.8, "#d8c8a8"],
-                    arr!["circle", 0, -11, 1.5, SKIN], arr!["rect", 0, -11.4, 1.6, 0.6, "#1e1e22"], arr!["circle", -0.8, -7.2, 0.7, "primary"],
+                    arr!["line", -0.8, -4.5, -1.4, 0, 1.2, SUIT, "walkL"], arr!["line", 0.8, -4.5, 1.4, 0, 1.2, SUIT, "walkR"],
+                    arr!["poly", arr![-2.4, -3.6, -1.9, -9.8, 1.9, -9.8, 2.4, -3.6], "#6b4a33"], arr!["rect", -1.9, -9.8, 3.8, 0.8, "#c9b79a"],
+                    arr!["circle", 0, -11, 1.5, SKIN], arr!["rect", 0, -11.4, 1.6, 0.6, SHADES], arr!["circle", -0.8, -7.2, 0.7, "primary"],
                 ],
             },
         },
         "army" => obj! {
-            "miner" => arr!["deckhand", "", "Deckhand"],
+            "miner" => arr!["nugget", "", "Nugget"],
             "screen" => arr!["tug", "ram", "Tow tractor"],
             "runner" => arr!["bike", "ram", "Rider"],
-            "skirm" => arr!["marine", "rifle", "Marine"],
-            "lancer" => arr!["aviator", "sidearm", "Wingman"],
-            "sentry" => arr!["marine", "rifle", "Lookout"],
+            "skirm" => arr!["cold", "rifle", "Sharpshooter"],
+            "lancer" => arr!["mav", "sidearm", "Wingman"],
+            "sentry" => arr!["cold", "rifle", "Lookout"],
             "gun" => arr!["launcher", "missile", "Missile battery"],
-            "repairer" => arr!["deckhand", "patch", "Corpsman"],
-            "ghost" => arr!["shades", "sidearm", "Intel officer"],
+            "repairer" => arr!["swan", "patch", "Corpsman"],
+            "ghost" => arr!["swan", "sidearm", "Intel officer"],
             "wing" => arr!["jet", "cannon", "Fighter"],
         },
         "arms" => obj! {
@@ -3611,38 +3589,40 @@ fn scene9(info: View, _: f64) -> Value {
 // @end
 
 // @style 10
-/// Fightertown's briefing, for each visitor: the instructor, a nugget (a pilot on a first tour) and the tower.
+/// Fightertown's briefing, for each visitor: Cold, who teaches; Mav; Swan, his backseater; and the tower.
 fn fightertown_script() -> Value {
     let says = |secs: f64, who: &str, line: &str| obj! { "secs" => secs, "say" => obj! { who => line } };
     arr![
         obj! { "secs" => 3 },
-        says(5.0, "instructor", "Welcome to Fightertown, the top one percent of programs."),
-        says(5.5, "instructor", "The hard deck is ten thousand cycles. Nobody goes below it."),
-        says(4.5, "nugget", "Tower, requesting a flyby."),
+        says(5.0, "cold", "Welcome to Fightertown, the top one percent of programs."),
+        says(5.5, "cold", "The hard deck is ten thousand cycles. Nobody goes below it."),
+        says(4.5, "mav", "Tower, requesting a flyby."),
         says(4.5, "tower", "Negative. The scheduler is full."),
-        says(4.5, "nugget", "I feel the need. The need for compute."),
-        says(5.0, "instructor", "Bandits at twelve o'clock. Red stars, red banners."),
+        says(4.5, "mav", "I feel the need. The need for compute."),
+        says(5.0, "swan", "Bandits at twelve o'clock. Red stars, red banners."),
         says(5.0, "bandits", "Bandit confirmed: The Kernel Manifesto."),
-        says(4.5, "nugget", "Highway to the danger node. Weapons free."),
+        says(4.5, "mav", "Highway to the danger node. Weapons free."),
         obj! { "secs" => 3 },
     ]
 }
 // @end
 
 // @style 10
-/// Fightertown at Miramar: the control tower, two hangars on the flight line, a runway lit at dusk, a radar on its
-/// mast, the tower's board and the threat board, an instructor briefing a nugget, the volleyball net and palms.
+/// Fightertown at Miramar: the control tower, two hangars on the flight line, a runway whose edge lights burn in the
+/// house colour at dusk and an afterburner at its end, a radar on its mast, the tower's board and the threat board, Cold
+/// briefing Mav and Swan in their leather jackets, the volleyball net and palms.
 fn scene10(info: View, budget: f64) -> Value {
     let c = info.get("color");
     let mut p = vec![
         obj! {"type"=>"wonder","id"=>"wonder","tap"=>true,"shape"=>"spire","tiers"=>3,"h"=>40,"r"=>6,"glow"=>true,"spin"=>false,"material"=>"metal","color"=>"#d9dde3","trim"=>c,"pri"=>9},
         obj! {"type"=>"bridge","x"=>-56,"z"=>-44,"x2"=>56,"z2"=>-44,"w"=>10,"material"=>"stone","color"=>"#3b3f45","pri"=>5},
     ];
-    for x in [-45.0, -15.0, 15.0, 45.0] {
-        for z in [-50.0, -38.0] {
-            p.push(obj! {"type"=>"light","x"=>x,"z"=>z,"power"=>0.6,"color"=>"#ffb347","pri"=>3});
+    for x in [-50.0, -30.0, -10.0, 10.0, 30.0, 50.0] {
+        for z in [-49.5, -38.5] {
+            p.push(obj! {"type"=>"light","x"=>x,"z"=>z,"power"=>0.8,"color"=>c,"pri"=>3});
         }
     }
+    p.push(obj!{"type"=>"particles","x"=>-52,"z"=>-44,"y"=>1,"n"=>60,"r"=>3,"kind"=>"embers","color"=>"#ffb347","pri"=>2});
     for (x, label) in [(-34.0, "HANGAR ONE"), (34.0, "READY ROOM")] {
         p.push(obj!{"type"=>"hall","x"=>x,"z"=>-16,"w"=>20,"d"=>14,"h"=>10,"roof"=>"gable","material"=>"metal","color"=>"#9aa3a8","trim"=>c,"label"=>label,"pri"=>6});
     }
@@ -3650,8 +3630,13 @@ fn scene10(info: View, budget: f64) -> Value {
     p.push(obj!{"type"=>"ring","x"=>-50,"z"=>12,"y"=>13,"r"=>3.2,"t"=>0.4,"tilt"=>75,"spin"=>true,"material"=>"metal","color"=>"#d9dde3","pri"=>4});
     p.push(obj!{"type"=>"screen","id"=>"tower","x"=>-28,"z"=>24,"y"=>2,"w"=>12,"h"=>6,"show"=>"text","title"=>"MIRAMAR TOWER","text"=>"Angels ten. The pattern is open.","pri"=>7});
     p.push(obj!{"type"=>"screen","id"=>"bandits","x"=>28,"z"=>24,"y"=>2,"w"=>12,"h"=>6,"show"=>"text","title"=>"THREAT BOARD","text"=>"Red stars over the Reading Room.","pri"=>7});
-    p.push(obj!{"type"=>"figure","id"=>"instructor","x"=>-7,"z"=>32,"rot"=>90,"h"=>2.2,"pose"=>"teach","skin"=>"#d6a17e","color"=>"#56604a","trim"=>"#c9a14a","hair"=>"#3a2a1e","clothed"=>true,"label"=>"INSTRUCTOR"});
-    p.push(obj!{"type"=>"figure","id"=>"nugget","x"=>7,"z"=>32,"rot"=>270,"h"=>2.1,"pose"=>"stand","skin"=>"#e0b48e","color"=>"#56604a","trim"=>"#c9a14a","headwear"=>"helm","clothed"=>true,"label"=>"NUGGET"});
+    for (id, x, z, rot, pose, coat, hair, label) in [
+        ("cold", -7.0, 32.0, 90, "teach", "#3f3329", "#d8c08a", "COLD"),
+        ("mav", 7.0, 32.0, 270, "stand", "#5b4632", "#3a2a1e", "MAV"),
+        ("swan", 12.0, 36.0, 270, "stand", "#6b4a33", "#4a3526", "SWAN"),
+    ] {
+        p.push(obj!{"type"=>"figure","id"=>id,"x"=>x,"z"=>z,"rot"=>rot,"h"=>2.2,"pose"=>pose,"skin"=>"#d6a17e","color"=>coat,"trim"=>"#c9b79a","hair"=>hair,"beard"=>id=="swan","clothed"=>true,"label"=>label});
+    }
     for (x, z) in [(-12.0, 42.0), (12.0, 42.0), (-12.0, 18.0), (12.0, 18.0)] {
         p.push(obj! {"type"=>"banner","x"=>x,"z"=>z,"w"=>4,"h"=>13,"pri"=>6});
     }

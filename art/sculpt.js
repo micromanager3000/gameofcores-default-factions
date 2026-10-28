@@ -53,3 +53,24 @@ export class Sculpt {
  tag(start,{material,detail,joint,aim,pivot}={}){for(const p of this.parts.slice(start)){if(material)p.material=material;if(detail!==undefined)p.detail=detail;if(joint)p.joint=joint;if(aim)p.aim=aim;if(pivot)p.pivot=[...pivot];}}
  transform(start,scale,offset){for(const p of this.parts.slice(start)){p.at=p.at.map((x,i)=>x*scale+offset[i]);p.size=p.size.map(x=>x*scale);p.pivot=p.pivot.map((x,i)=>x*scale+offset[i]);if(p.kneeDrop)p.kneeDrop*=scale;if(p.points)p.points=p.points.map(x=>x*scale);if(p.profile)p.profile=p.profile.map(r=>r.map(x=>x*scale));}}
 }
+
+// Materials the viewer shades (gpu/unit-surfaces.js): iron and brass are polished and mirror the sky, cloth carries a
+// sheen in its own colour, leather a soft grain, organic (skin, hide, leaves) lets light round its edge. Emissive parts
+// light themselves and flare as their unit strikes or is struck; a halo is the soft glow around one. Alloy and void are
+// the Null Pointer Society's. finish() draws every halo after the body it sits on.
+export function alloy(s,start){for(const p of s.parts.slice(start))if(!p.halo)p.material='alloy';}
+export function lit(s,start){for(const p of s.parts.slice(start))if(!p.halo)p.material='emissive';}
+export function mat(s,start,material,detail){for(const p of s.parts.slice(start))if(!p.halo){p.material=material;if(detail!==undefined)p.detail=detail;}}
+// A light: an emissive bead and the halo around it, on the same joint.
+export function lamp(s,at,r,{c='primary',m='',pivot=at,halo=3.2,stretch=[1,1,1],detail=0}={}){
+ const bead=s.capsule(at,stretch.map(k=>r*k),c,m,pivot);bead.material='emissive';bead.detail=detail;
+ if(halo){const h=s.orb(at,stretch.map(k=>r*k*halo),c,m,pivot);h.halo=true;h.detail=detail;}
+ return bead;
+}
+// A glow along a blade, lance or coil: a stretched halo centred on `at`, turned by `angle` to lie along it. A part turns
+// about its joint's pivot, so the centre is turned back first.
+export function streak(s,at,size,angle,{c='primary',m='',pivot=at,detail=0}={}){
+ const dx=at[0]-pivot[0],dy=at[1]-pivot[1],cos=Math.cos(-angle),sin=Math.sin(-angle);
+ const h=s.part('ellipsoid',[pivot[0]+dx*cos-dy*sin,pivot[1]+dx*sin+dy*cos,at[2]],size,c,m,pivot,[0,0,angle]);h.halo=true;h.detail=detail;return h;
+}
+export function finish(s){const solid=s.parts.filter(p=>!p.halo),halos=s.parts.filter(p=>p.halo);for(const h of halos)h.material='halo';s.parts=[...solid,...halos];}

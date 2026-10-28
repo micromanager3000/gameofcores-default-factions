@@ -1,5 +1,5 @@
 // Faction naval miniatures: retained hulls and rigid equipment, animated by the unit shader.
-import { Sculpt } from './sculpt.js';
+import { Sculpt, lit, lamp, finish } from './sculpt.js';
 const P='primary',S='secondary',A='accent',WOOD='#785239',DECK='#b59a70',IRON='#788b95',DARK='#26333a',GOLD='#dab866',IVORY='#e6dcc2',RED='#b93b3c',LIGHT='#a3fff0';
 export const NAVAL_ROLES=['hull','gun','sub','sonar','carrier'];
 // The three fleet functions stay stable; the house SDK gives them these display names.
@@ -179,15 +179,22 @@ function paper(s,role,v){
  if(role==='sonar'||v==='picket'){s.orb([.47,1.02,0],[.50,.33,.39],IVORY,'spin',[.47,1.02,0]);s.orb([.69,1.03,.04],[.06,.22,.22],P,'spin',[.47,1.02,0]);}
  if(v==='raider')for(const z of [-.45,.45])s.poly([-.51,.46,z],[-.37,0,.35,0,0,.39],.025,'#c1d09d');
 }
-// Highway to the Danger Node: haze-grey Navy hulls, a supercarrier with its island, missile cells and radar.
-const HAZE='#7d868d',HDECK='#5f676d',WHITE='#e8e6e0';
+// Highway to the Danger Node: haze-grey Navy hulls, a supercarrier with its island, missile cells and radar, lit like a
+// flight deck at night: deck-edge strips and bridge windows in the faction's colour and a lamp at every masthead.
+const HAZE='#7d868d',HDECK='#5f676d',WHITE='#e8e6e0',WARM='#ffcf7a';
 function flattop(s,role,v){
- if(role==='sub'){capsule(s,{c:'#2e3438',length:2.45,beam:.46});s.box([.22,.64,0],[.42,.42,.16],'#2e3438');for(const z of [-1,1])s.box([.22,.74,z*.20],[.20,.04,.26],'#2e3438');periscope(s,.16,1.10);return;}
+ if(role==='sub'){
+  capsule(s,{c:'#2e3438',length:2.45,beam:.46});s.box([.22,.64,0],[.42,.42,.16],'#2e3438');for(const z of [-1,1])s.box([.22,.74,z*.20],[.20,.04,.26],'#2e3438');periscope(s,.16,1.10);
+  const band=s.parts.length;for(const z of [-.085,.085])s.box([.22,.78,z],[.36,.035,.02],P);lit(s,band);lamp(s,[.34,1.10,0],.035,{c:'#ff4a3a',halo:3});
+  return;
+ }
  hull(s,{length:v==='raider'?1.05:1.30,beam:v==='raider'?.26:.38,c:HAZE,deck:HDECK,profile:'chine'});
  if(role==='carrier'){
   plate(s,[-1.32,-.58,1.18,-.50,1.36,0,1.18,.50,-1.32,.58],.70,.10,'#4c545a');
   s.box([.05,.76,-.12],[2.2,.02,.04],WHITE,'',[.05,.76,-.12],[0,.16,0]);for(const x of [-.9,-.3,.3,.9])s.box([x,.76,.20],[.18,.02,.03],'#e0c04a');
   s.box([-.15,1.00,.44],[.50,.55,.18],HAZE);s.box([-.20,1.36,.44],[.12,.30,.10],DARK);s.part('cylinder',[-.20,1.55,.44],[.30,.30,.04],IRON,'spin',[-.20,1.55,.44],[Math.PI/2,0,0]);
+  const edge=s.parts.length;for(const z of [-.53,.53])s.box([-.06,.76,z],[2.30,.02,.025],P);s.box([-.15,1.18,.44],[.52,.05,.20],P);lit(s,edge);
+  for(const z of [-.22,.22])lamp(s,[1.24,.78,z],.035,{c:WARM,halo:3});lamp(s,[-.20,1.62,.44],.035,{c:'#ff4a3a',halo:3.2});
   return;
  }
  s.box([-.12,.80,0],[.62,.42,.44],HAZE);s.box([-.10,1.06,0],[.40,.14,.36],HAZE);s.rod([-.10,1.10,0],[-.10,1.62,0],.045,IRON);s.box([-.10,1.48,0],[.40,.035,.035],IRON);
@@ -195,7 +202,9 @@ function flattop(s,role,v){
   if(v==='raider'){gun(s,.55,.66);s.box([-.65,.66,0],[.30,.16,.30],DARK);}
   else{s.box([.62,.76,0],[.30,.24,.22],P);s.box([.92,.80,0],[.40,.05,.05],IRON,'recoil',[.62,.76,0]);for(const x of [.30,.42])for(const z of [-.12,0,.12])s.box([x,.62,z],[.09,.03,.09],DARK);if(!v)for(const z of [-.14,.14])s.box([-.70,.70,z],[.36,.14,.12],WHITE);}
  }
- if(role==='sonar'||v==='picket'){s.box([-.10,1.66,0],[.55,.20,.06],WHITE,'spin',[-.10,1.66,0]);s.orb([.45,.95,0],[.30,.30,.30],WHITE);}
+ const glow=s.parts.length;s.box([.105,1.07,0],[.02,.05,.30],P);for(const z of [-.225,.225])s.box([-.12,.86,z],[.56,.035,.01],P);lit(s,glow);
+ if(role==='sonar'||v==='picket'){s.box([-.10,1.66,0],[.55,.20,.06],WHITE,'spin',[-.10,1.66,0]);s.orb([.45,.95,0],[.30,.30,.30],WHITE);lamp(s,[.45,1.27,0],.035,{c:'#ff4a3a',halo:3});}
+ else lamp(s,[-.10,1.66,0],.035,{c:WARM,halo:3.2});
 }
 function sloop(s,role,v){
  if(role==='sub'){capsule(s);s.box([-.18,.59,0],[.43,.30,.27],P);periscope(s);return;}
@@ -228,5 +237,5 @@ export function navalSculpt(style,role='hull',riders=0,variant=''){
  houseRig(s,style);
  // Only carriers display parked aircraft. Passenger count stays out of all other cache variants.
  if(role==='carrier')for(let i=0;i<Math.min(4,Math.max(0,riders));i++)wing(s,-.65+i*.40,.88,P,i%2?.25:-.25);
- return {parts:s.parts,rig:'ship'};
+ finish(s);return {parts:s.parts,rig:'ship'};
 }
